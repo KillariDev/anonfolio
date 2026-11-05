@@ -118,3 +118,23 @@ test('per-asset errors survive later progress and fatal errors; successful retry
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, success);
   expect(wallet.eth.failure).toBeUndefined(); expect(wallet.weth.failure).toBeUndefined();
 });
+
+test('stage changes and concurrent request phases update independently and clear on failure', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((_tokens, emit) => {
+    emit({ type:'progress', stage:'consensus', message:'Syncing finalized headers' });
+    expect(wallet.verificationStage).toBe('consensus');
+    const start = wallet.stageStartedAt;
+    const request = { requestId:1, method:'GET light_client/updates', host:'beacon.example', state:'waiting' as const, startedAt:1, deadline:90_001 };
+    emit({ type:'network', request });
+    emit({ type:'network', request:{ ...request, requestId:2 } });
+    emit({ type:'network', request:{ ...request, state:'reading' } });
+    expect(wallet.networkRequests?.map(r=>r.state)).toEqual(['waiting','reading']);
+    expect(wallet.stageStartedAt).toBe(start);
+    emit({ type:'network', request:{ ...request, state:'received' } });
+    expect(wallet.networkRequests?.map(r=>r.requestId)).toEqual([2]);
+    throw new Error('Private route unavailable');
+  }));
+  expect(wallet.networkRequests).toEqual([]);
+  expect(wallet.eth.failed).toBe(true);
+});

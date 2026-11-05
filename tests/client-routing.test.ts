@@ -30,20 +30,29 @@ test('background consensus and wallet execution use separate private keys with n
   const originalCheckpoint = config.checkpoint;
   config.checkpoint = { root: '0x' + '22'.repeat(32), slot: DEFAULT_CHECKPOINT.slot };
   try {
-    session = verifyWallet(wallet, privateWorker, [ethToken], () => {});
+    const events: any[] = [];
+    session = verifyWallet(wallet, privateWorker, [ethToken], event => events.push(event));
     const run = fake.sent[0].id;
     expect(fake.sent[0].checkpoint).toEqual(config.checkpoint);
     // No active run ID: consensus background sync must still use Anon-RPC.
     await fake.onmessage({ data: { type: 'consensus', id: 10, url: CONSENSUS_RPC + '/eth/v1/beacon/light_client/finality_update' } });
     expect(fake.sent.at(-1).type).toBe('consensus-reply');
+    expect(events.filter(event=>event.type === 'network')).toHaveLength(0);
+    await fake.onmessage({data:{type:'progress',run,stage:'consensus',message:'Syncing consensus'}});
+    await fake.onmessage({data:{type:'consensus',id:13,url:CONSENSUS_RPC+'/eth/v1/beacon/light_client/updates?start_period=1&count=1'}});
+    expect(events.filter(event=>event.type === 'network').map(event=>event.request.state)).toEqual(['waiting','reading','received']);
+    expect(events.find(event=>event.type === 'network').request).toMatchObject({method:'GET eth/v1/beacon/light_client/updates',host:'ethereum-beacon-api.publicnode.com'});
+    events.length=0;
     await fake.onmessage({ data: { type: 'rpc', run, id: 11, body: { jsonrpc: '2.0', id: 1, method: 'eth_getProof', params: [wallet.address, [], { blockHash: '0x'+'11'.repeat(32) }] } } });
-    expect(calls[0].key).not.toBe(wallet.isolationKey); expect(calls[1].key).toBe(wallet.isolationKey);
+    expect(events.filter(event=>event.type === 'network').map(event=>event.request.state)).toEqual(['waiting','reading','received']);
+    expect(events.find(event=>event.type === 'network').request).toMatchObject({method:'eth_getProof',host:'execution.example'});
+    expect(calls[0].key).not.toBe(wallet.isolationKey); expect(calls[2].key).toBe(wallet.isolationKey);
     fail = true;
     const rejection = session.catch(error => error);
     await fake.onmessage({ data: { type: 'consensus', id: 12, url: CONSENSUS_RPC + '/eth/v1/beacon/light_client/finality_update' } });
     expect((await rejection).message).toContain('Tor route unavailable');
     expect(fake.terminated).toBe(true);
-    expect(calls[2].key).toBe(calls[0].key);
+    expect(calls[3].key).toBe(calls[0].key);
   } finally {
     config.checkpoint = originalCheckpoint;
     fake?.onerror?.({ message: 'Test cleanup' });

@@ -1,3 +1,4 @@
+import type { NetworkProgress, VerificationStage } from './verification/progress';
 import { formatUnits, type Address } from 'viem';
 import { errorMessage, readFailure, type ReadFailure } from './errors';
 import { verifyWallet } from './verification/client';
@@ -29,6 +30,9 @@ export type Wallet = {
   queuedRefresh?: boolean;
   queuedForVerifier?: boolean;
   verificationStatus?: string;
+  verificationStage?: VerificationStage;
+  stageStartedAt?: number;
+  networkRequests?: NetworkProgress[];
 };
 export function makeWallet(address: Address, rpcUrl: string): Wallet {
   return { address, rpcUrl, isolationKey: crypto.randomUUID(),
@@ -59,12 +63,19 @@ export async function readBalances(
   const selected = tokens.filter(token => !onlyFailed || tokenBalance(wallet, token).failed || !tokenBalance(wallet, token).verifiedBlock);
   prepareActivity(wallet, selected);
   wallet.verificationStatus = 'Starting balance verification.';
+  wallet.networkRequests = [];
   wallet.queuedForVerifier = false;
   const pending = new Set(selected.map(token => token.address as string));
   const reported = new Set<string>();
   let fatal: ReadFailure | undefined;
   try {
     await verifier(wallet, worker, selected, event => {
+      const stage = event.type === 'queued' ? 'queued' : event.type === 'started' ? 'verifier' : event.type === 'asset' ? 'balances' : event.type === 'price-start' ? 'pricing' : event.stage;
+      if (stage && stage !== wallet.verificationStage) { wallet.verificationStage = stage; wallet.stageStartedAt = Date.now(); }
+      if (event.type === 'network' && event.request) {
+        wallet.networkRequests = (wallet.networkRequests || []).filter(request => request.requestId !== event.request!.requestId);
+        if (event.request.state !== 'received') wallet.networkRequests.push(event.request);
+      }
       if (event.type === 'queued' || event.type === 'started') {
         wallet.queuedForVerifier = event.type === 'queued';
         wallet.verificationStatus = event.message;
@@ -95,6 +106,7 @@ export async function readBalances(
     });
   } catch (error) { fatal = readFailure(error, wallet.verificationStatus); wallet.verificationStatus = fatal.message; }
   wallet.queuedForVerifier = false;
+  wallet.networkRequests = [];
   for (const token of selected) if (pending.has(token.address)) {
     tokenBalance(wallet, token).failed = true;
     if (!reported.has(token.address)) tokenBalance(wallet, token).failure = fatal || readFailure('Verifier finished without returning a verified balance.', wallet.verificationStatus);

@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import type { VerificationStage } from './progress';
 import initWasm, { EthereumClient } from '../../vendor/helios/index.js';
 import { setHeliosFetch } from '../../vendor/helios/fetch.js';
 import { DEFAULT_CHECKPOINT, validateCheckpoint, assertCheckpointSlot, type Checkpoint, CONSENSUS_RPC, HELIOS_WASM_SHA256, checkCheckpointAge, verifiedBlock, type VerifiedBlock } from './trust';
@@ -10,7 +11,7 @@ import { downloadVerifier } from './download';
 let activeCheckpoint: Checkpoint = DEFAULT_CHECKPOINT;
 const EXECUTION_URL = 'https://helios-execution.invalid/';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
-let current: { id: string; rpcHost: string; requests: number; block?: VerifiedBlock } | undefined;
+let current: { id: string; rpcHost: string; requests: number; asset?: string; block?: VerifiedBlock } | undefined;
 let client: EthereumClient | undefined;
 const oracle = new TwapOracle();
 let sequence = 0;
@@ -19,7 +20,7 @@ let queue = Promise.resolve();
 const replies = new Map<number, { resolve: (data: any) => void; reject: (error: Error) => void }>();
 const codeHashes = new Map<string, `0x${string}`>();
 const send = (type: string, extra: object = {}) => scope.postMessage({ type, run: current?.id, ...extra });
-const step = (message: string) => send('progress', { message });
+const step = (message: string, stage?: VerificationStage) => send('progress', { message, ...(stage ? { stage } : {}) });
 function rpcResponse(data: unknown) {
   const response = Response.json(data);
   // Reqwest's WASM adapter parses Response.url; synthetic responses need it too.
@@ -31,7 +32,7 @@ async function rpc(body: RpcRequest) {
   const run = current.id;
   const id = ++sequence;
   const response = new Promise<any>((resolve, reject) => replies.set(id, { resolve, reject }));
-  send('rpc', { id, body });
+  send('rpc', { id, body, asset: current.asset });
   const result = await response;
   if (current?.id !== run) throw new Error('Obsolete wallet execution response.');
   return result;
@@ -41,11 +42,13 @@ async function internalFetch(request: Request): Promise<Response> {
   if (url.href !== EXECUTION_URL) {
     assertConsensusUrl(url.href);
     if (request.method !== 'GET') throw new Error('Disallowed consensus method.');
-    step('Consensus: GET ' + url.hostname + url.pathname + ' through Anon-RPC on the shared consensus route. Verifying signatures and finalized headers.');
+    const syncingRun = current && !current.block ? current.id : undefined;
+    if (syncingRun) step('Requesting consensus data from ' + url.hostname + ' through Anon-RPC. No wallet balance request has been sent yet.', 'consensus');
     const id = ++sequence;
     const reply = new Promise<{ status: number; body: string }>((resolve, reject) => replies.set(id, { resolve, reject }));
     scope.postMessage({ type: 'consensus', id, url: url.href });
     const data = await reply;
+    if (syncingRun && current?.id === syncingRun && !current.block) step('Consensus response received; validating sync committee signatures and finalized headers.', 'consensus');
     if (url.pathname.includes('/light_client/bootstrap/')) {
       if (url.pathname.split('/').at(-1)?.toLowerCase() !== activeCheckpoint.root) throw new Error('Unexpected consensus checkpoint bootstrap root.');
       assertCheckpointSlot(JSON.parse(data.body), activeCheckpoint);
@@ -94,12 +97,13 @@ async function synced(checkpoint: Checkpoint) {
   if (client && (selected.root !== activeCheckpoint.root || selected.slot !== activeCheckpoint.slot)) throw new Error('Consensus checkpoint changed; reconnect to restart the shared verifier.');
   if (!client) {
     activeCheckpoint = selected;
-    step('Loading pinned Helios 0.12.0 WASM verifier.');
+    step('Downloading the pinned Helios verifier from this application.', 'verifier');
     const bytes = await downloadVerifier(new URL('../../vendor/helios/index_bg.wasm', import.meta.url));
+    step('Verifier downloaded; checking its SHA-256 integrity before initialization.', 'verifier');
     const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(v => v.toString(16).padStart(2, '0')).join('');
     if (hash !== HELIOS_WASM_SHA256) throw new Error('Helios WASM digest mismatch.');
     await initWasm({ module_or_path: bytes });
-    step('Bootstrapping shared consensus light client from ' + (activeCheckpoint.root === DEFAULT_CHECKPOINT.root && activeCheckpoint.slot === DEFAULT_CHECKPOINT.slot ? 'the release-pinned' : 'your configured') + ' checkpoint ' + activeCheckpoint.root + ' at slot ' + activeCheckpoint.slot + '.');
+    step('Bootstrapping shared consensus light client from ' + (activeCheckpoint.root === DEFAULT_CHECKPOINT.root && activeCheckpoint.slot === DEFAULT_CHECKPOINT.slot ? 'the release-pinned' : 'your configured') + ' checkpoint at slot ' + activeCheckpoint.slot + '.', 'consensus');
     // Memory DB prevents an older persisted client from replacing the selected root.
     client = new EthereumClient(EXECUTION_URL, undefined, CONSENSUS_RPC, 'mainnet', activeCheckpoint.root, 'config');
     await client.wait_synced();
@@ -112,12 +116,14 @@ async function refresh(message: any) {
   executionFailure = '';
   try {
     const helios = await synced(message.checkpoint);
+    step('Consensus synchronized; selecting one verified finalized block for this refresh.', 'consensus');
     const block = verifiedBlock(await helios.get_block_by_number('finalized', false));
     current.block = block;
     send('block', { block });
-    step('Pinned verified finalized block ' + BigInt(block.number) + ' (' + block.hash + ').');
+    step('Verified finalized block ' + BigInt(block.number) + ' selected for every balance in this refresh.', 'balances');
     const pricedTokens = [];
     for (const token of message.tokens) {
+      current.asset = token.address;
       executionFailure = '';
       send('asset', { asset: token.address });
       try {
@@ -140,6 +146,7 @@ async function refresh(message: any) {
     }
     // Oracle outages must not delay proving the remaining wallet balances.
     for (const token of pricedTokens) {
+      current.asset = token.address;
       send('price-start', { asset: token.address });
       try {
         const estimate = await oracle.estimate(token, message.pricing, block, async (to, input) => {

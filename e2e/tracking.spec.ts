@@ -929,3 +929,43 @@ test('an unresponsive verifier times out, terminates and clears every wallet spi
   await expect(page.locator('.failure-link').first()).toContainText('Verification timed out');
   expect(await page.evaluate(()=>(window as any).__verifiers[0].terminated)).toBe(true);
 });
+
+test('verification progress distinguishes consensus, actual private requests and local work', async ({page}) => {
+  await page.clock.install();
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await openWalletDetails(page,a);
+  const panel = page.getByRole('region',{name:'Verification progress',exact:true});
+  async function emit(event: object) {
+    await page.evaluate(event => {
+      const worker=(window as any).__verifiers[0];
+      worker.onmessage({data:{...event,run:worker.request.id}});
+    },event);
+  }
+  await emit({type:'progress',stage:'consensus',message:'Checking finalized headers.'});
+  await expect(panel.locator('[aria-current="step"]')).toHaveText('Consensus');
+  await expect(page.locator('.activity-item.waiting').first()).toContainText('balance request not sent');
+  await expect(page.locator('.activity-item.waiting').first()).not.toContainText('eth_getProof');
+  const startedAt = await page.evaluate(()=>Date.now());
+  const request={requestId:1,method:'GET eth/v1/beacon/light_client/updates',host:'beacon.example',state:'waiting',startedAt,deadline:startedAt+90_000};
+  await emit({type:'network',request});
+  await expect(panel).toContainText('Submitted to Anon-RPC · waiting for response headers');
+  await page.clock.fastForward(12_000);
+  await expect(panel).toContainText('12s elapsed · request timeout in 78s');
+  await emit({type:'network',request:{...request,state:'reading'}});
+  await expect(panel).toContainText('Response headers received · reading response body');
+  await emit({type:'network',request:{...request,state:'received'}});
+  await emit({type:'asset',asset:'eth'});
+  await emit({type:'progress',stage:'balances',message:'Checking account and requested storage proofs against finalized state root.'});
+  await expect(panel.locator('[aria-current="step"]')).toHaveText('Balances');
+  await expect(panel.locator('.progress-request')).toHaveCount(0);
+  await expect(panel).toContainText('Checking account and requested storage proofs');
+  await page.screenshot({path:'/tmp/anonfolio-progress-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:'/tmp/anonfolio-progress-mobile.png',fullPage:true});
+  await emit({type:'fatal',error:'Private eth_getProof failed: Tor route unavailable'});
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator('.wallet .spinner')).toHaveCount(0);
+});

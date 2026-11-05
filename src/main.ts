@@ -1,3 +1,4 @@
+import { stageLabels, progressTime, waitingReason, type VerificationStage } from './verification/progress';
 import chevronDown from './assets/chevron-down.svg?raw';
 import { discoverTorWorker, cacheTorWorker } from './worker-update';
 import type { WorkerMetadata } from './worker-metadata';
@@ -361,6 +362,60 @@ function renderTotals() {
     totals.append(card);
   }
 }
+let progressTimer: ReturnType<typeof setInterval> | undefined;
+function progressClock(startedAt: number, deadline?: number) {
+  const clock = document.createElement('small'); clock.className = 'progress-clock';
+  clock.dataset.progressStart = String(startedAt);
+  if (deadline) clock.dataset.progressDeadline = String(deadline);
+  clock.setAttribute('aria-live', 'off');
+  clock.textContent = progressTime(startedAt, Date.now(), deadline);
+  return clock;
+}
+function syncProgressClock() {
+  if (!wallets.some(wallet => wallet.loading)) { clearInterval(progressTimer); progressTimer = undefined; return; }
+  if (progressTimer) return;
+  progressTimer = setInterval(() => {
+    document.querySelectorAll<HTMLElement>('[data-progress-start]').forEach(clock => {
+      clock.textContent = progressTime(Number(clock.dataset.progressStart), Date.now(), clock.dataset.progressDeadline ? Number(clock.dataset.progressDeadline) : undefined);
+    });
+  }, 1000);
+}
+function verificationPanel(wallet: Wallet) {
+  const panel = document.createElement('section'); panel.className = 'verification-panel';
+  panel.setAttribute('aria-label', 'Verification progress');
+  const stage = wallet.verificationStage || 'connection';
+  const phases: VerificationStage[] = ['connection', 'verifier', 'consensus', 'balances', 'pricing'];
+  const index = stage === 'queued' ? 1 : phases.indexOf(stage);
+  const steps = document.createElement('ol'); steps.className = 'verification-stages';
+  ['Connection', 'Verifier', 'Consensus', 'Balances', 'Prices'].forEach((label, step) => {
+    const item = document.createElement('li'); item.textContent = label;
+    item.className = step < index ? 'completed' : step === index ? 'current' : '';
+    if (step === index) item.setAttribute('aria-current', 'step');
+    steps.append(item);
+  });
+  const heading = document.createElement('div'); heading.className = 'progress-heading';
+  const title = document.createElement('strong'); title.textContent = stageLabels[stage];
+  heading.append(title, progressClock(wallet.stageStartedAt || Date.now()));
+  panel.append(steps, heading);
+  const requests = wallet.networkRequests || [];
+  if (requests.length) {
+    for (const request of requests) {
+      const row = document.createElement('div'); row.className = 'progress-request';
+      const operation = document.createElement('p'); operation.textContent = request.method + ' → ' + request.host;
+      const state = document.createElement('span'); state.textContent = request.state === 'waiting' ? 'Submitted to Anon-RPC · waiting for response headers' : 'Response headers received · reading response body';
+      row.append(operation, state, progressClock(request.startedAt, request.deadline));
+      panel.append(row);
+    }
+    const hint = document.createElement('p'); hint.className = 'progress-hint';
+    hint.textContent = 'The private route and RPC do not report intermediate progress while a request is waiting.';
+    panel.append(hint);
+  } else {
+    const operation = document.createElement('p'); operation.className = 'verification-progress';
+    operation.setAttribute('role', 'status'); operation.textContent = wallet.verificationStatus || stageLabels[stage];
+    panel.append(operation);
+  }
+  return panel;
+}
 function walletDetails(wallet: Wallet) {
   const content = document.createElement('div');
   content.className = 'detail-inner';
@@ -368,12 +423,8 @@ function walletDetails(wallet: Wallet) {
   timestamps.className = 'detail-times';
   timestamps.textContent = tokens.map(token => ({ symbol: token.symbol, balance: tokenBalance(wallet, token) })).map(({ symbol, balance }) => symbol + ': ' + (balance.updatedAt
     ? 'last read ' + new Date(balance.updatedAt).toLocaleString() + (balance.verifiedBlock ? ' · finalized ' + balance.verifiedBlock.hash + ' at ' + new Date(balance.verifiedBlock.timestamp).toLocaleString() : ' · unverified legacy value') : 'not verified yet')).join(' · ');
-  const verification = document.createElement('p');
-  verification.className = 'verification-progress';
-  verification.setAttribute('role', 'status');
-  verification.textContent = (tokens.some(token => tokenBalance(wallet, token).failed) ? 'Retry in progress · ' : '') + (wallet.verificationStatus || 'Waiting to verify balances.');
   content.append(timestamps);
-  if (wallet.loading) content.append(verification);
+  if (wallet.loading) content.append(verificationPanel(wallet));
   for (const token of tokens) {
     const balance = tokenBalance(wallet, token);
     const failure = balanceFailure(balance);
@@ -385,7 +436,7 @@ function walletDetails(wallet: Wallet) {
     activity.className = 'activity';
     const summary = document.createElement('p');
     const finished = wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length;
-    summary.textContent = wallet.queuedForVerifier ? 'Queued for the shared verifier. No balance request is running for this address yet.' : wallet.loading ? (finished + '/' + wallet.activity.length + ' reads finished · ' + (wallet.activity.some(item => item.attempt > 0) ? 'Verifying finalized state locally.' : 'Waiting for the private worker; balance calls have not been submitted yet.'))
+    summary.textContent = wallet.queuedForVerifier ? 'Queued for the shared verifier. No balance request is running for this address yet.' : wallet.loading ? (finished + '/' + wallet.activity.length + ' reads finished · ' + (wallet.activity.some(item => item.attempt > 0) ? 'Balance verification in progress.' : waitingReason(wallet.verificationStage) + '; balance calls have not been submitted yet.'))
       : finished + '/' + wallet.activity.length + ' reads finished. Each amount shows its own result and last successful time.';
     const retry = retryMessage(wallet);
     if (retry) summary.textContent += ' ' + retry;
@@ -396,11 +447,11 @@ function walletDetails(wallet: Wallet) {
       if (wallet.loading && !wallet.queuedForVerifier && (item.phase === 'waiting' || item.phase === 'requesting')) line.append(spinner());
       const detail = document.createElement('div');
       const title = document.createElement('strong');
-      title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? 'Waiting for finalized verification'
+      title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? waitingReason(wallet.verificationStage)
         : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' on the same private route; verifying finalized state' : 'Verifying locally; fetching private proofs as needed')
         : item.phase === 'received' ? 'Balance received' : 'Read failed; previous amount kept if available');
       const payload = document.createElement('small');
-      payload.textContent = item.description + ' → ' + new URL(wallet.rpcUrl).hostname;
+      payload.textContent = item.phase === 'waiting' ? 'Balance request not submitted for this token yet.' : item.description + ' → ' + new URL(wallet.rpcUrl).hostname;
       detail.append(title, payload);
       line.append(detail);
       activity.append(line);
@@ -410,6 +461,7 @@ function walletDetails(wallet: Wallet) {
   return content;
 }
 function render() {
+  syncProgressClock();
   renderTotals();
   document.querySelector('#count')!.textContent = String(wallets.length);
   const focus = document.activeElement?.getAttribute('aria-label');
@@ -475,7 +527,9 @@ function render() {
     if (wallet.loading && wallet.verificationStatus) {
       const progress = document.createElement('small');
       progress.className = 'verification-progress compact-progress';
-      progress.textContent = wallet.verificationStatus; progress.title = wallet.verificationStatus;
+      const request = wallet.networkRequests?.[0];
+      progress.textContent = request ? (request.state === 'waiting' ? 'Waiting for ' : 'Receiving ') + request.method + ' · ' + request.host : stageLabels[wallet.verificationStage || 'connection'];
+      progress.title = wallet.verificationStatus;
       identity.append(progress);
     }
     row.append(identity);
@@ -563,6 +617,9 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   else retries.cancel(wallet);
   const selectedTokens = [...tokens];
   wallet.loading = true;
+  wallet.verificationStage = 'connection';
+  wallet.stageStartedAt = Date.now();
+  wallet.networkRequests = [];
   wallet.queuedForVerifier = false;
   prepareActivity(wallet, selectedTokens, onlyFailed);
   render();
@@ -580,6 +637,7 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
     });
   } finally {
     wallet.loading = false;
+    wallet.networkRequests = [];
     wallet.queuedForVerifier = false;
     pruneTokenBalances(wallet);
     persist(); render();
