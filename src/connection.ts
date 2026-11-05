@@ -2,7 +2,8 @@ import { errorMessage } from './errors';
 import { AnonRpcWorker } from '@anon-rpc/browser-harness';
 import bundleUrl from '../vendor/tor/anon-rpc-worker.js?url&no-inline';
 import { pinnedSpecifierProvider } from './bootstrap';
-import { config, TOR_SPECIFIER } from './config';
+import { cachedTorWorkerUrl } from './worker-update';
+import { config, TOR_SPECIFIER, TOR_WORKER_HASH } from './config';
 
 export type ConnectionState = 'starting' | 'ready' | 'failed';
 export class Connection {
@@ -19,13 +20,43 @@ export class Connection {
     this.lastError = undefined;
     this.warnings = [];
     this.onState('starting');
-    this.onProgress('Loading the bundled Tor worker and verifying its pinned hash locally. No Ethereum RPC is contacted during startup.');
-    const localBundle = new URL(bundleUrl, document.baseURI);
-    if (localBundle.origin !== window.location.origin) throw new Error('Tor worker bundle must be served with the application.');
-    const worker = this.worker = new AnonRpcWorker({
-      address: TOR_SPECIFIER, config: { gateways: config.gateways },
-      preExisting: { rpcProvider: pinnedSpecifierProvider(localBundle.href) },
-    });
+    // Defer start so synchronous initialization failures also clear pending.
+    this.pending = Promise.resolve().then(() => this.start());
+    return this.pending;
+  }
+  private async start(): Promise<AnonRpcWorker> {
+    let worker: AnonRpcWorker | undefined;
+    let objectUrl: string | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      this.onProgress(config.torWorker ? 'Loading your saved Tor worker and verifying its selected hash locally. No public discovery request is sent.' : 'Loading the bundled Tor worker and verifying its pinned hash locally. No Ethereum RPC is contacted during startup.');
+      const localBundle = new URL(bundleUrl, document.baseURI);
+      if (localBundle.origin !== window.location.origin) throw new Error('Tor worker bundle must be served with the application.');
+      if (config.torWorker) objectUrl = await cachedTorWorkerUrl(config.torWorker);
+      worker = this.worker = new AnonRpcWorker({
+        address: TOR_SPECIFIER, config: { gateways: config.gateways },
+        preExisting: { rpcProvider: pinnedSpecifierProvider(objectUrl || localBundle.href, config.torWorker?.hash || TOR_WORKER_HASH) },
+      });
+      this.drainLogs(worker);
+      await Promise.race([worker.ready, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Private connection timed out')), 120_000);
+      })]);
+      this.lastError = undefined;
+      this.onState('ready');
+      return worker;
+    } catch (error) {
+      this.lastError ||= this.failureMessage(error);
+      worker?.close();
+      this.worker = undefined;
+      this.pending = undefined;
+      this.onState('failed');
+      throw new Error('Private connection unavailable: ' + this.lastError);
+    } finally {
+      clearTimeout(timer);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+  }
+  private drainLogs(worker: AnonRpcWorker) {
     // Keep only bounded, redacted warning/error diagnostics locally; never log request payloads.
     void (async () => {
       try {
@@ -48,27 +79,6 @@ export class Connection {
         }
       }
     })();
-    this.pending = (async () => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        await Promise.race([worker.ready, new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error('Private connection timed out')), 120_000);
-        })]);
-        this.lastError = undefined;
-        this.onState('ready');
-        return worker;
-      } catch (error) {
-        this.lastError ||= this.failureMessage(error);
-        worker.close();
-        if (this.worker === worker) {
-          this.worker = undefined;
-          this.pending = undefined;
-          this.onState('failed');
-        }
-        throw new Error('Private connection unavailable: ' + this.lastError);
-      } finally { clearTimeout(timer); }
-    })();
-    return this.pending;
   }
   private failureMessage(error: unknown) {
     const reason = errorMessage(error);

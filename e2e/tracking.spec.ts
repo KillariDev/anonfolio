@@ -1,3 +1,4 @@
+import { encodeAbiParameters, keccak256, stringToBytes } from 'viem';
 import { openAddressForm, openTokenSettings, mockVerification } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -764,4 +765,75 @@ test('checkpoint settings validate, persist through reconnect and restore the re
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(root).toHaveValue(defaultRoot);
   await expect(slot).toHaveValue(defaultSlot);
+});
+
+
+test('manual PublicNode worker update is explicit, cached, applied on save and fails closed if corrupted', async ({ page }) => {
+  const bundle = '// user-selected Tor worker fixture';
+  const hash = keccak256(stringToBytes(bundle));
+  const resolver = 'https://tor-download.example/anon-rpc-worker.js';
+  const requests: any[] = [];
+  await page.route('**/node_modules/.vite/deps/@anon-rpc_browser-harness.js*', route => route.fulfill({ contentType:'text/javascript',body:`
+    import { WORKER_HASH_SELECTOR, WORKER_RESOLVERS_SELECTOR } from '/src/bootstrap.ts';
+    export class AnonRpcWorker {
+      constructor(options) {
+        this.ready = Promise.all([WORKER_HASH_SELECTOR,WORKER_RESOLVERS_SELECTOR].map(data => options.preExisting.rpcProvider.request({method:'eth_call',params:[{to:options.address,data},'latest']})))
+          .then(values => {window.__selectedWorkerHash=values[0];});
+      }
+      acceptLog() {return new Promise(() => {});}
+      close() {}
+    }
+  ` }));
+  await page.route('https://ethereum-rpc.publicnode.com/', route => {
+    const body = route.request().postDataJSON(); requests.push(body);
+    const result = body.method === 'eth_blockNumber' ? '0x123' : body.id === 2 ? hash : encodeAbiParameters([{type:'string[]'}], [[resolver]]);
+    return route.fulfill({json:{jsonrpc:'2.0',id:body.id,result}});
+  });
+  let downloads = 0;
+  await page.route(resolver, route => { downloads++; return route.fulfill({body:bundle,contentType:'text/javascript'}); });
+  await page.goto('/');
+  await expect(page.locator('#connection')).toContainText('Private worker ready');
+  expect(requests).toHaveLength(0); expect(downloads).toBe(0);
+  await page.getByRole('button', {name:'Settings',exact:true}).click();
+  await page.getByRole('button', {name:'Update Tor worker from PublicNode',exact:true}).click();
+  await expect(page.locator('#tor-worker-status')).toContainText('Update downloaded and hash-checked');
+  await expect(page.locator('#tor-worker-metadata')).toContainText(hash);
+  await expect(page.locator('#tor-worker-metadata')).toContainText(resolver);
+  expect(await page.evaluate(() => localStorage.getItem('anonfolio.network.v1'))).toBeNull();
+  expect(requests.map(body => body.method)).toEqual(['eth_blockNumber','eth_call','eth_call']);
+  expect(requests.slice(1).every(body => body.params[0].to.toLowerCase() === '0x700da3193d35fa54cd3fbf29b66f2a2a0385659e' && body.params[1] === '0x123')).toBe(true);
+  await page.getByRole('button', {name:'Save settings and reconnect',exact:true}).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__selectedWorkerHash)).toBe(hash);
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => (window as any).__selectedWorkerHash)).toBe(hash);
+  expect(requests).toHaveLength(3); expect(downloads).toBe(1);
+  await page.evaluate(async () => {
+    const cache = await caches.open('anonfolio-user-tor-worker-v1');
+    for (const key of await cache.keys()) await cache.put(key, new Response('tampered'));
+  });
+  await page.reload();
+  await expect(page.locator('#connection > summary')).toContainText('Saved Tor worker digest mismatch');
+  expect(requests).toHaveLength(3); expect(downloads).toBe(1);
+  await page.getByRole('button', {name:'Settings',exact:true}).click();
+  await page.getByLabel('Tor worker source',{exact:true}).selectOption('bundled');
+  await page.getByRole('button', {name:'Save settings and reconnect',exact:true}).click();
+  await expect(page.locator('#connection')).toContainText('Private worker ready');
+  expect(requests).toHaveLength(3); expect(downloads).toBe(1);
+});
+
+for (const failure of ['RPC outage', 'digest mismatch']) test('manual worker update preserves the current worker on ' + failure, async ({page}) => {
+  await mockConnection(page);
+  await page.route('https://ethereum-rpc.publicnode.com/', route => {
+    const body = route.request().postDataJSON();
+    if (failure === 'RPC outage') return route.fulfill({status:503,body:'unavailable'});
+    return route.fulfill({json:{jsonrpc:'2.0',id:body.id,result:body.method === 'eth_blockNumber' ? '0x123' : body.id === 2 ? '0x'+'ab'.repeat(32) : encodeAbiParameters([{type:'string[]'}], [['https://tor-download.example/worker.js']])}});
+  });
+  await page.route('https://tor-download.example/worker.js', route => route.fulfill({body:'tampered worker'}));
+  await page.goto('/');
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await page.getByRole('button',{name:'Update Tor worker from PublicNode',exact:true}).click();
+  await expect(page.locator('#tor-worker-status')).toContainText(failure === 'RPC outage' ? 'HTTP 503' : 'digest mismatch');
+  await expect(page.locator('#tor-worker-status')).toContainText('Your current worker is unchanged');
+  await expect(page.getByLabel('Tor worker source',{exact:true})).toHaveValue('bundled');
+  expect(await page.evaluate(() => localStorage.getItem('anonfolio.network.v1'))).toBeNull();
 });

@@ -72,3 +72,12 @@ test('custom checkpoints persist, normalize and reset without changing legacy de
     expect(() => validateSettings({ ...defaults, checkpoint: bad })).toThrow('Checkpoint');
   }
 });
+
+test('downloaded Tor worker metadata survives reload and is removed by restoring defaults', () => {
+  const torWorker = { hash: ('0x' + 'ab'.repeat(32)) as `0x${string}`, resolvers: ['https://worker.example/bundle.js'], blockNumber: '0x123' };
+  expect(saveSettings({ ...defaults, torWorker: torWorker as any })).toBe(true);
+  expect(loadSettings(defaults).torWorker).toEqual(torWorker);
+  expect(saveSettings(null)).toBe(true);
+  expect(loadSettings(defaults).torWorker).toBeUndefined();
+  expect(saveSettings({ ...defaults, torWorker: { ...torWorker, hash: '0x123' } as any })).toBe(false);
+});

@@ -1,3 +1,5 @@
+import { discoverTorWorker, cacheTorWorker } from './worker-update';
+import type { WorkerMetadata } from './worker-metadata';
 import { DEFAULT_CHECKPOINT, checkCheckpointAge } from './verification/trust';
 import appIcon from './assets/anonfolio.svg?no-inline';
 import { addressDisplay } from './address-display';
@@ -44,6 +46,11 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <label for="settings-rpcs">Balance RPC endpoints</label><textarea id="settings-rpcs" rows="3" spellcheck="false" autocomplete="off" aria-describedby="rpc-hint settings-error"></textarea>
 <p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses use separate endpoints where possible. Every balance request goes through the private worker.</p>
 <p class="form-hint">The Tor worker is bundled and hash-verified locally. Startup never queries an Ethereum RPC. Consensus, balance and oracle requests all use Anon-RPC.</p>
+<h2>Tor worker</h2>
+<label for="settings-tor-worker">Tor worker source</label><select id="settings-tor-worker"><option value="bundled">Bundled release worker (default)</option><option value="updated">Saved worker from PublicNode</option></select>
+<p class="form-hint">Update only when you choose: this queries ethereum-rpc.publicnode.com directly for the Tor specifier's hash and download locations, then downloads the worker directly. No tracked addresses are sent. Applying the update trusts PublicNode's worker hash and code. Balance, proof and consensus requests stay on Anon-RPC.</p>
+<button id="update-tor-worker" type="button">Update Tor worker from PublicNode</button>
+<p id="tor-worker-status" role="status" class="form-hint"></p><pre id="tor-worker-metadata" class="form-hint" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
 <h2 id="checkpoint-settings">Consensus checkpoint</h2>
 <label for="settings-checkpoint-root">Mainnet checkpoint root</label><input id="settings-checkpoint-root" type="text" spellcheck="false" autocomplete="off" aria-describedby="checkpoint-hint settings-error">
 <label for="settings-checkpoint-slot">Checkpoint beacon slot</label><input id="settings-checkpoint-slot" type="number" min="1" step="1" aria-describedby="checkpoint-hint settings-error">
@@ -649,7 +656,18 @@ document.querySelector('#token-form')!.addEventListener('submit', async event =>
   finally { savingToken = false; submit.disabled = false; submit.textContent = 'Add token'; }
 });
 const settingsField = (id: string) => document.querySelector<HTMLInputElement | HTMLTextAreaElement>('#settings-' + id)!;
+let stagedWorker: WorkerMetadata | undefined = config.torWorker;
+function renderWorkerMetadata() {
+  document.querySelector('#tor-worker-metadata')!.textContent = stagedWorker
+    ? 'Saved worker hash: ' + stagedWorker.hash + '\nDiscovery block: ' + stagedWorker.blockNumber + '\nDownload locations:\n' + stagedWorker.resolvers.join('\n')
+    : 'No updated worker saved. The bundled worker is used by default.';
+  const option = document.querySelector<HTMLOptionElement>('#settings-tor-worker option[value="updated"]')!;
+  option.disabled = !stagedWorker;
+}
 function showSettings(settings: NetworkSettings) {
+  stagedWorker = settings.torWorker;
+  settingsField('tor-worker').value = stagedWorker ? 'updated' : 'bundled';
+  renderWorkerMetadata();
   settingsField('gateways').value = settings.gateways.join('\n');
   settingsField('rpcs').value = settings.rpcUrls.join('\n');
   const checkpoint = settings.checkpoint || DEFAULT_CHECKPOINT;
@@ -657,6 +675,21 @@ function showSettings(settings: NetworkSettings) {
   settingsField('checkpoint-slot').value = String(checkpoint.slot);
 }
 showSettings(config);
+document.querySelector('#update-tor-worker')!.addEventListener('click', async () => {
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('#settings-form button')];
+  buttons.forEach(button => { button.disabled = true; });
+  const status = document.querySelector('#tor-worker-status')!;
+  const update = (message: string) => { status.replaceChildren(spinner(), document.createTextNode(' ' + message)); };
+  try {
+    const metadata = await discoverTorWorker(update);
+    await cacheTorWorker(metadata, update);
+    stagedWorker = metadata;
+    renderWorkerMetadata();
+    settingsField('tor-worker').value = 'updated';
+    status.textContent = 'Update downloaded and hash-checked. Review the hash and locations, then Save settings and reconnect to use it.';
+  } catch (error) { status.textContent = 'Tor worker update failed: ' + errorMessage(error) + ' Your current worker is unchanged.'; }
+  finally { buttons.forEach(button => { button.disabled = false; }); }
+});
 function applySettings(settings: NetworkSettings | null) {
   const message = document.querySelector('#settings-error')!;
   if (!saveSettings(settings)) {
@@ -672,7 +705,7 @@ document.querySelector('#settings-form')!.addEventListener('submit', event => {
   event.preventDefault();
   try {
     const lines = (value: string) => value.split(/[,\n]/).map(line => line.trim()).filter(Boolean);
-    const settings = validateSettings({ gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value),
+    const settings = validateSettings({ torWorker: settingsField('tor-worker').value === 'updated' ? stagedWorker : undefined, gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value),
       checkpoint: { root: settingsField('checkpoint-root').value, slot: Number(settingsField('checkpoint-slot').value) } });
     checkCheckpointAge(Date.now(), settings.checkpoint);
     applySettings(settings);

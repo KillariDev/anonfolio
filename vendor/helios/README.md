@@ -52,8 +52,9 @@ Settings with a trusted root and matching mainnet slot, compared across independ
 sources. The verifier checks the slot-derived age and bootstrap header slot before
 Helios binds the header to the selected root. An expired (>14-day) checkpoint fails
 closed. Saving/reconnecting restarts the shared client with an in-memory database;
-Restore defaults selects the release pin. Runtime settings cannot change either
-binary digest. Release-default changes still require a reviewed source update.
+Restore defaults selects the release pin. Runtime settings cannot change the Helios binary digest. The explicit Tor worker
+updater can apply a PublicNode-supplied Tor digest and locally cached worker; that
+user-selected worker is outside this release review. Release-default changes still require a reviewed source update.
 
 Updating Helios requires reviewing the corresponding proof, EVM, transport,
 background-task and consensus changes, regenerating/verifying the upstream

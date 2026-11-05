@@ -1,5 +1,6 @@
+import { validateWorkerMetadata, type WorkerMetadata } from './worker-metadata';
 import { validateCheckpoint, type Checkpoint } from './verification/trust';
-export type NetworkSettings = { gateways: string[]; rpcUrls: string[]; checkpoint?: Checkpoint };
+export type NetworkSettings = { gateways: string[]; rpcUrls: string[]; checkpoint?: Checkpoint; torWorker?: WorkerMetadata };
 export const SETTINGS_KEY = 'anonfolio.network.v1';
 export function validateSettings(value: unknown): NetworkSettings {
   if (!value || typeof value !== 'object') throw new Error('Invalid network settings.');
@@ -28,6 +29,7 @@ export function validateSettings(value: unknown): NetworkSettings {
     } catch { throw new Error('Use Tor gateway format ip:port:certhash (or [ipv6]:port:certhash), with a valid SHA-256 certificate hash and port 1–65535.'); }
   }
   return { gateways,
+    ...(data.torWorker !== undefined ? { torWorker: validateWorkerMetadata(data.torWorker) } : {}),
     ...(data.checkpoint !== undefined ? { checkpoint: validateCheckpoint(data.checkpoint) } : {}),
     rpcUrls: [...new Set(entries(data.rpcUrls, 'balance RPC endpoint').map(rpc))] };
 }

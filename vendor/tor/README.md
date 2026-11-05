@@ -16,9 +16,17 @@ and the Anon-RPC harness checks the fetched bytes before executing them.
 
 `src/bootstrap.ts` supplies the specifier hash and same-origin bundle URL from
 release metadata. Its provider answers only the two supported specifier calls
-locally; it is not an Ethereum client. No runtime RPC discovery or external
-resolver fallback is used. Updating the worker requires a reviewed release,
-matching source pin and vendored bytes. It is also part of the offline/IPFS shell.
+locally; it is not an Ethereum client. Startup never performs RPC discovery or
+remote resolver fallback. The bundled worker is part of the offline/IPFS shell.
+
+Settings also provides an explicit PublicNode update action. It reads specifier
+metadata at one block and directly downloads/hash-checks candidate bytes. Applying
+this update replaces the default Tor trust pin with the PublicNode-supplied digest;
+it does not imply the release review applies to that code. Bytes are cached
+locally and rechecked on startup, then loaded through a blob resolver. A missing
+or corrupt cache fails closed. Selecting the bundled worker restores this release
+pin. Updating the bundled release still requires matching source pins, reviewed
+bytes, and tests.
 
 Upstream: <https://github.com/ethereum/tor-js>. Distributed under MIT OR
 Apache-2.0; see `LICENSE-MIT` and `LICENSE-APACHE` in this directory.
