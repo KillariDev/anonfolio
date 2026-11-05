@@ -620,7 +620,7 @@ test('TWAP holding estimates, partial totals and custom quote settings persist',
   await page.getByLabel('Quote token', { exact: true }).selectOption('custom');
   await page.getByLabel('Quote contract address').fill('invalid');
   await page.getByLabel('Quote symbol').fill('CUSTOM');
-  await page.getByLabel('Quote fallback decimals').fill('18');
+  await page.getByLabel('Quote decimals').fill('18');
   await page.getByRole('button', { name: 'Save pricing and refresh' }).click();
   await expect(page.locator('#pricing-error')).toContainText('valid mainnet');
   await page.getByLabel('Quote contract address').fill(b);
@@ -649,7 +649,7 @@ test('saved balance errors expose per-asset causes and recovery actions, then cl
       for(const token of tokens) {
         emit({type:'asset',asset:token.address});
         emit({type:'progress',message:'Fetching '+token.symbol+' proof at finalized block'});
-        if(window.__recovered) emit({type:'balance',asset:token.address,amount:token.address==='eth'?'1000000000000000000':'0',decimals:18,decimalsVerified:true,block});
+        if(window.__recovered) emit({type:'balance',asset:token.address,amount:token.address==='eth'?'1000000000000000000':'0',decimals:18,block});
         else emit({type:'asset-error',asset:token.address,error:token.address==='eth'?'Error: Private eth_getProof rejected (-32602): distance to target block exceeds maximum proof window. https://user:password@rpc.example/key-secret?token=query-secret':'Bytecode hash does not match the verified account.'});
       }
       emit({type:'progress',message:'Later progress must not erase earlier failures'});

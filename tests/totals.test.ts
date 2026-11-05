@@ -79,12 +79,12 @@ test('totals explicitly detect balances from mixed finalized blocks', () => {
   expect(portfolioTotals([first, second], defaultTokens())[0]!.mixedBlocks).toBe(false);
 });
 
-test('conflicting verified decimals suppress the aggregate instead of misformatting it', () => {
+test('configured decimals apply consistently to all addresses, ignoring legacy decimal metadata', () => {
   const first = makeWallet(a.address, a.rpcUrl);
   const second = makeWallet(b.address, b.rpcUrl);
-  first.weth = { amount: 1000000n, decimals: 6, decimalsVerified: true, failed: false };
-  second.weth = { amount: 1000000000000000000n, decimals: 18, decimalsVerified: true, failed: false };
+  first.weth = { amount: 1000000n, decimals: 6, failed: false };
+  second.weth = { amount: 1000000000000000000n, decimals: 18, failed: false };
   const total = portfolioTotals([first, second], defaultTokens())[1]!;
-  expect(total.decimalsMismatch).toBe(true);
-  expect(total.amount).toBeUndefined();
+  expect(total.decimals).toBe(18);
+  expect(total.amount).toBe(1000000000001000000n);
 });

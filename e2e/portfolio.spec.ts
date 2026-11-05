@@ -127,9 +127,7 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   expect(proven).toHaveLength(3);
   await test.info().attach('verified-balances', { body: JSON.stringify(proven, null, 2), contentType: 'application/json' });
   expect(proven.every(balance => balance.verifiedBlock?.hash && balance.verifiedBlock.timestamp)).toBe(true);
-  for (let index = 0; index < proven.length; index++) if (!proven[index]!.decimalsVerified) {
-    await expect(page.locator('.wallet').first().locator('.balance').nth(index).locator('.decimals-source')).toHaveText('User-supplied decimals');
-  }
+  await expect(page.locator('.decimals-source')).toHaveCount(0);
   expect(new Set(proven.map(balance => balance.verifiedBlock.hash)).size).toBe(1);
   expect(proven[0].estimate.pool).toBe('0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640');
   expect(proven[0].estimate.blockHash).toBe(proven[0].verifiedBlock.hash);

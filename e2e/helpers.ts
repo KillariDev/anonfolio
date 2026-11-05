@@ -33,7 +33,7 @@ export async function mockVerification(page: Page, priced = false) {
           try {
             const response=await worker.fetch(wallet.rpcUrl,{method:'POST',body:JSON.stringify(body),anonOptions:{isolationKey:wallet.isolationKey}});
             const data=await response.json();
-            emit({type:'balance',asset:token.address,amount:BigInt(data.result).toString(),block,decimals:token.decimals,decimalsVerified:true});
+            emit({type:'balance',asset:token.address,amount:BigInt(data.result).toString(),block,decimals:token.decimals});
             if (${priced}) {
               const pricing=JSON.parse(localStorage.getItem('anonfolio.pricing.v1')||'null') || {quote:{address:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',symbol:'USDC',decimals:6},minLiquidity:'10000'};
               if(pricing.quote.symbol==='USDC' && (token.address==='eth'||token.symbol==='WETH')) emit({type:'price',asset:token.address,block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:pricing.quote.address,symbol:'USDC',decimals:6,numerator:'2000000000',denominator:'1000000000000000000',window:1800,blockHash:block.hash,minLiquidity:pricing.minLiquidity}});

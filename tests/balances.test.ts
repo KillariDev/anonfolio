@@ -9,12 +9,12 @@ function engine(run: (tokens: ReturnType<typeof defaultTokens>, emit: (event: Ve
   return async (_wallet, _worker, tokens, emit) => run(tokens, emit);
 }
 const success = engine((tokens, emit) => {
-  for (const token of tokens) emit({ type: 'balance', asset: token.address, amount: '0', decimals: 18, decimalsVerified: true, block });
+  for (const token of tokens) emit({ type: 'balance', asset: token.address, amount: '0', decimals: 18, block });
 });
 test('verified zero keeps its finalized block identity, timestamp and decimals', async () => {
   const wallet = makeWallet(address, 'https://one.example');
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, success);
-  expect(wallet.eth).toMatchObject({ amount: 0n, failed: false, verifiedBlock: block, decimalsVerified: true });
+  expect(wallet.eth).toMatchObject({ amount: 0n, failed: false, verifiedBlock: block });
   expect(wallet.weth.verifiedBlock).toEqual(wallet.eth.verifiedBlock);
 });
 test('failed verification retains previous amounts and provenance as stale', async () => {
@@ -31,7 +31,7 @@ test('legacy and cached balances are reverified rather than treated as proven ze
   let selected = 0;
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, true, engine((tokens, emit) => {
     selected = tokens.length;
-    tokens.forEach(token => emit({ type: 'balance', asset: token.address, amount: '1', decimals: 18, decimalsVerified: true, block }));
+    tokens.forEach(token => emit({ type: 'balance', asset: token.address, amount: '1', decimals: 18, block }));
   }));
   expect(selected).toBe(2);
   expect(wallet.eth.cached).toBeUndefined();
@@ -41,7 +41,7 @@ test('partial success stores independently while failed assets retain old amount
   const wallet = makeWallet(address, 'https://one.example');
   wallet.weth = { amount: 9n, updatedAt: 1, failed: false };
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((tokens, emit) => {
-    emit({ type: 'balance', asset: 'eth', amount: '5', decimals: 18, decimalsVerified: true, block });
+    emit({ type: 'balance', asset: 'eth', amount: '5', decimals: 18, block });
     emit({ type: 'asset-error', asset: tokens[1]!.address, error: 'Tampered code' });
   }));
   expect(wallet.eth.amount).toBe(5n);
@@ -54,21 +54,21 @@ test('automatic recovery selects failed assets and keeps their original private 
   const key = wallet.isolationKey;
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, true, engine((tokens, emit) => {
     expect(tokens.map(token => token.symbol)).toEqual(['WETH']);
-    emit({ type: 'balance', asset: tokens[0]!.address, amount: '7', decimals: 18, decimalsVerified: true, block });
+    emit({ type: 'balance', asset: tokens[0]!.address, amount: '7', decimals: 18, block });
   }));
   expect(wallet.isolationKey).toBe(key);
   expect(wallet.weth.amount).toBe(7n);
 });
-test('custom tokens retain verified or explicitly user-supplied decimals and progress', async () => {
+test('custom tokens always use configured decimals despite old verifier metadata', async () => {
   const token = validateToken('0x0000000000000000000000000000000000000002', 'CUSTOM', '6');
   const wallet = makeWallet(address, 'https://one.example');
   let updates = 0;
   await readBalances(wallet, unusedWorker, [token], () => updates++, false, engine((_tokens, emit) => {
     emit({ type: 'progress', message: 'Verifying proxy storage' });
     emit({ type: 'asset', asset: token.address });
-    emit({ type: 'balance', asset: token.address, amount: '12345', decimals: 8, decimalsVerified: true, block });
+    emit({ type: 'balance', asset: token.address, amount: '12345', decimals: 8, block });
   }));
-  expect(tokenBalance(wallet, token).decimals).toBe(8);
+  expect(tokenBalance(wallet, token).decimals).toBe(6);
   expect(wallet.verificationStatus).toContain('Verification complete');
   expect(updates).toBeGreaterThan(2);
 });
@@ -89,7 +89,7 @@ test('oracle failure keeps proven balances available and marks only the estimate
   const wallet = makeWallet(address, 'https://one.example');
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((tokens, emit) => {
     for (const token of tokens) {
-      emit({ type: 'balance', asset: token.address, amount: '7', decimals: 18, decimalsVerified: true, block });
+      emit({ type: 'balance', asset: token.address, amount: '7', decimals: 18, block });
       emit({ type: 'price-error', asset: token.address, error: 'No direct pool qualifies' });
     }
   }));
@@ -99,7 +99,7 @@ test('oracle failure keeps proven balances available and marks only the estimate
 test('a quote event for another finalized block cannot attach to a proven balance', async () => {
   const wallet = makeWallet(address, 'https://one.example');
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((_tokens, emit) => {
-    emit({ type: 'balance', asset: 'eth', amount: '7', decimals: 18, decimalsVerified: true, block });
+    emit({ type: 'balance', asset: 'eth', amount: '7', decimals: 18, block });
     emit({ type: 'price', asset: 'eth', block: { ...block, hash: '0x'+'33'.repeat(32) }, estimate: {} as any });
   }));
   expect(wallet.eth.estimate).toBeUndefined();

@@ -167,12 +167,12 @@ test('address names persist alongside balances and malformed names do not discar
   }
 });
 
-test('verified provenance and on-chain decimals survive storage but remain stale until reverified', () => {
+test('verified provenance and configured decimals survive storage but remain stale until reverified', () => {
   const wallet = makeWallet(getAddress(address), operators[0]!);
   const block = { hash: '0x' + '11'.repeat(32), stateRoot: '0x' + '22'.repeat(32), number: '0x100', timestamp: Date.now() - 60_000 };
-  wallet.weth = { amount: 0n, failed: false, updatedAt: Date.now(), verifiedBlock: block, decimals: 18, decimalsVerified: true };
+  wallet.weth = { amount: 0n, failed: false, updatedAt: Date.now(), verifiedBlock: block, decimals: 18 };
   expect(savePortfolio([wallet], defaultTokens())).toBe(true);
-  expect(loadPortfolio(operators).wallets[0]!.weth).toMatchObject({ amount: 0n, cached: true, verifiedBlock: block, decimals: 18, decimalsVerified: true });
+  expect(loadPortfolio(operators).wallets[0]!.weth).toMatchObject({ amount: 0n, cached: true, verifiedBlock: block, decimals: 18 });
 });
 
 test('last failure survives reload for saved and unavailable balances without losing provenance', () => {

@@ -30,14 +30,14 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div><label for="token-symbol">Symbol</label><input id="token-symbol" placeholder="USDC" maxlength="16" autocomplete="off" aria-describedby="token-error"></div>
 <div><label for="token-decimals">Decimals</label><input id="token-decimals" type="number" min="0" max="255" step="1" value="18" aria-describedby="token-error"></div></div>
 <label for="token-icon">Icon (optional)</label><input id="token-icon" type="file" accept="image/png,image/jpeg,image/webp"><p class="form-hint">Upload a PNG, JPEG or WebP up to 1 MB. Icons are stored in this browser.</p>
-<p class="form-hint">Use the token's actual symbol and decimals (for example, USDC uses 6). You supply these display settings; balanceOf and decimals are executed locally against proven code and storage, with no approvals or transactions.</p>
+<p class="form-hint">Use the token's actual symbol and decimals (for example, USDC uses 6). You supply these display settings; balanceOf is executed locally against proven code and storage, with no approvals or transactions.</p>
 <button type="submit">Add token</button><p id="token-error" class="input-error" role="alert"></p></form></details>
 <form id="pricing-form" novalidate>
 <h2>Price estimates</h2>
 <label for="pricing-preset">Quote token</label><select id="pricing-preset"><option value="usdc">USDC (Ethereum mainnet)</option><option value="custom">Custom ERC-20</option></select>
-<div id="pricing-custom"><label for="pricing-address">Quote contract address</label><input id="pricing-address" spellcheck="false" autocomplete="off"><label for="pricing-symbol">Quote symbol</label><input id="pricing-symbol" maxlength="16" autocomplete="off"><label for="pricing-decimals">Quote fallback decimals</label><input id="pricing-decimals" type="number" min="0" max="255"></div>
+<div id="pricing-custom"><label for="pricing-address">Quote contract address</label><input id="pricing-address" spellcheck="false" autocomplete="off"><label for="pricing-symbol">Quote symbol</label><input id="pricing-symbol" maxlength="16" autocomplete="off"><label for="pricing-decimals">Quote decimals</label><input id="pricing-decimals" type="number" min="0" max="255"></div>
 <label for="pricing-liquidity">Minimum quote-side liquidity</label><input id="pricing-liquidity" inputmode="decimal" autocomplete="off">
-<p class="form-hint">30-minute Uniswap v3 TWAP from one direct token/quote pool. No multihop. Both current and harmonic virtual quote reserves must meet this amount (default 10,000 USDC). Quote decimals are verified on-chain. No qualifying pool means no estimate.</p>
+<p class="form-hint">30-minute Uniswap v3 TWAP from one direct token/quote pool. No multihop. Both current and harmonic virtual quote reserves must meet this amount (default 10,000 USDC). Quote decimals use your configuration. No qualifying pool means no estimate.</p>
 <button type="submit">Save pricing and refresh</button><p id="pricing-error" class="input-error" role="alert"></p></form>
 <form id="settings-form" novalidate>
 <h2>Network connection</h2>
@@ -227,7 +227,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
 
   const amount = document.createElement('div');
   amount.className = 'amount';
-  amount.textContent = balance.amount === undefined ? '—' : formatBalance(balance.amount, balance.decimals ?? decimals);
+  amount.textContent = balance.amount === undefined ? '—' : formatBalance(balance.amount, decimals);
   if (pending) amount.prepend(spinner());
   const status = document.createElement('small');
   status.className = balance.failed ? 'error' : balance.cached ? 'cached' : balance.verifiedBlock ? 'proven' : '';
@@ -251,13 +251,6 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   const values = document.createElement('div'); values.className = 'balance-values';
   values.append(amount, price); box.insertBefore(values, status);
   if (balance.verifiedBlock) box.title = 'Finalized block ' + BigInt(balance.verifiedBlock.number) + ' · ' + balance.verifiedBlock.hash + ' · ' + new Date(balance.verifiedBlock.timestamp).toLocaleString();
-  if (!native) {
-    box.title += balance.decimalsVerified ? ' · decimals verified by local EVM' : ' · decimals are user-supplied';
-    if (!balance.decimalsVerified) {
-      const source = document.createElement('small'); source.className = 'decimals-source';
-      source.textContent = 'User-supplied decimals'; box.append(source);
-    }
-  }
   if (balance.updatedAt) {
     const time = document.createElement('time');
     time.className = 'sr-only';
@@ -278,7 +271,7 @@ function renderTokens() {
     const text = document.createElement('div');
     text.className = 'token-metadata';
     const name = document.createElement('strong');
-    name.textContent = token.symbol + ' · ' + token.decimals + (token.address === 'eth' ? ' native decimals' : ' fallback decimals (user-supplied)');
+    name.textContent = token.symbol + ' · ' + token.decimals + ' decimals';
     const address = document.createElement('small');
     address.textContent = token.address === 'eth' ? 'Native Ethereum' : token.address;
     const status = document.createElement('small');
@@ -360,9 +353,7 @@ function renderTotals() {
     const coverage = total.known + '/' + total.addresses + ' addresses';
     status.textContent = !total.addresses ? 'Add an address to start'
       : total.known < total.addresses ? 'Partial · ' + coverage : coverage;
-    if (total.decimalsMismatch) status.textContent += ' · decimals differ; total unavailable';
     if (total.mixedBlocks) status.textContent += ' · mixed finalized blocks';
-    if (total.userSuppliedDecimals) status.textContent += ' · user-supplied decimals';
     if (total.stale) status.textContent += ' · ' + total.stale + ' stale';
     if (total.loading) status.textContent += ' · updating';
     card.classList.toggle('incomplete', total.known < total.addresses || total.stale > 0);
@@ -748,7 +739,8 @@ const quoteAddress = document.querySelector<HTMLInputElement>('#pricing-address'
 const quoteSymbol = document.querySelector<HTMLInputElement>('#pricing-symbol')!;
 const quoteDecimals = document.querySelector<HTMLInputElement>('#pricing-decimals')!;
 const quoteLiquidity = document.querySelector<HTMLInputElement>('#pricing-liquidity')!;
-pricingPreset.value = pricing.quote.address === defaultPricing().quote.address ? 'usdc' : 'custom';
+const presetQuote = defaultPricing().quote;
+pricingPreset.value = pricing.quote.address === presetQuote.address && pricing.quote.decimals === presetQuote.decimals && pricing.quote.symbol === presetQuote.symbol ? 'usdc' : 'custom';
 quoteAddress.value = pricing.quote.address; quoteSymbol.value = pricing.quote.symbol;
 quoteDecimals.value = String(pricing.quote.decimals); quoteLiquidity.value = pricing.minLiquidity;
 function showPricingCustom() { document.querySelector<HTMLElement>('#pricing-custom')!.hidden = pricingPreset.value !== 'custom'; }

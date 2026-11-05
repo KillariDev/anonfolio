@@ -5,7 +5,7 @@ import { loadPricing, type Estimate, type PricingSettings } from '../pricing';
 import type { Token } from '../tokens';
 import type { VerifiedBlock } from './trust';
 import { privateExecutionRpc, privateConsensusGet } from './transport';
-export type VerifiedAmount = { asset: string; amount: string; decimals: number; decimalsVerified: boolean; block: VerifiedBlock; estimate?: Estimate };
+export type VerifiedAmount = { asset: string; amount: string; decimals: number; block: VerifiedBlock; estimate?: Estimate };
 export type VerificationEvent = { type: string; message?: string; asset?: string; error?: string } & Partial<VerifiedAmount>;
 let shared: Worker | undefined;
 let consensusRoute: { worker: PrivateWorker; key: string } | undefined;

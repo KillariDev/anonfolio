@@ -8,7 +8,7 @@ import { WETH } from './config';
 import { defaultTokens, type Token } from './tokens';
 
 export type PrivateWorker = Pick<AnonRpcWorker, 'fetch'>;
-export type Balance = { failure?: ReadFailure; estimate?: Estimate; priceError?: string; amount?: bigint; updatedAt?: number; failed: boolean; cached?: boolean; verifiedBlock?: VerifiedBlock; decimals?: number; decimalsVerified?: boolean };
+export type Balance = { failure?: ReadFailure; estimate?: Estimate; priceError?: string; amount?: bigint; updatedAt?: number; failed: boolean; cached?: boolean; verifiedBlock?: VerifiedBlock; decimals?: number };
 export type RequestActivity = {
   asset: string;
   symbol: string;
@@ -69,7 +69,7 @@ export async function readBalances(
       if (event.type === 'asset' && activity) { activity.phase = 'requesting'; activity.attempt++; }
       if (event.type === 'balance' && token && event.block && event.amount !== undefined) {
         setTokenBalance(wallet, token, { amount: BigInt(event.amount), updatedAt: Date.now(), failed: false,
-          verifiedBlock: event.block, decimals: event.decimals, decimalsVerified: event.decimalsVerified });
+          verifiedBlock: event.block, decimals: token.decimals });
         if (activity) activity.phase = 'received';
         pending.delete(token.address);
       }

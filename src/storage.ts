@@ -50,7 +50,7 @@ function restoreBalance(value: unknown): Balance {
   return { ...(failure ? { failure } : {}), estimate, amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true,
     ...(block ? { verifiedBlock: block } : {}),
     ...(typeof value.decimals === 'number' && Number.isInteger(value.decimals) && value.decimals >= 0 && value.decimals <= 255
-      ? { decimals: value.decimals, decimalsVerified: value.decimalsVerified === true } : {}),
+      ? { decimals: value.decimals } : {}),
   };
 }
 export function loadPortfolio(rpcUrls: string[]): { wallets: Wallet[]; tokens: Token[] } {
@@ -100,7 +100,7 @@ export function loadPortfolio(rpcUrls: string[]): { wallets: Wallet[]; tokens: T
 }
 function savedBalance(balance: Balance) {
   return balance.amount === undefined ? (balance.failure ? { failed: true, failure: balance.failure } : undefined)
-    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, failure: balance.failure, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, decimalsVerified: balance.decimalsVerified, estimate: balance.estimate };
+    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, failure: balance.failure, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, estimate: balance.estimate };
 }
 export function savePortfolio(wallets: Wallet[], tokens: Token[]): boolean {
   try {

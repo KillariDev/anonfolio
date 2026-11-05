@@ -123,8 +123,7 @@ async function refresh(message: any) {
       send('asset', { asset: token.address });
       try {
         let amount: bigint;
-        let decimals = token.decimals;
-        let decimalsVerified = token.address === 'eth';
+        const decimals = token.decimals;
         if (token.address === 'eth') {
           step('ETH: requesting wallet account proof and verifying its balance against the finalized state root.');
           amount = BigInt(await helios.get_balance(message.address, { blockHash: block.hash }));
@@ -134,14 +133,9 @@ async function refresh(message: any) {
           const output = await helios.call(call, { blockHash: block.hash }, undefined);
           if (!/^0x[0-9a-f]{64}$/i.test(output)) throw new Error('Invalid balanceOf return value.');
           amount = BigInt(output);
-          try {
-            step(token.symbol + ': locally verifying decimals() at the same finalized block.');
-            const result = await helios.call({ to: token.address, input: '0x313ce567', gas: '0x989680' }, { blockHash: block.hash }, undefined);
-            if (!/^0x[0-9a-f]{64}$/i.test(result) || BigInt(result) > 255n) throw new Error('Invalid decimals return value.');
-            decimals = Number(BigInt(result)); decimalsVerified = true;
-          } catch { step(token.symbol + ': decimals() unavailable; displayed decimals remain explicitly user-supplied.'); }
+
         }
-        send('balance', { asset: token.address, amount: amount.toString(), decimals, decimalsVerified, block });
+        send('balance', { asset: token.address, amount: amount.toString(), decimals, block });
         pricedTokens.push(token);
       } catch (error) { send('asset-error', { asset: token.address, error: executionFailure || String(error) }); }
     }

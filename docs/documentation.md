@@ -79,7 +79,7 @@ The watchlist uses compact table rows, a refresh button beside each address, exp
 
 The tracked-token list applies to every address. Native ETH is represented internally by the identifier `eth`; ERC-20 assets use their contract addresses. ETH and WETH use the same settings controls as custom tokens and can be removed and re-added. Removing all tokens preserves the address list while stopping balance reads.
 
-Custom token configuration includes a contract address, display symbol, fallback decimals, and optional icon. Token identity is based on the address, so two contracts with the same symbol remain distinct. The symbol is user-supplied display metadata; it is not an authenticated token name.
+Custom token configuration includes a contract address, display symbol, decimals, and optional icon. Token identity is based on the address, so two contracts with the same symbol remain distinct. The symbol is user-supplied display metadata; it is not an authenticated token name.
 
 Icons use bundled assets or local raster uploads. Uploaded PNG, JPEG, and WebP files are limited to 1 MB, decoded in the browser, fitted into a 64×64 canvas, and saved as PNG data URLs. Missing images use a symbol badge. Remote icon URLs and uploaded SVGs are rejected. The application icon is a bundled SVG shared by the header and browser tab.
 
@@ -135,11 +135,11 @@ For WETH and custom ERC-20 tokens, Helios runs `balanceOf(wallet)` in its local 
 
 This approach does not assume a token's balance mapping lives at a particular slot. Proxy implementation code and storage dependencies follow the same verified execution path. Every requested storage slot must be present in the proof response, preventing an omitted nonzero slot from being interpreted as zero.
 
-The verifier also executes `decimals()` at the same block. A valid result replaces the configured fallback. If that call is unavailable or reverts, the balance remains usable but its displayed decimals are labeled user-supplied. ETH intrinsically uses 18 decimals. Pricing has a stricter quote-token rule: it requires verified quote decimals before returning an estimate.
+Token and quote decimals are always configured display metadata. The verifier executes only `balanceOf(wallet)` for token balances; it never calls `decimals()`, and pricing does not make metadata calls either. Built-in ETH/WETH default to 18 decimals and the USDC quote defaults to 6. Configured decimals control display and token totals even when a legacy cache contains different on-chain decimal metadata. Balance authenticity still comes from the finalized account/storage proofs and local EVM execution; decimal precision comes from the user's settings. Cached price estimates are eligible only when their quote precision matches the current configuration.
 
 ### Result and error messages
 
-`verification/client.ts` assigns session IDs and relays progress, asset starts, balances, prices, and failures. `balances.ts` applies these events to wallet state. A successful balance stores its raw bigint amount, retrieval time, verified block metadata, and decimals provenance.
+`verification/client.ts` assigns session IDs and relays progress, asset starts, balances, prices, and failures. `balances.ts` applies these events to wallet state. A successful balance stores its raw bigint amount, retrieval time, verified block metadata, and configured decimals.
 
 Each failed asset retains its own error message, failed step, and attempt timestamp, so later progress or another asset's error cannot replace its cause. A short explanation next to the balance opens Details with a styled error card: a clear title, recovery guidance, and compact endpoint/time metadata. Raw errors and distinct failed steps are tucked behind Technical details; repeated transport error text is omitted from the stage. There are no settings shortcut buttons in these cards. Wallet progress text appears only while verification is active, so completed failures do not retain a misleading consensus status above the cards. These failure records survive reloads, including failed first reads with no amount, and clear when that asset is successfully verified. Errors that echo endpoint URLs have credentials, paths, and query strings redacted before display/storage. If an older snapshot has no recorded reason, the UI says so and asks for a refresh to capture one.
 
@@ -181,13 +181,13 @@ The portfolio adds these fractions and reduces them before display conversion. D
 
 Oracle execution occurs after the balance loop, through the same local EVM, pinned block, and wallet transport. No external price API or public execution shortcut is involved.
 
-`TwapOracle` keeps three bounded in-memory maps, each limited to 128 entries: pool data keyed by pool/window/block hash, selected pools keyed by base/quote/window/block/liquidity floor, and verified quote decimals keyed by quote address/block. Cached raw liquidity is normalized again when quoting a pool in reverse. Successful estimates are also stored with their balances for historical display. Qualification failures are not cached as quotes.
+`TwapOracle` keeps two bounded in-memory maps, each limited to 128 entries: pool data keyed by pool/window/block hash, and selected pools keyed by base/quote/window/block/liquidity floor. Cached raw liquidity is normalized again when quoting a pool in reverse. Successful estimates are also stored with their balances for historical display. Qualification failures are not cached as quotes.
 
-An estimate can be displayed only when its quote address, block hash, window, and liquidity setting match the active settings and balance. Changing pricing settings clears stored estimates and refreshes wallets. A missing pool, short history, insufficient liquidity, unavailable quote decimals, or failed private request leaves the holding **Unpriced** without invalidating its proven balance. Oracle-only failures currently require a manual refresh; the balance retry scheduler is driven by balance failures.
+An estimate can be displayed only when its quote address, block hash, window, and liquidity setting match the active settings and balance. Changing pricing settings clears stored estimates and refreshes wallets. A missing pool, short history, insufficient liquidity, or failed private request leaves the holding **Unpriced** without invalidating its proven balance. Oracle-only failures currently require a manual refresh; the balance retry scheduler is driven by balance failures.
 
 ## Totals and number formatting
 
-`portfolioTotals()` sums raw bigint balances separately for each token contract/native identifier. It records coverage, stale values, loading state, block hashes, and decimals provenance. Unknown balances are excluded and make coverage partial. Conflicting decimals suppress the token amount total instead of adding incompatible units. Cached or failed historical values can be included with stale indicators.
+`portfolioTotals()` sums raw bigint balances separately for each token contract/native identifier. It records coverage, stale values, loading state, block hashes, and configured decimals. Unknown balances are excluded and make coverage partial. Conflicting decimals suppress the token amount total instead of adding incompatible units. Cached or failed historical values can be included with stale indicators.
 
 `estimatedTotal()` sums usable holding-value fractions in the configured quote token. It reports the number of priced holdings, marks missing prices as partial, labels mixed finalized blocks and stale values, and suppresses the displayed amount if quote decimals conflict across snapshots.
 

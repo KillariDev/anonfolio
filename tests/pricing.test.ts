@@ -10,7 +10,7 @@ const block = { hash: '0x' + '11'.repeat(32), stateRoot: '0x' + '22'.repeat(32),
 const low = '0x0000000000000000000000000000000000000001' as Address;
 const high = getAddress('0xf000000000000000000000000000000000000001');
 const poolAddress = '0x0000000000000000000000000000000000000010' as Address;
-type Fixture = { base?: Address; quote?: Address; tick?: number; history?: boolean; liquidity?: bigint; harmonic?: bigint; factory?: Address; noDirect?: boolean; decimals?: number; fee?: number };
+type Fixture = { base?: Address; quote?: Address; tick?: number; history?: boolean; liquidity?: bigint; harmonic?: bigint; factory?: Address; noDirect?: boolean; fee?: number };
 function fixture(options: Fixture = {}) {
   const base = options.base ?? WETH, quote = options.quote ?? USDC;
   const [token0, token1] = [base, quote].sort((a,b) => a.toLowerCase().localeCompare(b.toLowerCase()));
@@ -31,7 +31,6 @@ function fixture(options: Fixture = {}) {
       case 'token0': result = token0; break;
       case 'token1': result = token1; break;
       case 'fee': result = options.fee ?? 500; break;
-      case 'decimals': result = options.decimals ?? 6; break;
       case 'liquidity': result = liquidity; break;
       case 'slot0': result = [1n << 96n, 0, 1, 2, 2, 0, true]; break;
       case 'observe':
@@ -56,12 +55,13 @@ test('ETH and WETH share exactly the canonical direct 0.05% pool and a block/win
   await oracle.estimate(ethToken, defaultPricing(), { ...block, hash: '0x'+'33'.repeat(32) }, rpc.call, progress);
   expect(rpc.calls.filter(c => c.method === 'observe')).toHaveLength(2);
 });
-test('token ordering and verified quote decimals convert raw amounts without floating point', async () => {
+test('token ordering and configured quote decimals convert raw amounts without floating point', async () => {
   for (const address of [low, high]) {
     const token = validateToken(address, 'TEST', '18');
-    const rpc = fixture({ base: address, tick: 0, decimals: 8 });
-    const estimate = await new TwapOracle().estimate(token, defaultPricing(), block, rpc.call, progress);
-    expect(estimate.decimals).toBe(8); // verified, not the supplied six
+    const rpc = fixture({ base: address, tick: 0 });
+    const settings = validatePricing({ ...defaultPricing(), quote: { ...defaultPricing().quote, decimals: 8 } });
+    const estimate = await new TwapOracle().estimate(token, settings, block, rpc.call, progress);
+    expect(estimate.decimals).toBe(8); // configured precision, without a decimals() call
     expect(formatBalance(displayValue(valueFraction(123456789n, estimate)), 26)).toBe('1.23');
     const price = await new TwapOracle().estimate(token, defaultPricing(), block, fixture({ base: address, tick: 100 }).call, progress);
     const result = displayValue(valueFraction(10n ** 18n, price));
@@ -93,7 +93,7 @@ test('a token with only a WETH pool is never routed through WETH to USDC', async
 });
 test('custom quote uses only its direct pair and same-token holdings are denominated at par', async () => {
   const settings = validatePricing({ quote: { address: low, symbol: 'CUSTOM', decimals: 8 }, minLiquidity: '100' });
-  const rpc = fixture({ base: WETH, quote: low, decimals: 8 });
+  const rpc = fixture({ base: WETH, quote: low });
   const estimate = await new TwapOracle().estimate(ethToken, settings, block, rpc.call, progress);
   expect(estimate.quote).toBe(low); expect(estimate.pool).toBe(poolAddress);
   expect(rpc.calls.filter(c => c.method === 'getPool').every(c => c.args[1] === low)).toBe(true);
@@ -146,8 +146,18 @@ test('a cached pool can be quoted in reverse without mixing liquidity units', as
   const oracle = new TwapOracle();
   const forward = await oracle.estimate(validateToken(low, 'TOKEN', '8'), defaultPricing(), block, fixture({ base: low, tick: 100 }).call, progress);
   const reverseSettings = validatePricing({ quote: { address: low, symbol: 'TOKEN', decimals: 8 }, minLiquidity: '100' });
-  const reverseRpc = fixture({ base: USDC, quote: low, tick: 100, decimals: 8 });
+  const reverseRpc = fixture({ base: USDC, quote: low, tick: 100 });
   const reverse = await oracle.estimate(defaultPricing().quote, reverseSettings, block, reverseRpc.call, progress);
   expect(reverse.numerator).toBe(forward.denominator); expect(reverse.denominator).toBe(forward.numerator);
   expect(reverseRpc.calls.filter(c => c.method === 'observe')).toHaveLength(0);
+});
+
+
+test('quote-token holdings require no contract calls and cached quotes must match configured decimals', async () => {
+  const settings = validatePricing({ ...defaultPricing(), quote: { ...defaultPricing().quote, decimals: 8 } });
+  const quote = await new TwapOracle().estimate(settings.quote, settings, block, async () => { throw new Error('No metadata call is necessary'); }, progress);
+  expect(quote.decimals).toBe(8);
+  const balance = { amount: 100000000n, verifiedBlock: block, estimate: quote };
+  expect(usableEstimate(balance, settings)).toBe(quote);
+  expect(usableEstimate(balance, defaultPricing())).toBeUndefined();
 });

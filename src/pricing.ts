@@ -16,8 +16,7 @@ export function validatePricing(value: unknown): PricingSettings {
   const quote = validateToken(data.quote.address, data.quote.symbol, String(data.quote.decimals));
   if (!/^\d{1,24}(\.\d{1,18})?$/.test(data.minLiquidity) || !/[1-9]/.test(data.minLiquidity)) throw new Error('Minimum quote liquidity must be a positive decimal amount.');
   if ((data.minLiquidity.split('.')[1]?.length || 0) > quote.decimals) throw new Error('Liquidity amount exceeds quote token precision.');
-  // Canonical USDC display metadata cannot be overridden.
-  return { quote: (quote.address === USDC ? defaultPricing().quote : quote) as PricingSettings['quote'], minLiquidity: data.minLiquidity };
+  return { quote: quote as PricingSettings['quote'], minLiquidity: data.minLiquidity };
 }
 export function loadPricing(): PricingSettings {
   try { const saved = localStorage.getItem(PRICING_KEY); if (saved) return validatePricing(JSON.parse(saved)); } catch { /* use defaults */ }
@@ -32,7 +31,6 @@ export const oracleAbi = parseAbi([
   'function getPool(address,address,uint24) view returns (address)',
   'function factory() view returns (address)', 'function token0() view returns (address)', 'function token1() view returns (address)',
   'function fee() view returns (uint24)', 'function liquidity() view returns (uint128)',
-  'function decimals() view returns (uint8)',
   'function slot0() view returns (uint160,int24,uint16,uint16,uint16,uint8,bool)',
   'function observe(uint32[]) view returns (int56[],uint160[])',
 ]);
@@ -73,24 +71,16 @@ type PoolQuote = { pool: Address; token0: Address; token1: Address; tick: number
 export class TwapOracle {
   private pools = new Map<string, PoolQuote>();
   private selections = new Map<string, PoolQuote>();
-  private decimals = new Map<string, number>();
   private put<T>(cache: Map<string, T>, key: string, value: T) { if (cache.size >= 128) cache.delete(cache.keys().next().value!); cache.set(key, value); }
   async estimate(token: Token, settings: PricingSettings, block: VerifiedBlock, call: LocalCall, progress: (message: string) => void): Promise<Estimate> {
     const base = token.address === 'eth' ? WETH : token.address;
     const quote = settings.quote.address;
     const read = (to: Address, method: string, args: readonly unknown[] = []) => contractRead(call, to, method, args);
-    const decimalsKey = quote + ':' + block.hash;
-    let decimals = this.decimals.get(decimalsKey);
-    if (decimals === undefined) {
-      progress('Pricing: verifying quote token decimals() locally at the balance’s finalized block.');
-      decimals = Number(await read(quote, 'decimals'));
-      if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error('Quote decimals unavailable.');
-      this.put(this.decimals, decimalsKey, decimals);
-    }
+    const decimals = settings.quote.decimals;
     const common = { quote, symbol: settings.quote.symbol, decimals, blockHash: block.hash, window: WINDOW, minLiquidity: settings.minLiquidity };
     // A holding denominated in the quote token needs no oracle conversion.
     if (base === quote) return { ...common, pool: zeroAddress, numerator: '1', denominator: '1' };
-    if ((settings.minLiquidity.split('.')[1]?.length || 0) > decimals) throw new Error('Liquidity floor exceeds verified quote precision.');
+    if ((settings.minLiquidity.split('.')[1]?.length || 0) > decimals) throw new Error('Liquidity floor exceeds configured quote precision.');
     const floor = parseUnits(settings.minLiquidity, decimals);
     if (floor <= 0n) throw new Error('Invalid liquidity floor.');
     const selectionKey = [base, quote, WINDOW, block.hash, floor].join(':');
@@ -156,5 +146,5 @@ export function displayValue(value: Fraction): bigint { return value.numerator *
 
 export function usableEstimate(balance: { amount?: bigint; verifiedBlock?: VerifiedBlock; estimate?: Estimate }, settings: PricingSettings): Estimate | undefined {
   const estimate = balance.estimate;
-  return balance.amount !== undefined && estimate?.quote === settings.quote.address && estimate.blockHash === balance.verifiedBlock?.hash && estimate.window === WINDOW && estimate.minLiquidity === settings.minLiquidity ? estimate : undefined;
+  return balance.amount !== undefined && estimate?.quote === settings.quote.address && estimate.decimals === settings.quote.decimals && estimate.blockHash === balance.verifiedBlock?.hash && estimate.window === WINDOW && estimate.minLiquidity === settings.minLiquidity ? estimate : undefined;
 }
