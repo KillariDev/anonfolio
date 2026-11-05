@@ -32,7 +32,7 @@ export function tokenBalance(wallet: Wallet, token: Token): Balance {
   if (token.address === WETH) return wallet.weth;
   return wallet.tokens[token.address] ??= { failed: false };
 }
-export function prepareActivity(wallet: Wallet, tokens: Token[]) {
+export function prepareActivity(wallet: Wallet, tokens: Token[], onlyFailed = false) {
   wallet.activity = [
     { asset: 'eth', symbol: 'ETH', description: 'eth_getBalance(address, latest)', phase: 'waiting', attempt: 0 },
     ...[wethToken, ...tokens].map(token => ({
@@ -41,6 +41,8 @@ export function prepareActivity(wallet: Wallet, tokens: Token[]) {
       phase: 'waiting' as const, attempt: 0,
     })),
   ];
+  if (onlyFailed) wallet.activity = wallet.activity.filter(item => item.asset === 'eth'
+    ? wallet.eth.failed : item.asset === WETH ? wallet.weth.failed : wallet.tokens[item.asset]?.failed);
 }
 export function privateClient(wallet: Wallet, worker: PrivateWorker, onChange: () => void = () => {}) {
   // Every attempt, including viem retries, goes through this wallet's worker route.
@@ -64,9 +66,9 @@ export function privateClient(wallet: Wallet, worker: PrivateWorker, onChange: (
   });
 }
 export async function readBalances(
-  wallet: Wallet, worker: PrivateWorker, tokens: Token[] = [], onChange: () => void = () => {},
+  wallet: Wallet, worker: PrivateWorker, tokens: Token[] = [], onChange: () => void = () => {}, onlyFailed = false,
 ) {
-  prepareActivity(wallet, tokens);
+  prepareActivity(wallet, tokens, onlyFailed);
   const client = privateClient(wallet, worker, onChange);
   const jobs = [
     { asset: 'eth', balance: () => wallet.eth, set: (value: Balance) => { wallet.eth = value; },
@@ -81,7 +83,7 @@ export async function readBalances(
         args: [wallet.address], blockTag: 'latest' }),
     })),
   ];
-  await Promise.all(jobs.map(async job => {
+  await Promise.all(jobs.filter(job => !onlyFailed || job.balance().failed).map(async job => {
     const activity = wallet.activity.find(item => item.asset === job.asset);
     try {
       const amount = await job.read();

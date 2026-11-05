@@ -12,10 +12,10 @@ test('static build loads and handles unavailable bootstrap without public balanc
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'A little less public.' })).toBeVisible();
   await page.locator('#address').fill('invalid');
-  await page.getByRole('button', { name: 'Add wallet' }).click();
+  await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.getByRole('alert')).toContainText('valid Ethereum address');
   await page.locator('#address').fill('0x0000000000000000000000000000000000000001');
-  await page.getByRole('button', { name: 'Add wallet' }).click();
+  await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.getByRole('button', { name: 'Retry connection' })).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('.amount')).toHaveText(['—', '—']);
   await expect(page.locator('.error')).toHaveText(['Lookup failed · retry available', 'Lookup failed · retry available']);

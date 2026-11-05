@@ -53,7 +53,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   await expect(page.locator('#connection')).toContainText('bootstrap.example');
   await addToken(page);
   await page.locator('#address').fill(a + ',\n' + b + '\n' + a);
-  await page.getByRole('button', { name: 'Add wallet' }).click();
+  await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.wallet')).toHaveCount(2);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(2);
   await expect(page.locator('.activity-item.waiting')).toHaveCount(6);
@@ -82,7 +82,7 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
   await page.goto('/');
   await addToken(page);
   await page.locator('#address').fill(a);
-  await page.getByRole('button', { name: 'Add wallet' }).click();
+  await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.234567']);
   const originalTimes = await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')));
   const snapshot = await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!));
@@ -111,7 +111,7 @@ test('invalid bulk input is atomic and invalid or duplicate tokens do not change
   await mockConnection(page);
   await page.goto('/');
   await page.locator('#address').fill(a + '\ninvalid');
-  await page.getByRole('button', { name: 'Add wallet' }).click();
+  await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('#input-error')).toContainText('valid Ethereum address');
   await expect(page.locator('.wallet')).toHaveCount(0);
   await addToken(page);
@@ -135,7 +135,88 @@ test('storage write failure is visible while reads and changes still work', asyn
   await mockConnection(page);
   await page.goto('/');
   await page.locator('#address').fill(a);
-  await page.getByRole('button', { name: 'Add wallet' }).click();
+  await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
   await expect(page.locator('#storage-warning')).toContainText('could not be saved');
+});
+
+test('failed retrieval retries automatically without a button click and stops after success', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'add address to track' })).toBeVisible();
+  await expect(page.getByText('YOUR WALLETS. YOUR BUSINESS.', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.privacy-note')).toHaveCount(0);
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  const originalCalls = await page.evaluate(() => (window as any).__calls);
+  await page.evaluate(() => { (window as any).__fail = true; });
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await expect(page.locator('.error')).toHaveCount(2);
+  await expect(page.locator('.activity')).toContainText('Automatic retry 1 scheduled');
+  await page.evaluate(() => { (window as any).__fail = false; });
+  await expect(page.locator('.error')).toHaveCount(0, { timeout: 8000 });
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.activity')).not.toContainText('Automatic retry');
+  const after = await page.evaluate(() => (window as any).__calls);
+  expect(new Set(after.map((call: any) => call.key))).toEqual(new Set(originalCalls.map((call: any) => call.key)));
+  const count = after.length;
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => (window as any).__calls.length)).toBe(count);
+});
+
+test('offline reads resume automatically on reconnect and removed addresses never retry', async ({ page, context }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  const initial = await page.evaluate(() => (window as any).__calls.length);
+  await context.setOffline(true);
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await expect(page.locator('.activity')).toContainText('paused until the connection returns');
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => (window as any).__calls.length)).toBe(initial);
+  await context.setOffline(false);
+  await expect(page.locator('.error')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__calls.length)).toBeGreaterThan(initial);
+  await page.evaluate(() => { (window as any).__fail = true; });
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await expect(page.locator('.activity')).toContainText('Automatic retry 1 scheduled');
+  await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
+  const removedCount = await page.evaluate(() => (window as any).__calls.length);
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => (window as any).__calls.length)).toBe(removedCount);
+  await expect(page.locator('.wallet')).toHaveCount(0);
+});
+
+test('worker discovery failures reconnect automatically and resume pending reads', async ({ page }) => {
+  await page.route('**/src/connection.ts*', route => route.fulfill({
+    contentType: 'text/javascript', body: `
+      window.__recover = false;
+      export class Connection {
+        constructor(onState) { this.onState = onState; }
+        async get() {
+          if (!window.__recover) { this.onState('failed'); throw new Error('temporary startup failure'); }
+          this.onState('ready');
+          return { fetch: async (_, init) => {
+            const body = JSON.parse(init.body);
+            return Response.json({ jsonrpc: '2.0', id: body.id,
+              result: body.method === 'eth_getBalance' ? '0x0' : '0x' + '0'.repeat(64) });
+          }};
+        }
+        close() {}
+      }
+    `,
+  }));
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.error')).toHaveCount(2);
+  await expect(page.locator('#connection')).toContainText('Automatic retry');
+  await page.evaluate(() => { (window as any).__recover = true; });
+  await expect(page.locator('#connection')).toContainText('Private worker ready', { timeout: 8000 });
+  await expect(page.locator('.amount')).toHaveText(['0', '0'], { timeout: 8000 });
+  await expect(page.locator('.error')).toHaveCount(0);
 });

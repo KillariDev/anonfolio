@@ -3,15 +3,16 @@ import { Connection, type ConnectionState } from './connection';
 import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance, type Balance, type Wallet } from './balances';
 import { loadPortfolio, savePortfolio } from './storage';
 import { parseWalletList, validateToken, wethToken, type Token } from './tokens';
+import { RetryQueue } from './retries';
 import './style.css';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <header><a class="brand" href="./" aria-label="Anonfolio home"><span class="brand-mark">a</span>anonfolio<span class="brand-dot">.</span></a><span class="network"><i></i>Ethereum mainnet</span></header>
-<main><div class="eyebrow">YOUR WALLETS. YOUR BUSINESS.</div>
+<main>
 <h1>A little less public.</h1><p class="intro">Keep an eye on your ETH and tokens.<br>Read balances through Tor, with a private route for every wallet.</p>
 <form id="wallet-form" novalidate>
 <label for="address">Ethereum wallet addresses</label>
-<div class="input-row"><textarea id="address" name="address" rows="2" placeholder="0x… Paste one address or a list" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="wallet-hint input-error" required></textarea><button class="primary" type="submit">Add wallet <span aria-hidden="true">↗</span></button></div>
+<div class="input-row"><textarea id="address" name="address" rows="2" placeholder="0x… Paste one address or a list" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="wallet-hint input-error" required></textarea><button class="primary" type="submit">add address to track <span aria-hidden="true">↗</span></button></div>
 <p class="form-hint" id="wallet-hint">One address per line, or separate addresses with commas. Each wallet has its own refresh.</p>
 <p id="input-error" class="input-error" role="alert"></p><p id="wallet-notice" class="form-hint" role="status"></p></form>
 <details class="token-settings"><summary>Tracked tokens <span id="token-count"></span></summary>
@@ -27,7 +28,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div id="connection" role="status" aria-live="polite"></div>
 <p id="offline-notice" role="status"></p><p id="storage-warning" role="status"></p>
 <section id="wallets" aria-label="Watched wallets"></section>
-<aside class="privacy-note"><span aria-hidden="true">⌁</span><div><strong>A private path to public balances.</strong><p>Wallet reads travel through Anon-RPC and Tor. No wallet connection, no analytics, no addresses in URLs. The RPC operator still sees the address it reads. Saved balances may be out of date.</p></div></aside>
 </main><footer><span>anonfolio / balance reader</span><span>Ethereum mainnet · Latest RPC state</span></footer>`;
 
 let state: ConnectionState = 'starting';
@@ -36,8 +36,18 @@ const { wallets, tokens } = loadPortfolio(config.rpcUrls);
 const walletList = document.querySelector<HTMLElement>('#wallets')!;
 const input = document.querySelector<HTMLTextAreaElement>('#address')!;
 const error = document.querySelector<HTMLElement>('#input-error')!;
+const retries = new RetryQueue<Wallet | 'connection'>(
+  key => key === 'connection' ? start(true) : refreshWallet(key, true),
+  () => navigator.onLine,
+  () => { renderConnection(); render(); },
+);
 const connection = new Connection(
-  next => { state = next; renderConnection(); },
+  next => {
+    state = next;
+    if (next === 'failed') retries.schedule('connection');
+    else if (next === 'ready') retries.cancel('connection');
+    renderConnection();
+  },
   message => { connectionMessage = message; renderConnection(); },
 );
 function persist() {
@@ -49,6 +59,13 @@ function spinner() {
   node.className = 'spinner';
   node.setAttribute('aria-hidden', 'true');
   return node;
+}
+function retryMessage(key: Wallet | 'connection') {
+  const retry = retries.info(key);
+  if (!retry) return '';
+  return retry.dueAt
+    ? 'Automatic retry ' + retry.attempt + ' scheduled at ' + new Date(retry.dueAt).toLocaleTimeString() + '.'
+    : 'Automatic retry paused until the connection returns.';
 }
 function renderConnection() {
   const node = document.querySelector<HTMLElement>('#connection')!;
@@ -64,7 +81,7 @@ function renderConnection() {
   detail.className = 'connection-detail';
   detail.textContent = state === 'starting' ? connectionMessage
     : state === 'ready' ? 'Balance requests go to the RPC operator listed on each wallet. Worker readiness does not guarantee that every Tor route or operator is reachable.'
-    : 'No direct fallback was used. Saved balances remain visible. Retry the connection, then refresh the wallets you want.';
+    : 'Saved balances remain visible. ' + retryMessage('connection');
   const gateway = document.createElement('p');
   gateway.className = 'connection-detail';
   gateway.textContent = 'Configured Tor gateway(s): ' + config.gateways.map(entry => entry.split(':').slice(0, 2).join(':')).join(', ')
@@ -164,7 +181,11 @@ function render() {
     remove.className = 'remove';
     remove.textContent = '×';
     remove.setAttribute('aria-label', 'Remove ' + wallet.address);
-    remove.onclick = () => { wallets.splice(wallets.indexOf(wallet), 1); persist(); render(); };
+    remove.onclick = () => {
+      retries.cancel(wallet);
+      wallets.splice(wallets.indexOf(wallet), 1);
+      persist(); render();
+    };
     actions.append(refresh, remove);
     head.append(identity, actions);
     const amounts = document.createElement('div');
@@ -186,6 +207,8 @@ function render() {
       const finished = wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length;
       summary.textContent = wallet.loading ? (finished + '/' + wallet.activity.length + ' reads finished · ' + (wallet.activity.some(item => item.attempt > 0) ? 'Waiting for private RPC responses.' : 'Waiting for the private worker; balance calls have not been submitted yet.'))
         : finished + '/' + wallet.activity.length + ' reads finished. Each amount shows its own result and last successful time.';
+      const retry = retryMessage(wallet);
+      if (retry) summary.textContent += ' ' + retry;
       activity.append(summary);
       wallet.activity.filter(item => item.asset === 'eth' || item.asset === wethToken.address || tokens.some(token => token.address === item.asset)).forEach(item => {
         const line = document.createElement('div');
@@ -213,31 +236,44 @@ function pruneTokenBalances(wallet: Wallet) {
     if (!tokens.some(token => token.address === address)) delete wallet.tokens[address];
   }
 }
-async function refreshWallet(wallet: Wallet) {
+async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   if (wallet.loading) { wallet.queuedRefresh = true; return; }
   if (!wallets.includes(wallet)) return;
+  if (onlyFailed) retries.begin(wallet);
+  else retries.cancel(wallet);
   const selectedTokens = [...tokens];
   wallet.loading = true;
-  prepareActivity(wallet, selectedTokens);
+  prepareActivity(wallet, selectedTokens, onlyFailed);
   render();
   try {
     if (!navigator.onLine) throw new Error('Offline');
     const worker = await connection.get();
-    if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { pruneTokenBalances(wallet); persist(); render(); });
+    if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { pruneTokenBalances(wallet); persist(); render(); }, onlyFailed);
   } catch {
-    wallet.eth.failed = wallet.weth.failed = true;
-    selectedTokens.forEach(token => { tokenBalance(wallet, token).failed = true; });
-    wallet.activity.forEach(item => { item.phase = 'failed'; });
+    wallet.activity.forEach(item => {
+      if (item.asset === 'eth') wallet.eth.failed = true;
+      else {
+        const token = [wethToken, ...selectedTokens].find(token => token.address === item.asset);
+        if (token) tokenBalance(wallet, token).failed = true;
+      }
+      item.phase = 'failed';
+    });
   } finally {
     wallet.loading = false;
     pruneTokenBalances(wallet);
     persist(); render();
+    if (!wallets.includes(wallet)) { retries.cancel(wallet); return; }
     if (wallet.queuedRefresh) { wallet.queuedRefresh = false; void refreshWallet(wallet); }
+    else if ([wallet.eth, wallet.weth, ...Object.values(wallet.tokens)].some(balance => balance.failed)) retries.schedule(wallet);
+    else retries.cancel(wallet);
   }
 }
-async function start() {
-  if (!navigator.onLine) { state = 'failed'; renderConnection(); return; }
-  try { await connection.get(); } catch { /* connection status provides retry */ }
+async function start(automatic = false) {
+  if (automatic) retries.begin('connection');
+  else retries.cancel('connection');
+  if (!navigator.onLine) { state = 'failed'; retries.schedule('connection'); renderConnection(); return; }
+  try { await connection.get(); }
+  catch { state = 'failed'; retries.schedule('connection'); renderConnection(); }
 }
 document.querySelector('#wallet-form')!.addEventListener('submit', event => {
   event.preventDefault();
@@ -282,15 +318,15 @@ document.querySelector('#token-form')!.addEventListener('submit', event => {
 });
 function renderOffline() {
   document.querySelector('#offline-notice')!.textContent = navigator.onLine ? ''
-    : 'You appear to be offline. Saved wallets, tokens and balances remain available; the timestamps show when they were last read.';
+    : 'You appear to be offline. Saved wallets, tokens and balances remain available. Failed reads will retry when the connection returns.';
 }
 renderTokens(); render(); renderConnection(); renderOffline();
 void start();
 wallets.forEach(wallet => { void refreshWallet(wallet); });
-window.addEventListener('offline', renderOffline);
-window.addEventListener('online', () => { renderOffline(); void start(); });
-window.addEventListener('pagehide', () => connection.close());
-window.addEventListener('pageshow', event => { if (event.persisted) void start(); });
+window.addEventListener('offline', () => { retries.pause(); renderOffline(); });
+window.addEventListener('online', () => { renderOffline(); retries.resume(); void start(); });
+window.addEventListener('pagehide', () => { retries.pause(); connection.close(); });
+window.addEventListener('pageshow', event => { if (event.persisted) { retries.resume(); void start(); } });
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   void navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(() => {
     document.querySelector('#offline-notice')!.textContent = 'Offline page caching is unavailable. Balances are still saved locally, but reopening the page may need a connection.';

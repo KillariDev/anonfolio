@@ -132,3 +132,24 @@ test('custom token reads use the wallet private route, report retries and save p
   expect(new Set(calls.map(call => call.key))).toEqual(new Set([wallet.isolationKey]));
   expect(calls.filter(call => call.body.method === 'eth_call').every(call => call.body.params[1] === 'latest')).toBe(true);
 });
+
+test('automatic recovery retries failed assets only and keeps the original private key and operator', async () => {
+  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
+  wallet.eth = { amount: 9n, updatedAt: 123, failed: false };
+  wallet.weth = { amount: 5n, updatedAt: 100, failed: true };
+  const calls: any[] = [];
+  globalThis.fetch = (() => { throw new Error('PUBLIC FETCH FORBIDDEN'); }) as unknown as typeof fetch;
+  await readBalances(wallet, { fetch: async (url, init) => {
+    const body = JSON.parse(init!.body as string);
+    calls.push({ url: String(url), body, key: init!.anonOptions!.isolationKey });
+    return Response.json({ jsonrpc: '2.0', id: body.id, result: '0x' + '0'.repeat(64) });
+  } }, [], () => {}, true);
+  expect(calls).toHaveLength(1);
+  expect(calls[0].body.method).toBe('eth_call');
+  expect(calls[0].key).toBe(wallet.isolationKey);
+  expect(new URL(calls[0].url).href).toBe(new URL(wallet.rpcUrl).href);
+  expect(wallet.eth).toEqual({ amount: 9n, updatedAt: 123, failed: false });
+  expect(wallet.weth.amount).toBe(0n);
+  expect(wallet.weth.failed).toBe(false);
+  expect(wallet.activity).toHaveLength(1);
+});
