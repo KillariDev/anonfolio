@@ -223,10 +223,17 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .balance-values { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; }
 
 .failure-link { display: block; max-width: 240px; margin-top: 3px; padding: 0; border: 0; background: transparent; color: #e6bd91; font-size: 10px; text-decoration: underline; text-align: left; }
-.read-failure { margin: 10px 0; padding: 10px 12px; border-left: 3px solid #d8a575; background: #281e15; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
-.read-failure strong { color: #f0c49f; }
-.read-failure p { margin: 5px 0; }
-.read-failure .failure-message { font-family: ui-monospace, monospace; white-space: pre-wrap; color: #ead3bb; }
-.read-failure .failure-action { color: #dfdfc8; }
-.read-failure .failure-stage, .read-failure time { color: #ada894; font-size: 10px; }
-.read-failure button { display: block; margin-top: 8px; }
+.read-failure { margin: 12px 0; padding: 16px; border: 1px solid #514333; border-radius: 10px; background: #211e17; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.failure-heading { display: flex; flex-direction: column; gap: 3px; }
+.failure-label { color: #b4a48d; font-size: 10px; letter-spacing: .5px; }
+.failure-heading strong { color: #edc8a0; font-size: 14px; font-weight: 550; }
+.read-failure .failure-action { color: #c1c6b8; margin: 9px 0 12px; max-width: 75ch; }
+.failure-metadata { display: flex; flex-wrap: wrap; gap: 10px 28px; margin: 0; }
+.failure-metadata > div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.failure-metadata dt { color: #8f9783; font-size: 10px; }
+.failure-metadata dd { margin: 0; color: #bdc4b3; font-size: 10px; }
+.failure-technical { margin-top: 13px; border-top: 1px solid #3c382a; }
+.failure-technical > summary { padding: 10px 0 0; color: #aaa997; font-size: 10px; }
+.failure-technical[open] > summary { border-bottom: 0; }
+.read-failure .failure-message { margin: 10px 0 0; padding: 10px 12px; border-radius: 6px; background: #171a14; font: 10px/1.8 ui-monospace, monospace; white-space: pre-wrap; color: #b9bdac; }
+.read-failure .failure-stage { margin: 8px 0 0; color: #939c87; font-size: 10px; }

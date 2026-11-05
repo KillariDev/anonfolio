@@ -665,14 +665,16 @@ test('saved balance errors expose per-asset causes and recovery actions, then cl
   await expect(ethFailure).toBeVisible();
   await expect(ethFailure).toContainText('distance to target block exceeds maximum proof window');
   await expect(ethFailure).toContainText('supports account and storage proofs at finalized block hashes');
-  await expect(ethFailure).toContainText('While: Fetching ETH proof at finalized block');
+  await expect(ethFailure.locator('.failure-message')).toBeHidden();
+  await ethFailure.getByText('Technical details', { exact: true }).click();
+  await expect(ethFailure.locator('.failure-message')).toBeVisible();
+  await expect(ethFailure).toContainText('Step: Fetching ETH proof at finalized block');
   await expect(page.getByRole('region', { name: 'WETH balance failure', exact: true })).toContainText('Bytecode hash does not match');
   const saved = await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2')!);
   expect(saved).toContain('maximum proof window'); expect(saved).not.toMatch(/password|key-secret|query-secret/);
   await expect(page.locator('body')).not.toContainText('password');
-  await ethFailure.getByRole('button', { name: 'Open network settings' }).click();
-  await expect(page.getByLabel('Balance RPC endpoints', { exact: true })).toBeFocused();
-  await page.getByRole('button', { name: 'Close settings', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open network settings' })).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/balance-error-details.png', fullPage: true });
   await page.evaluate(() => { (window as any).__recovered = true; });
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.failure-link')).toHaveCount(0);
@@ -680,7 +682,7 @@ test('saved balance errors expose per-asset causes and recovery actions, then cl
   await expect(page.locator('.balance small.error')).toHaveCount(0);
 });
 
-test('an expired checkpoint links to checkpoint settings instead of suggesting an RPC change', async ({ page }) => {
+test('an expired checkpoint explains checkpoint settings without an extra settings button', async ({ page }) => {
   await mockConnection(page);
   await page.route('**/src/verification/client.ts*', route => route.fulfill({ contentType: 'text/javascript', body: `
     export async function verifyWallet(wallet, worker, tokens, emit) {
@@ -697,8 +699,7 @@ test('an expired checkpoint links to checkpoint settings instead of suggesting a
   await expect(report).toContainText('outside its 14-day trust window');
   await expect(report).toContainText('updated application release with a reviewed mainnet checkpoint');
   await expect(report).toContainText('Changing RPC or gateway settings cannot renew the checkpoint');
-  await report.getByRole('button', { name: 'Open network settings' }).click();
-  await expect(page.locator('#settings-checkpoint-root')).toBeFocused();
+  await expect(report.getByRole('button', { name: 'Open network settings' })).toHaveCount(0);
   await expect(page.locator('.amount')).toHaveText(['—', '—']);
 });
 

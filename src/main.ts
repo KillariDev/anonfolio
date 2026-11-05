@@ -180,28 +180,39 @@ function failureReport(label: string, failure: ReadFailure, rpcHost?: string) {
   const report = document.createElement('section'); report.className = 'read-failure';
   report.setAttribute('aria-label', label + ' failure');
   const { summary, action } = explainFailure(failure);
-  const heading = document.createElement('strong'); heading.textContent = label + ' · ' + summary;
-  const message = document.createElement('p'); message.className = 'failure-message'; message.textContent = failure.message;
+  const header = document.createElement('div'); header.className = 'failure-heading';
+  const asset = document.createElement('span'); asset.className = 'failure-label'; asset.textContent = label;
+  const heading = document.createElement('strong'); heading.textContent = summary;
+  header.append(asset, heading);
   const help = document.createElement('p'); help.className = 'failure-action'; help.textContent = action;
-  report.append(heading, message, help);
-  if (failure.stage) {
-    const stage = document.createElement('p'); stage.className = 'failure-stage'; stage.textContent = 'While: ' + failure.stage;
-    report.append(stage);
-  }
+  report.append(header, help);
+  const metadata = document.createElement('dl'); metadata.className = 'failure-metadata';
   if (rpcHost) {
-    const endpoint = document.createElement('p'); endpoint.textContent = 'RPC endpoint: ' + rpcHost; report.append(endpoint);
+    const entry = document.createElement('div');
+    const name = document.createElement('dt'); name.textContent = 'RPC';
+    const value = document.createElement('dd'); value.textContent = rpcHost;
+    entry.append(name, value); metadata.append(entry);
   }
   if (failure.at) {
-    const time = document.createElement('time'); time.dateTime = new Date(failure.at).toISOString();
-    time.textContent = 'Last failed attempt: ' + new Date(failure.at).toLocaleString(); report.append(time);
+    const entry = document.createElement('div');
+    const name = document.createElement('dt'); name.textContent = 'Last attempt';
+    const value = document.createElement('dd');
+    const date = new Date(failure.at);
+    const time = document.createElement('time'); time.dateTime = date.toISOString(); time.title = date.toLocaleString();
+    time.textContent = date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    value.append(time); entry.append(name, value); metadata.append(entry);
   }
-  if (action.includes('Settings')) {
-    const settings = document.createElement('button'); settings.type = 'button'; settings.textContent = 'Open network settings';
-    const pricing = action.includes('Price estimates');
-    settings.textContent = pricing ? 'Open pricing settings' : 'Open network settings';
-    settings.onclick = () => { settingsPanel.open = true; document.querySelector<HTMLElement>(pricing ? '#pricing-preset' : action.includes('Consensus checkpoint') ? '#settings-checkpoint-root' : '#settings-rpcs')!.focus(); };
-    report.append(settings);
+  if (metadata.childElementCount) report.append(metadata);
+  const technical = document.createElement('details'); technical.className = 'failure-technical';
+  const toggle = document.createElement('summary'); toggle.textContent = 'Technical details';
+  const message = document.createElement('p'); message.className = 'failure-message'; message.textContent = failure.message;
+  technical.append(toggle, message);
+  const stageText = failure.stage && errorMessage(failure.stage.replace(/^Verification transport rejected a request:\s*/i, ''));
+  if (stageText && !stageText.includes(failure.message) && !failure.message.includes(stageText)) {
+    const stage = document.createElement('p'); stage.className = 'failure-stage'; stage.textContent = 'Step: ' + stageText;
+    technical.append(stage);
   }
+  report.append(technical);
   return report;
 }
 function balanceFailure(balance: Balance): ReadFailure | undefined {
@@ -371,7 +382,8 @@ function walletDetails(wallet: Wallet) {
   verification.className = 'verification-progress';
   verification.setAttribute('role', 'status');
   verification.textContent = wallet.verificationStatus || 'Waiting to verify balances.';
-  content.append(fullAddress, timestamps, verification);
+  content.append(fullAddress, timestamps);
+  if (wallet.loading) content.append(verification);
   for (const token of tokens) {
     const balance = tokenBalance(wallet, token);
     const failure = balanceFailure(balance);
