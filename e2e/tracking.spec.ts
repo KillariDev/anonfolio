@@ -466,7 +466,7 @@ test('pinned local startup never queries RPC directly; retries keep their privat
   expect(publicRequests).toEqual([]);
 });
 
-test('named addresses use reusable blockies in rows and details, persist, and keep names out of RPC requests', async ({ page }) => {
+test('named addresses use blockies in rows, avoid duplicate detail addresses, persist, and keep names out of RPC requests', async ({ page }) => {
   await mockConnection(page);
   const externalImages: string[] = [];
   page.on('request', request => { if (request.resourceType() === 'image' && request.url().startsWith('https:')) externalImages.push(request.url()); });
@@ -481,10 +481,8 @@ test('named addresses use reusable blockies in rows and details, persist, and ke
   const blockie = await row.locator('svg').innerHTML();
   await expect(row.locator('svg rect')).toHaveCount(64);
   await page.getByRole('button', { name: 'Details ' + a + ' · Savings', exact: true }).click();
-  const detail = page.locator('.full-address');
-  await expect(detail.locator('.address-name')).toHaveText('Savings');
-  await expect(detail.locator('.wallet-address')).toHaveText(a);
-  expect(await detail.locator('svg').innerHTML()).toBe(blockie);
+  await expect(page.locator('.detail-inner .address-display')).toHaveCount(0);
+  await expect(row.locator('.wallet-address')).toBeVisible();
   await expect(page.locator('.activity-item .address-display')).toHaveCount(0);
   await expect(page.locator('.activity')).not.toContainText(a);
   await expect(page.locator('.detail-inner')).not.toContainText('Private RPC operator:');

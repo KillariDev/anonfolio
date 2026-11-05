@@ -73,7 +73,7 @@ Addresses have independent UI state and retry schedules, but execution in Helios
 
 Address validation happens locally before the watchlist changes. Plain lists accept whitespace, commas, or semicolons. Named lists accept `Name | 0x…`, one entry per line. Invalid input rejects the addition as a whole; valid addresses are normalized and duplicates are removed. A single-address name field is also available. Names are trimmed, limited to 80 characters, and rejected if they contain control characters.
 
-`addressDisplay()` renders a blockie, an optional name, and the address. The blockie is an address-seeded, mirrored 8×8 SVG grid generated without a library or network lookup. Full address text stays in the DOM; CSS only clips it when the available width is too small. The component is used in table rows and expanded details. Per-token activity does not repeat the address already displayed above it.
+`addressDisplay()` renders a blockie, an optional name, and the address. The blockie is an address-seeded, mirrored 8×8 SVG grid generated without a library or network lookup. Full address text stays in the DOM; CSS only clips it when the available width is too small. The component is used in table rows; expanded details do not repeat the address. Per-token activity does not repeat the address already displayed above it.
 
 The watchlist uses compact table rows, a refresh button beside each address, expandable details, and sticky headers/address cells. On narrow screens the table can scroll horizontally. Removing an address opens a confirmation showing its name and full address. Confirming removes it from the active watchlist and stored snapshot, cancels scheduled retries, and updates totals. It does not undo an already submitted network request.
 

@@ -363,7 +363,6 @@ function renderTotals() {
 function walletDetails(wallet: Wallet) {
   const content = document.createElement('div');
   content.className = 'detail-inner';
-  const fullAddress = addressDisplay(wallet);
   const timestamps = document.createElement('p');
   timestamps.className = 'detail-times';
   timestamps.textContent = tokens.map(token => ({ symbol: token.symbol, balance: tokenBalance(wallet, token) })).map(({ symbol, balance }) => symbol + ': ' + (balance.updatedAt
@@ -372,7 +371,7 @@ function walletDetails(wallet: Wallet) {
   verification.className = 'verification-progress';
   verification.setAttribute('role', 'status');
   verification.textContent = (tokens.some(token => tokenBalance(wallet, token).failed) ? 'Retry in progress · ' : '') + (wallet.verificationStatus || 'Waiting to verify balances.');
-  content.append(fullAddress, timestamps);
+  content.append(timestamps);
   if (wallet.loading) content.append(verification);
   for (const token of tokens) {
     const balance = tokenBalance(wallet, token);
