@@ -3,6 +3,8 @@ import { defineConfig } from 'vite';
 
 // Cache only built application files, never RPC or worker/gateway traffic.
 export default defineConfig({
+  // Resolve assets beneath both subdomain gateways and /ipfs/<CID>/ paths.
+  base: './',
   plugins: [{
     name: 'offline-application-shell',
     enforce: 'post',

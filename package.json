@@ -5,13 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc --noEmit && vite build",
+    "build": "bun --bun tsc --noEmit && bun --bun vite build",
     "test": "bun test ./tests",
     "serve": "bun scripts/serve.ts",
     "test:browser": "playwright test",
     "test:live": "LIVE_RPC=1 playwright test --grep \"live mainnet\"",
     "test:static": "BASE_URL=http://127.0.0.1:4173 playwright test --grep \"static build\"",
-    "test:all": "bun run test && bun run build && bun run test:browser && bun run test:static"
+    "test:all": "bun run test && bun run build && bun run test:browser && bun run test:static",
+    "typecheck": "bun --bun tsc --noEmit --project tsconfig.json",
+    "check": "bun run test && bun run typecheck && bun run build",
+    "ui:docker": "bun ./scripts/build-docker.mts anonfolio-ui && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR anonfolio-ui",
+    "test:ipfs": "bun scripts/test-ipfs.mts"
   },
   "dependencies": {
     "@anon-rpc/browser-harness": "0.4.0",

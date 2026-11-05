@@ -108,3 +108,57 @@ BASE_URL=http://127.0.0.1:4173 bun run test:live
 The test runner starts the static server if needed. Deterministic UI tests replace the connection boundary only in Playwright; the production app has no mock mode.
 
 References: [Anon-RPC web integration](https://ethereum.github.io/anon-rpc/wallets/), [tor-js circuit isolation](https://github.com/ethereum/tor-js#circuit-isolation), and [browser harness](https://github.com/ethereum/anon-rpc/tree/main/impl/browser-harness).
+
+## IPFS publishing
+
+The Docker publisher follows [Sealwort's IPFS deployment](https://github.com/DarkFlorist/Sealwort/tree/bc67c11581a0dba371a7335fe0220d9dc47ef396) (Unlicense): a pinned Bun builder produces the site, a pinned Kubo v0.25.0 computes a CIDv1 for the directory, and the runtime uploads and pins that same directory to your Kubo RPC API. Publishing fails if the returned CID differs from the build-time CID. No pinning provider is selected or authenticated automatically.
+
+The matching package commands are:
+
+```sh
+bun run typecheck
+bun run check
+bun run ui:docker
+```
+
+`check` runs unit tests, type checking and the production build. `ui:docker` builds the `anonfolio-ui` image, publishes `/export` to the host's existing Kubo node, checks its CID, and prints `http://<CID>.ipfs.localhost:8080/`. It requires a running Docker engine and Kubo; it does not start or reconfigure your node. Like Sealwort, its default RPC multiaddress is `/dns4/host.docker.internal/tcp/5001`, with a host-gateway mapping for Linux and Docker Desktop support on Windows/macOS.
+
+Override the RPC multiaddress if necessary:
+
+```sh
+IPFS_API_MULTIADDR=/ip4/192.0.2.10/tcp/5001 bun run ui:docker
+```
+
+In PowerShell:
+
+```powershell
+$env:IPFS_API_MULTIADDR = '/ip4/192.0.2.10/tcp/5001'
+bun run ui:docker
+```
+
+A Linux host daemon bound only to `127.0.0.1:5001` is not reachable via Docker's host-gateway mapping. Use a trusted container network or a private host address reachable from the publisher. Keep the Kubo RPC API private; the browser needs only the gateway. The printed URL assumes your gateway listens on port 8080; use your actual gateway port or HTTPS domain otherwise. The runtime pins content on your node; continued public availability requires keeping that node reachable or pinning the CID elsewhere.
+
+The ready-to-install IPFS workflow template in [.github-workflows/ipfs-deploy.yml](.github-workflows/ipfs-deploy.yml) builds and pushes a GHCR image for `main` and `v*` tags. Enable it by copying the template into `.github/workflows/ipfs-deploy.yml` using credentials with workflow-write permission (the current repository token cannot push workflow changes). Tags also attach `anonfolio.car` and `ipfs-cid.txt` to the GitHub release, using the same checked CID. Import an artifact into your chosen Kubo node with `ipfs dag import anonfolio.car`; it contains the full site and pins the root by default. You can also produce the artifact directly from an image without publishing to a host node:
+
+```sh
+mkdir -p ipfs-artifacts
+docker run --rm --entrypoint /bin/sh --volume "$PWD/ipfs-artifacts:/output" anonfolio-ui /export-ipfs.sh
+```
+
+The production build forces Bun as the JavaScript runtime, matching the Docker builder. Builds use relative asset paths, so the same directory works at both `https://<CID>.ipfs.<gateway>/` and `https://<gateway>/ipfs/<CID>/`. Keep the trailing slash. The app's service worker registers under that directory and caches only the application files; RPC and gateway connections remain uncached. Use HTTPS (or local loopback gateways) for browser worker and offline support. The Docker build uses the shipped deployment defaults; browser Settings can override gateways and RPCs after loading.
+
+Prefer a subdomain gateway for per-CID browser origin isolation. A path gateway shares browser storage with other applications on that gateway origin. With subdomain gateways, each new CID has a separate origin, so wallets, names and settings from a previous CID do not automatically carry over.
+
+### Verify a real local IPFS deployment
+
+Install Kubo (tested with v0.25.0), Chromium via `bunx playwright install chromium`, and a POSIX shell (Linux, macOS or WSL), then run:
+
+```sh
+bun run test:ipfs
+# Or point to an installed Kubo binary:
+IPFS_BIN=/path/to/ipfs bun run test:ipfs
+# Include actual mainnet reads through the real tor-js worker:
+LIVE_RPC=1 bun run test:ipfs
+```
+
+The check builds the production site, starts an isolated offline Kubo node on random loopback ports, runs the exact Docker publishing script, checks CID-mismatch rejection, exports a CAR, and imports it into a fresh repository. Chromium loads the site through actual path and subdomain gateways and checks relative assets, service-worker scope, named wallets, tokens, cached zero balances, offline reloads and absence of public balance requests. It leaves `ipfs-artifacts/anonfolio.car` and `ipfs-artifacts/ipfs-cid.txt`, then stops the temporary node. It never changes an existing Kubo configuration, pins to a public provider, or requires Docker. The optional live check additionally exercises ETH/WETH/USDC, two wallets, zero balances and manual refresh from the IPFS-hosted production page.

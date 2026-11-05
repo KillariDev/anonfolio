@@ -115,7 +115,7 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.wallet').nth(1).locator('.amount')).toHaveText(['0', '0', '0'], { timeout: 180_000 });
   expect(publicBalanceCalls).toEqual([]);
-  await page.screenshot({ path: 'test-results/live-mainnet.png', fullPage: true });
+  await page.screenshot({ path: process.env.IPFS_GATEWAY_URL ? 'ipfs-artifacts/live-mainnet.png' : 'test-results/live-mainnet.png', fullPage: true });
 });
 
 test('failed private startup shows retry and never displays a false zero', async ({ page }) => {
