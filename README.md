@@ -4,7 +4,7 @@ A standalone Bun, Vite and TypeScript Ethereum mainnet balance reader. Paste an 
 
 ## Run
 
-Install [Bun](https://bun.sh), then:
+Use [Bun](https://bun.sh) **1.3.14** (the project baseline), then:
 
 ```sh
 bun install --frozen-lockfile
@@ -28,6 +28,10 @@ BASE_URL=http://127.0.0.1:4173 bun run test:live
 ```
 
 The test runner starts the static server if it is not already running. Live tests depend on the public gateway, RPC operators and Tor. The deterministic browser tests inject a fake connection boundary only in the test runner; the production app has no mock mode.
+
+The committed lockfile uses format version 1 so Bun 1.3.14 can read it. Bun 1.4.x can also install it with `bun install --frozen-lockfile`. When changing dependencies, use Bun 1.3.14 to keep the lockfile compatible; a normal install with Bun 1.4.x may migrate it to version 2.
+
+If you previously saw “Unknown lockfile version”, pull this fix and run `bun install --frozen-lockfile`. If an earlier install rewrote your local lockfile, restore `bun.lock` from the updated branch first.
 
 ## Deployment
 
