@@ -2,6 +2,8 @@ import { expect, test } from 'bun:test';
 import { verifyWallet } from '../src/verification/client';
 import { makeWallet } from '../src/balances';
 import { ethToken } from '../src/tokens';
+import { config } from '../src/config';
+import { DEFAULT_CHECKPOINT } from '../src/verification/trust';
 import { CONSENSUS_RPC } from '../src/verification/trust';
 
 test('background consensus and wallet execution use separate private keys with no direct fetch fallback', async () => {
@@ -24,9 +26,12 @@ test('background consensus and wallet execution use separate private keys with n
   } };
   const wallet = makeWallet('0x0000000000000000000000000000000000000001', 'https://execution.example/');
   let session: Promise<void> | undefined;
+  const originalCheckpoint = config.checkpoint;
+  config.checkpoint = { root: '0x' + '22'.repeat(32), slot: DEFAULT_CHECKPOINT.slot };
   try {
     session = verifyWallet(wallet, privateWorker, [ethToken], () => {});
     const run = fake.sent[0].id;
+    expect(fake.sent[0].checkpoint).toEqual(config.checkpoint);
     // No active run ID: consensus background sync must still use Anon-RPC.
     await fake.onmessage({ data: { type: 'consensus', id: 10, url: CONSENSUS_RPC + '/eth/v1/beacon/light_client/finality_update' } });
     expect(fake.sent.at(-1).type).toBe('consensus-reply');
@@ -40,6 +45,7 @@ test('background consensus and wallet execution use separate private keys with n
     expect(fake.sent.at(-1).error).toContain('Disallowed consensus'); expect(calls).toHaveLength(3);
     await fake.onmessage({ data: { type: 'done', run } }); await session;
   } finally {
+    config.checkpoint = originalCheckpoint;
     fake?.onerror?.({ message: 'Test cleanup' });
     await session?.catch(() => {});
     Object.defineProperty(globalThis, 'Worker', { configurable: true, value: OriginalWorker });

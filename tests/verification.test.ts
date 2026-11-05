@@ -93,3 +93,15 @@ test('a substituted on-chain Tor worker digest cannot replace the reviewed binar
   expect(() => assertTorWorkerHash(TOR_WORKER_HASH)).not.toThrow();
   expect(() => assertTorWorkerHash('0x' + '00'.repeat(32))).toThrow('reviewed pin');
 });
+
+test('custom checkpoint age and bootstrap slot are bound to the selected trust anchor', async () => {
+  const { DEFAULT_CHECKPOINT, validateCheckpoint, assertCheckpointSlot } = await import('../src/verification/trust');
+  const selected = validateCheckpoint({ root: '0x' + 'ab'.repeat(32), slot: DEFAULT_CHECKPOINT.slot + 32 });
+  expect(() => checkCheckpointAge(CHECKPOINT_TIME + 32 * 12_000, selected)).not.toThrow();
+  expect(() => checkCheckpointAge(CHECKPOINT_TIME - 60_001, selected)).toThrow('trust window');
+  expect(() => checkCheckpointAge(CHECKPOINT_TIME + 15 * 86400_000, selected)).toThrow('trust window');
+  expect(() => assertCheckpointSlot({ data: { header: { beacon: { slot: String(selected.slot) } } } }, selected)).not.toThrow();
+  for (const bootstrap of [{}, { data: { header: { beacon: { slot: DEFAULT_CHECKPOINT.slot } } } }]) {
+    expect(() => assertCheckpointSlot(bootstrap, selected)).toThrow('slot does not match');
+  }
+});

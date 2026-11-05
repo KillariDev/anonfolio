@@ -1,3 +1,5 @@
+import { config } from '../config';
+import { DEFAULT_CHECKPOINT } from './trust';
 import type { PrivateWorker, Wallet } from '../balances';
 import { loadPricing, type Estimate, type PricingSettings } from '../pricing';
 import type { Token } from '../tokens';
@@ -53,6 +55,6 @@ export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker,
   return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => close(new Error('Verification timed out; cached values remain stale.')), 300_000);
     sessions.set(id, { wallet, privateWorker, event, resolve, reject, timer });
-    worker.postMessage({ type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, tokens, pricing });
+    worker.postMessage({ type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, checkpoint: config.checkpoint || DEFAULT_CHECKPOINT, tokens, pricing });
   });
 }

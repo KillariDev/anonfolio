@@ -1,4 +1,5 @@
-export type NetworkSettings = { gateways: string[]; rpcUrls: string[] };
+import { validateCheckpoint, type Checkpoint } from './verification/trust';
+export type NetworkSettings = { gateways: string[]; rpcUrls: string[]; checkpoint?: Checkpoint };
 export const SETTINGS_KEY = 'anonfolio.network.v1';
 export function validateSettings(value: unknown): NetworkSettings {
   if (!value || typeof value !== 'object') throw new Error('Invalid network settings.');
@@ -27,6 +28,7 @@ export function validateSettings(value: unknown): NetworkSettings {
     } catch { throw new Error('Use Tor gateway format ip:port:certhash (or [ipv6]:port:certhash), with a valid SHA-256 certificate hash and port 1–65535.'); }
   }
   return { gateways,
+    ...(data.checkpoint !== undefined ? { checkpoint: validateCheckpoint(data.checkpoint) } : {}),
     rpcUrls: [...new Set(entries(data.rpcUrls, 'balance RPC endpoint').map(rpc))] };
 }
 export function loadSettings(defaults: NetworkSettings): NetworkSettings {
@@ -34,7 +36,7 @@ export function loadSettings(defaults: NetworkSettings): NetworkSettings {
     const saved = localStorage.getItem(SETTINGS_KEY);
     if (saved) return validateSettings(JSON.parse(saved));
   } catch { /* Corrupt or blocked browser storage uses deployment defaults. */ }
-  return { gateways: [...defaults.gateways], rpcUrls: [...defaults.rpcUrls] };
+  return { gateways: [...defaults.gateways], rpcUrls: [...defaults.rpcUrls], ...(defaults.checkpoint ? { checkpoint: { ...defaults.checkpoint } } : {}) };
 }
 export function saveSettings(settings: NetworkSettings | null): boolean {
   try {

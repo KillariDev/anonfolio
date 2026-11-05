@@ -1,11 +1,12 @@
 /// <reference lib="webworker" />
 import initWasm, { EthereumClient } from '../../vendor/helios/index.js';
 import { setHeliosFetch } from '../../vendor/helios/fetch.js';
-import { CHECKPOINT, CONSENSUS_RPC, HELIOS_WASM_SHA256, checkCheckpointAge, verifiedBlock, type VerifiedBlock } from './trust';
+import { DEFAULT_CHECKPOINT, validateCheckpoint, assertCheckpointSlot, type Checkpoint, CONSENSUS_RPC, HELIOS_WASM_SHA256, checkCheckpointAge, verifiedBlock, type VerifiedBlock } from './trust';
 import { assertPinnedBlock, verifyAccountResponse, verifyCode } from './proofs';
 import { TwapOracle } from '../pricing';
 import { assertConsensusUrl, type RpcRequest } from './transport';
 
+let activeCheckpoint: Checkpoint = DEFAULT_CHECKPOINT;
 const EXECUTION_URL = 'https://helios-execution.invalid/';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 let current: { id: string; rpcHost: string; requests: number; block?: VerifiedBlock } | undefined;
@@ -44,6 +45,10 @@ async function internalFetch(request: Request): Promise<Response> {
     const reply = new Promise<{ status: number; body: string }>((resolve, reject) => replies.set(id, { resolve, reject }));
     scope.postMessage({ type: 'consensus', id, url: url.href });
     const data = await reply;
+    if (url.pathname.includes('/light_client/bootstrap/')) {
+      if (url.pathname.split('/').at(-1)?.toLowerCase() !== activeCheckpoint.root) throw new Error('Unexpected consensus checkpoint bootstrap root.');
+      assertCheckpointSlot(JSON.parse(data.body), activeCheckpoint);
+    }
     const response = new Response(data.body, { status: data.status, headers: { 'content-type': 'application/json' } });
     Object.defineProperty(response, 'url', { value: url.href });
     return response;
@@ -82,9 +87,12 @@ setHeliosFetch(request => internalFetch(request).catch(error => {
   step('Verification transport rejected a request: ' + executionFailure);
   throw error;
 }));
-async function synced() {
+async function synced(checkpoint: Checkpoint) {
+  const selected = validateCheckpoint(checkpoint);
+  checkCheckpointAge(Date.now(), selected);
+  if (client && (selected.root !== activeCheckpoint.root || selected.slot !== activeCheckpoint.slot)) throw new Error('Consensus checkpoint changed; reconnect to restart the shared verifier.');
   if (!client) {
-    checkCheckpointAge();
+    activeCheckpoint = selected;
     step('Loading pinned Helios 0.12.0 WASM verifier.');
     const download = await fetch(new URL('../../vendor/helios/index_bg.wasm', import.meta.url));
     if (!download.ok) throw new Error('Helios WASM download failed (HTTP ' + download.status + ').');
@@ -92,9 +100,9 @@ async function synced() {
     const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(v => v.toString(16).padStart(2, '0')).join('');
     if (hash !== HELIOS_WASM_SHA256) throw new Error('Helios WASM digest mismatch.');
     await initWasm({ module_or_path: bytes });
-    step('Bootstrapping shared consensus light client from independently pinned checkpoint ' + CHECKPOINT + '.');
-    // Memory DB prevents a browser-supplied checkpoint from replacing the pinned root.
-    client = new EthereumClient(EXECUTION_URL, undefined, CONSENSUS_RPC, 'mainnet', CHECKPOINT, 'config');
+    step('Bootstrapping shared consensus light client from ' + (activeCheckpoint.root === DEFAULT_CHECKPOINT.root && activeCheckpoint.slot === DEFAULT_CHECKPOINT.slot ? 'the release-pinned' : 'your configured') + ' checkpoint ' + activeCheckpoint.root + ' at slot ' + activeCheckpoint.slot + '.');
+    // Memory DB prevents an older persisted client from replacing the selected root.
+    client = new EthereumClient(EXECUTION_URL, undefined, CONSENSUS_RPC, 'mainnet', activeCheckpoint.root, 'config');
     await client.wait_synced();
   }
   return client;
@@ -104,7 +112,7 @@ async function refresh(message: any) {
   codeHashes.clear();
   executionFailure = '';
   try {
-    const helios = await synced();
+    const helios = await synced(message.checkpoint);
     const block = verifiedBlock(await helios.get_block_by_number('finalized', false));
     current.block = block;
     send('block', { block });

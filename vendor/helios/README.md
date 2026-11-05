@@ -47,9 +47,13 @@ The checkpoint at slot 15589024 (2026-11-05 15:25:11 UTC) was compared with
 PublicNode's finalized beacon header and independently with beaconcha.in,
 Attestant and ChainSafe checkpointz slot lists. These independently observed
 weak-subjectivity inputs are a deployment trust decision, not a new runtime
-checkpoint-discovery protocol. Runtime settings and localStorage cannot replace
-the checkpoint or either binary digest. An expired (>14-day) pin fails closed;
-update it through a reviewed release, comparing independent operators again.
+checkpoint-discovery protocol. Users may explicitly replace the checkpoint in
+Settings with a trusted root and matching mainnet slot, compared across independent
+sources. The verifier checks the slot-derived age and bootstrap header slot before
+Helios binds the header to the selected root. An expired (>14-day) checkpoint fails
+closed. Saving/reconnecting restarts the shared client with an in-memory database;
+Restore defaults selects the release pin. Runtime settings cannot change either
+binary digest. Release-default changes still require a reviewed source update.
 
 Updating Helios requires reviewing the corresponding proof, EVM, transport,
 background-task and consensus changes, regenerating/verifying the upstream

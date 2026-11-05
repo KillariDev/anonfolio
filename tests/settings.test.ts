@@ -58,3 +58,17 @@ test('legacy discovery RPC settings are ignored without discarding gateways or p
   expect(values.get(SETTINGS_KEY)).not.toContain('bootstrapRpc');
   expect(values.get(SETTINGS_KEY)).not.toContain('old-direct-rpc');
 });
+
+test('custom checkpoints persist, normalize and reset without changing legacy defaults', () => {
+  const checkpoint = { root: '0x' + 'AB'.repeat(32), slot: 15589024 };
+  const settings = validateSettings({ ...defaults, checkpoint });
+  expect(settings.checkpoint).toEqual({ root: checkpoint.root.toLowerCase(), slot: checkpoint.slot });
+  expect(saveSettings(settings)).toBe(true);
+  expect(loadSettings(defaults).checkpoint).toEqual(settings.checkpoint);
+  expect(saveSettings(null)).toBe(true);
+  expect(loadSettings(defaults).checkpoint).toBeUndefined();
+  for (const bad of [null, {}, { root: '0x1234', slot: 1 }, { root: '0x' + '0'.repeat(64), slot: 1 },
+    ...[0, -1, 1.1, '15589024', Number.MAX_SAFE_INTEGER].map(slot => ({ ...checkpoint, slot }))]) {
+    expect(() => validateSettings({ ...defaults, checkpoint: bad })).toThrow('Checkpoint');
+  }
+});

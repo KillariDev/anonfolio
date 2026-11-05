@@ -1,3 +1,4 @@
+import { DEFAULT_CHECKPOINT, checkCheckpointAge } from './verification/trust';
 import appIcon from './assets/anonfolio.svg?no-inline';
 import { addressDisplay } from './address-display';
 import { parseTrackedAddresses } from './addresses';
@@ -43,6 +44,10 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <label for="settings-rpcs">Balance RPC endpoints</label><textarea id="settings-rpcs" rows="3" spellcheck="false" autocomplete="off" aria-describedby="rpc-hint settings-error"></textarea>
 <p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses use separate endpoints where possible. Every balance request goes through the private worker.</p>
 <p class="form-hint">The Tor worker is bundled and hash-verified locally. Startup never queries an Ethereum RPC. Consensus, balance and oracle requests all use Anon-RPC.</p>
+<h2 id="checkpoint-settings">Consensus checkpoint</h2>
+<label for="settings-checkpoint-root">Mainnet checkpoint root</label><input id="settings-checkpoint-root" type="text" spellcheck="false" autocomplete="off" aria-describedby="checkpoint-hint settings-error">
+<label for="settings-checkpoint-slot">Checkpoint beacon slot</label><input id="settings-checkpoint-slot" type="number" min="1" step="1" aria-describedby="checkpoint-hint settings-error">
+<p id="checkpoint-hint" class="form-hint">A trusted finalized beacon block root and its matching slot, less than 14 days old. Compare them across independent trusted mainnet sources before saving: this checkpoint is the light client's trust anchor. Saving restarts verification. Restore defaults uses the release-pinned checkpoint.</p>
 <p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and restarts private reads; saved balances remain visible.</p>
 <div class="settings-actions"><button class="primary" type="submit">Save settings and reconnect</button><button id="reset-settings" type="button">Restore defaults</button></div>
 <p id="settings-error" class="input-error" role="alert"></p></form></section></details></div></header>
@@ -188,7 +193,7 @@ function failureReport(label: string, failure: ReadFailure, rpcHost?: string) {
     const settings = document.createElement('button'); settings.type = 'button'; settings.textContent = 'Open network settings';
     const pricing = action.includes('Price estimates');
     settings.textContent = pricing ? 'Open pricing settings' : 'Open network settings';
-    settings.onclick = () => { settingsPanel.open = true; document.querySelector<HTMLElement>(pricing ? '#pricing-preset' : '#settings-rpcs')!.focus(); };
+    settings.onclick = () => { settingsPanel.open = true; document.querySelector<HTMLElement>(pricing ? '#pricing-preset' : action.includes('Consensus checkpoint') ? '#settings-checkpoint-root' : '#settings-rpcs')!.focus(); };
     report.append(settings);
   }
   return report;
@@ -647,6 +652,9 @@ const settingsField = (id: string) => document.querySelector<HTMLInputElement | 
 function showSettings(settings: NetworkSettings) {
   settingsField('gateways').value = settings.gateways.join('\n');
   settingsField('rpcs').value = settings.rpcUrls.join('\n');
+  const checkpoint = settings.checkpoint || DEFAULT_CHECKPOINT;
+  settingsField('checkpoint-root').value = checkpoint.root;
+  settingsField('checkpoint-slot').value = String(checkpoint.slot);
 }
 showSettings(config);
 function applySettings(settings: NetworkSettings | null) {
@@ -664,7 +672,10 @@ document.querySelector('#settings-form')!.addEventListener('submit', event => {
   event.preventDefault();
   try {
     const lines = (value: string) => value.split(/[,\n]/).map(line => line.trim()).filter(Boolean);
-    applySettings(validateSettings({ gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value) }));
+    const settings = validateSettings({ gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value),
+      checkpoint: { root: settingsField('checkpoint-root').value, slot: Number(settingsField('checkpoint-slot').value) } });
+    checkCheckpointAge(Date.now(), settings.checkpoint);
+    applySettings(settings);
   } catch (cause) { document.querySelector('#settings-error')!.textContent = (cause as Error).message; }
 });
 document.querySelector('#reset-settings')!.addEventListener('click', () => {

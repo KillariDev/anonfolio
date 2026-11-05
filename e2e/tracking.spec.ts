@@ -677,7 +677,7 @@ test('saved balance errors expose per-asset causes and recovery actions, then cl
   await expect(page.locator('.balance small.error')).toHaveCount(0);
 });
 
-test('an expired checkpoint explains the required application update instead of suggesting an RPC change', async ({ page }) => {
+test('an expired checkpoint links to checkpoint settings instead of suggesting an RPC change', async ({ page }) => {
   await mockConnection(page);
   await page.route('**/src/verification/client.ts*', route => route.fulfill({ contentType: 'text/javascript', body: `
     export async function verifyWallet(wallet, worker, tokens, emit) {
@@ -694,7 +694,8 @@ test('an expired checkpoint explains the required application update instead of 
   await expect(report).toContainText('outside its 14-day trust window');
   await expect(report).toContainText('updated application release with a reviewed mainnet checkpoint');
   await expect(report).toContainText('Changing RPC or gateway settings cannot renew the checkpoint');
-  await expect(report.getByRole('button', { name: 'Open network settings' })).toHaveCount(0);
+  await report.getByRole('button', { name: 'Open network settings' }).click();
+  await expect(page.locator('#settings-checkpoint-root')).toBeFocused();
   await expect(page.locator('.amount')).toHaveText(['—', '—']);
 });
 
@@ -731,4 +732,36 @@ test('private startup failures expose Tor warning causes, preserve wallet detail
   await page.getByRole('button', { name: 'Retry connection', exact: true }).click();
   await expect(page.locator('#connection > summary')).toContainText('Private worker ready');
   await expect(page.locator('#connection')).not.toContainText('ECONNREFUSED');
+});
+
+
+test('checkpoint settings validate, persist through reconnect and restore the release default', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const root = page.getByLabel('Mainnet checkpoint root', { exact: true });
+  const slot = page.getByLabel('Checkpoint beacon slot', { exact: true });
+  const defaultRoot = await root.inputValue();
+  const defaultSlot = await slot.inputValue();
+  await root.fill('0x1234');
+  await page.getByRole('button', { name: 'Save settings and reconnect', exact: true }).click();
+  await expect(page.locator('#settings-error')).toContainText('32-byte beacon block root');
+  expect(await page.evaluate(() => localStorage.getItem('anonfolio.network.v1'))).toBeNull();
+  const customRoot = '0x' + 'ab'.repeat(32);
+  await root.fill(customRoot);
+  await slot.fill('1');
+  await page.getByRole('button', { name: 'Save settings and reconnect', exact: true }).click();
+  await expect(page.locator('#settings-error')).toContainText('14-day trust window');
+  await slot.fill(defaultSlot);
+  await page.getByRole('button', { name: 'Save settings and reconnect', exact: true }).click();
+  await expect(page.locator('#connection')).toContainText('Private worker ready');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(root).toHaveValue(customRoot);
+  await expect(slot).toHaveValue(defaultSlot);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.network.v1')!).checkpoint)).toEqual({root:customRoot,slot:Number(defaultSlot)});
+  await page.getByRole('button', { name: 'Restore defaults', exact: true }).click();
+  await expect(page.locator('#connection')).toContainText('Private worker ready');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(root).toHaveValue(defaultRoot);
+  await expect(slot).toHaveValue(defaultSlot);
 });

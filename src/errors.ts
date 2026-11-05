@@ -40,7 +40,10 @@ export function explainFailure(failure: ReadFailure) {
     action = 'This asset needs a direct pool against the selected quote token with 30 minutes of history and sufficient liquidity. Check Price estimates in Settings or leave this holding unpriced.';
   } else if (/checkpoint.*(trust window|expired|outside)/.test(message)) {
     summary = 'Consensus checkpoint needs updating';
-    action = 'Check your device clock. If it is correct, install an updated application release with a reviewed mainnet checkpoint. Changing RPC or gateway settings cannot renew the checkpoint.';
+    action = 'Check your device clock. In Settings → Consensus checkpoint, enter a recent mainnet root and matching slot checked against independent trusted sources, or install an updated application release with a reviewed mainnet checkpoint. Changing RPC or gateway settings cannot renew the checkpoint.';
+  } else if (/checkpoint/.test(message)) {
+    summary = 'Consensus checkpoint rejected';
+    action = 'Check the root and matching mainnet beacon slot in Settings → Consensus checkpoint against independent trusted sources, then save and reconnect.';
   } else if (/digest|wasm.*hash|tor worker.*hash/.test(message)) {
     summary = 'Verifier integrity check failed';
     action = 'Reload from a trusted, updated application deployment. The downloaded verifier or Tor worker did not match its pinned hash.';
