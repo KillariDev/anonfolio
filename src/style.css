@@ -37,9 +37,6 @@ h1 { font-size: 25px; letter-spacing: -.8px; line-height: 1.2; margin: 0; font-w
 h2 { font-size: 14px; font-weight: 550; margin: 0; }
 .local-note { font-size: 11px; color: #8a9a80; }
 .overview { margin-bottom: 14px; }
-.overview-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.overview-heading h2 { font-size: 11px; color: #a4b698; font-weight: 500; }
-#total-count { font-size: 10px; color: #778e6c; }
 .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: 10px; }
 .total { background: #192219; border: 1px solid #35452e; border-radius: 9px; padding: 11px 15px; min-width: 0; }
 .total-label { font-size: 10px; letter-spacing: 1px; font-weight: 600; color: #b7ceaa; display: flex; align-items: center; gap: 7px; }

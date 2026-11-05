@@ -67,7 +67,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <main>
 <div class="page-heading"><h1>Portfolio</h1><span class="local-note">Ethereum balances · saved on this browser</span></div>
 <section class="overview" aria-label="Portfolio token totals">
-<div class="overview-heading"><h2>Token totals</h2><span id="total-count"></span></div>
 <div id="estimated-total" class="portfolio-value" aria-label="Estimated portfolio value" aria-live="polite"></div>
 <div id="totals" class="totals" aria-live="polite"></div></section>
 <div class="controls">
@@ -365,7 +364,6 @@ function renderTotals() {
   metadata.append(coverage, valuationFlags(estimate), method);
   updateChildren(summary, [primary, metadata]);
   const totals = document.createDocumentFragment();
-  document.querySelector('#total-count')!.textContent = wallets.length + ' tracked address' + (wallets.length === 1 ? '' : 'es');
   if (!tokens.length) {
     const empty = document.createElement('p');
     empty.className = 'form-hint';
