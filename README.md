@@ -2,6 +2,8 @@
 
 A standalone Bun, Vite and TypeScript Ethereum mainnet portfolio reader. Track wallet addresses and ERC-20 balances without connecting a wallet. Each wallet's reads use its own Anon-RPC/Tor isolation key.
 
+Read [how the application works](docs/documentation.md) for an overview followed by detailed explanations of the architecture, verification, pricing, storage, interface, and deployment.
+
 ## Run
 
 Use [Bun](https://bun.sh) **1.3.14** (the project baseline):
