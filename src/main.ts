@@ -69,8 +69,12 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <section class="overview" aria-label="Portfolio token totals">
 <div id="estimated-total" class="portfolio-value" aria-label="Estimated portfolio value" aria-live="polite"></div>
 <div id="totals" class="totals" aria-live="polite"></div></section>
+<p id="offline-notice" role="status"></p><p id="storage-warning" role="status"></p>
+<div class="section-heading"><h2>Addresses <span id="count">0</span></h2></div>
+<p class="scroll-hint">Swipe the table to see more tokens and controls.</p>
+<section id="wallets" aria-label="Watched wallets"></section>
 <div class="controls">
-<details id="address-panel" class="address-settings"><summary>Add addresses</summary>
+<details id="address-panel" class="address-settings"><summary class="address-toggle" role="button" aria-label="Add addresses" title="Add addresses" aria-controls="wallet-form"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
 <form id="wallet-form" novalidate>
 <label for="address-name">Address name (optional, for one address)</label><input id="address-name" maxlength="80" autocomplete="off" placeholder="e.g. Savings" aria-describedby="input-error">
 <label for="address">Ethereum wallet addresses</label>
@@ -79,10 +83,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <p id="input-error" class="input-error" role="alert"></p><p id="wallet-notice" class="form-hint" role="status"></p></form></details>
 
 </div>
-<p id="offline-notice" role="status"></p><p id="storage-warning" role="status"></p>
-<div class="section-heading"><h2>Addresses <span id="count">0</span></h2></div>
-<p class="scroll-hint">Swipe the table to see more tokens and controls.</p>
-<section id="wallets" aria-label="Watched wallets"></section>
 </main><footer><span>anonfolio / balance reader</span><span>Ethereum mainnet · Verified finalized state</span></footer>`;
 
 let state: ConnectionState = 'starting';
@@ -93,6 +93,13 @@ const walletList = document.querySelector<HTMLElement>('#wallets')!;
 walletList.tabIndex = 0;
 const addressPanel = document.querySelector<HTMLDetailsElement>('#address-panel')!;
 addressPanel.open = wallets.length === 0;
+const addressToggle = addressPanel.querySelector<HTMLElement>('summary')!;
+function syncAddressToggle() {
+  addressToggle.setAttribute('aria-expanded', String(addressPanel.open));
+  addressToggle.title = addressPanel.open ? 'Close address form' : 'Add addresses';
+}
+addressPanel.addEventListener('toggle', syncAddressToggle);
+syncAddressToggle();
 const settingsPanel = document.querySelector<HTMLDetailsElement>('#network-settings')!;
 const settingsToggle = settingsPanel.querySelector<HTMLElement>('summary')!;
 function closeSettings(restoreFocus = false) {
@@ -113,6 +120,9 @@ document.addEventListener('keydown', event => {
 const expandedAddresses = new Set<string>();
 const input = document.querySelector<HTMLTextAreaElement>('#address')!;
 const error = document.querySelector<HTMLElement>('#input-error')!;
+addressToggle.addEventListener('click', () => {
+  if (!addressPanel.open) requestAnimationFrame(() => { if (addressPanel.open) input.focus(); });
+});
 const loggedRetries = new Map<Wallet,string>();
 const retries = new RetryQueue<Wallet | 'connection'>(
   key => key === 'connection' ? start(true) : refreshWallet(key, true),
@@ -750,6 +760,7 @@ document.querySelector('#wallet-form')!.addEventListener('submit', event => {
   input.value = '';
   document.querySelector<HTMLInputElement>('#address-name')!.value = '';
   addressPanel.open = false;
+  addressToggle.focus({ preventScroll: true });
   document.querySelector<HTMLDetailsElement>('.token-settings')!.open = false;
   document.querySelector<HTMLDetailsElement>('#network-settings')!.open = false;
   added.forEach(wallet => { void refreshWallet(wallet); });

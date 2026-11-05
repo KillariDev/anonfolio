@@ -43,8 +43,14 @@ h2 { font-size: 14px; font-weight: 550; margin: 0; }
 .total-amount { font: 23px/1.35 ui-monospace, monospace; letter-spacing: -.8px; margin: 5px 0 3px; overflow-wrap: anywhere; }
 .total-status { display: block; height: 14px; line-height: 14px; font-size: 10px; color: #8fa580; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .total.incomplete .total-status { color: #ccb98c; }
-.controls { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; margin-bottom: 10px; }
-.address-settings, .token-settings, #network-settings { min-width: 0; border: 1px solid #303d2b; border-radius: 7px; background: #151c14; }
+.controls { margin-top: 12px; }
+.token-settings, #network-settings { min-width: 0; border: 1px solid #303d2b; border-radius: 7px; background: #151c14; }
+.address-settings { min-width: 0; }
+.address-settings > .address-toggle { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; list-style: none; border: 1px solid #3d483c; border-radius: 8px; background: #1e281e; color: #b8dca3; }
+.address-toggle::-webkit-details-marker { display: none; }
+.address-settings > .address-toggle:hover, .address-settings[open] > .address-toggle { background: #2b3928; border-color: #91af77; }
+.address-settings[open] > .address-toggle svg { transform: rotate(45deg); }
+.address-settings > form { margin-top: 8px; border: 1px solid #303d2b; border-radius: 8px; background: #151c14; }
 summary { cursor: pointer; font-size: 12px; color: #bdcdb2; padding: 9px 12px; }
 details[open] > summary { border-bottom: 1px solid #303d2b; }
 form { padding: 14px; }
@@ -161,7 +167,6 @@ footer { border-top: 1px solid #273223; max-width: 1216px; margin: 20px auto 0; 
   .total { padding: 10px; }
   .total-amount { font-size: 18px; letter-spacing: -.5px; }
   .total-status { font-size: 9px; }
-  .controls { grid-template-columns: 1fr; gap: 7px; }
   .input-row { flex-direction: column; }
   .token-inputs { grid-template-columns: 1fr 1fr; }
   .token-inputs > div:first-child { grid-column: 1/-1; }
