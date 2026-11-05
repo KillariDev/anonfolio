@@ -11,7 +11,9 @@ export async function privateExecutionRpc(worker: PrivateWorker, wallet: Pick<Wa
     throw new Error('Private ' + request.method + ' to ' + new URL(wallet.rpcUrl).hostname + ' failed: ' + errorMessage(error));
   });
   if (!response.ok) throw new Error('Private RPC returned HTTP ' + response.status);
-  const data = await response.json();
+  const data = await response.json().catch(error => {
+    throw new Error('Private ' + request.method + ' response from ' + new URL(wallet.rpcUrl).hostname + ' could not be read: ' + errorMessage(error));
+  });
   if (data?.error && data.id === request.id && data.jsonrpc === '2.0') {
     const reason = typeof data.error.message === 'string' ? data.error.message.slice(0, 300) : 'request rejected';
     throw new Error('Private ' + request.method + ' rejected (' + String(data.error.code) + '): ' + reason);
@@ -37,5 +39,8 @@ export async function privateConsensusGet(worker: PrivateWorker, isolationKey: s
     throw new Error('Consensus GET ' + url.hostname + url.pathname + ' through Anon-RPC failed: ' + errorMessage(error));
   });
   if (!response.ok) throw new Error('Consensus GET ' + url.hostname + url.pathname + ' returned HTTP ' + response.status);
-  return { status: response.status, body: await response.text() };
+  const body = await response.text().catch(error => {
+    throw new Error('Consensus GET ' + url.hostname + url.pathname + ' response could not be read: ' + errorMessage(error));
+  });
+  return { status: response.status, body };
 }

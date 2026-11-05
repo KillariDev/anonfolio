@@ -92,6 +92,7 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
 test('live mainnet through the actual tor-js worker', async ({ page }) => {
   test.setTimeout(480_000);
   test.skip(!process.env.LIVE_RPC, 'Opt in with LIVE_RPC=1; requires working WebRTC/Tor gateway.');
+  const liveAddress = process.env.LIVE_WALLET_ADDRESS || '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
   const publicBalanceCalls: string[] = [];
   page.on('request', req => {
     const body = req.postData() || '';
@@ -109,13 +110,13 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   await page.getByLabel('Decimals', { exact: true }).fill('6');
   await page.getByRole('button', { name: 'Add token', exact: true }).click();
   await openAddressForm(page);
-  await page.locator('#address').fill('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
+  await page.locator('#address').fill(liveAddress);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount').first()).not.toHaveText('—', { timeout: 210_000 });
   await expect(page.locator('.amount').nth(1)).not.toHaveText('—', { timeout: 180_000 });
   await expect(page.locator('.amount').nth(2)).not.toHaveText('—', { timeout: 180_000 });
   expect(publicBalanceCalls).toEqual([]);
-  const refresh = page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true });
+  const refresh = page.getByRole('button', { name: 'Refresh ' + liveAddress, exact: true });
   await expect(refresh).toBeEnabled({ timeout: 180_000 });
   // Exercise manual recovery from an unavailable oracle without permitting a fallback.
   if ((await page.locator('.price-estimate').first().textContent()) === 'Unpriced') {
@@ -134,8 +135,8 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   expect(proven[0].estimate.window).toBe(1800);
   expect(proven[1].estimate.numerator).toBe(proven[0].estimate.numerator);
   expect(proven[1].estimate.denominator).toBe(proven[0].estimate.denominator);
-  await page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true })).toBeEnabled({ timeout: 180_000 });
+  await page.getByRole('button', { name: 'Refresh ' + liveAddress, exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Refresh ' + liveAddress, exact: true })).toBeEnabled({ timeout: 180_000 });
   await expect(page.locator('.error')).toHaveCount(0);
   await openAddressForm(page);
   await page.locator('#address').fill('0x57f138c846dd879810213d0d23c583a9961b7ba2');

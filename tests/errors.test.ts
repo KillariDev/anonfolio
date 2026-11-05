@@ -53,3 +53,29 @@ test('private transport failures identify request, endpoint and worker cause wit
   await expect(privateConsensusGet(worker, 'consensus-key', CONSENSUS_RPC + '/eth/v1/beacon/light_client/finality_update')).rejects.toThrow('Circuit construction failed (TOR_TIMEOUT)');
   expect(calls.map(call => call.key)).toEqual(['wallet-key', 'consensus-key']);
 });
+
+test('interrupted response bodies identify the private request instead of a bare Failed to fetch', async () => {
+  const { privateExecutionRpc, privateConsensusGet } = await import('../src/verification/transport');
+  const { CONSENSUS_RPC } = await import('../src/verification/trust');
+  const worker = { fetch: async () => new Response(new ReadableStream({ start(controller) { controller.error(new TypeError('Failed to fetch')); } })) };
+  await expect(privateExecutionRpc(worker, { rpcUrl: 'https://rpc.example/', isolationKey: 'wallet-key' },
+    { jsonrpc: '2.0', id: 1, method: 'eth_getProof', params: [] })).rejects.toThrow('Private eth_getProof response from rpc.example could not be read: Failed to fetch');
+  await expect(privateConsensusGet(worker, 'consensus-key', CONSENSUS_RPC + '/eth/v1/beacon/light_client/bootstrap/0x123')).rejects.toThrow('Consensus GET ethereum-beacon-api.publicnode.com/eth/v1/beacon/light_client/bootstrap/0x123 response could not be read: Failed to fetch');
+});
+
+test('verifier asset failures name the application host, including interrupted downloads', async () => {
+  const { downloadVerifier } = await import('../src/verification/download');
+  const url = new URL('https://app.example/assets/verifier.wasm');
+  await expect(downloadVerifier(url, async () => { throw new TypeError('Failed to fetch'); })).rejects.toThrow('Helios WASM download from app.example failed: Failed to fetch');
+  await expect(downloadVerifier(url, async () => new Response('', { status: 404 }))).rejects.toThrow('app.example failed: HTTP 404');
+  await expect(downloadVerifier(url, async () => new Response(new ReadableStream({ start(controller) { controller.error(new TypeError('Failed to fetch')); } })))).rejects.toThrow('app.example failed: Failed to fetch');
+});
+
+test('failure destinations distinguish consensus, verifier assets and execution; bare fetch failures identify no endpoint', async () => {
+  const { failureEndpoint } = await import('../src/errors');
+  expect(failureEndpoint(readFailure('Consensus GET beacon.example/eth/v1/beacon/light_client/bootstrap/0x123 response could not be read: Failed to fetch'), 'rpc.example')).toEqual({ label: 'Consensus API', host: 'beacon.example' });
+  expect(failureEndpoint(readFailure('Helios WASM download from app.example failed: Failed to fetch'), 'rpc.example')).toEqual({ label: 'Application host', host: 'app.example' });
+  expect(failureEndpoint(readFailure('Private eth_getProof response from actual-rpc.example could not be read: Failed to fetch'), 'other.example')).toEqual({ label: 'RPC', host: 'actual-rpc.example' });
+  expect(failureEndpoint(readFailure('Failed to fetch'), 'rpc.example')).toBeUndefined();
+  expect(explainFailure(readFailure('Private eth_getProof response from rpc.example could not be read: Failed to fetch')).summary).toBe('RPC response interrupted');
+});

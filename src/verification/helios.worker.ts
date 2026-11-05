@@ -5,6 +5,7 @@ import { DEFAULT_CHECKPOINT, validateCheckpoint, assertCheckpointSlot, type Chec
 import { assertPinnedBlock, verifyAccountResponse, verifyCode } from './proofs';
 import { TwapOracle } from '../pricing';
 import { assertConsensusUrl, type RpcRequest } from './transport';
+import { downloadVerifier } from './download';
 
 let activeCheckpoint: Checkpoint = DEFAULT_CHECKPOINT;
 const EXECUTION_URL = 'https://helios-execution.invalid/';
@@ -94,9 +95,7 @@ async function synced(checkpoint: Checkpoint) {
   if (!client) {
     activeCheckpoint = selected;
     step('Loading pinned Helios 0.12.0 WASM verifier.');
-    const download = await fetch(new URL('../../vendor/helios/index_bg.wasm', import.meta.url));
-    if (!download.ok) throw new Error('Helios WASM download failed (HTTP ' + download.status + ').');
-    const bytes = await download.arrayBuffer();
+    const bytes = await downloadVerifier(new URL('../../vendor/helios/index_bg.wasm', import.meta.url));
     const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(v => v.toString(16).padStart(2, '0')).join('');
     if (hash !== HELIOS_WASM_SHA256) throw new Error('Helios WASM digest mismatch.');
     await initWasm({ module_or_path: bytes });

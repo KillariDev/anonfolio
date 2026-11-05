@@ -840,3 +840,31 @@ for (const failure of ['RPC outage', 'digest mismatch']) test('manual worker upd
   await expect(page.getByLabel('Tor worker source',{exact:true})).toHaveValue('bundled');
   expect(await page.evaluate(() => localStorage.getItem('anonfolio.network.v1'))).toBeNull();
 });
+
+test('failure cards identify the actual service and do not blame the wallet RPC for generic fetch failures', async ({ page }) => {
+  await mockConnection(page);
+  await page.route('**/src/verification/client.ts*', route => route.fulfill({ contentType:'text/javascript', body:`
+    export async function verifyWallet(wallet,worker,tokens,emit) {
+      const errors={consensus:'Consensus GET beacon.example/eth/v1/beacon/light_client/bootstrap/0x123 response could not be read: Failed to fetch',
+        verifier:'Helios WASM download from app.example failed: Failed to fetch', generic:'Failed to fetch'};
+      throw new Error(errors[window.__failureService || 'consensus']);
+    }
+  ` }));
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await page.getByRole('button', { name: 'Explain ETH failure for ' + a, exact:true }).click();
+  const failure = page.getByRole('region', { name: 'ETH balance failure', exact:true });
+  await expect(failure.locator('.failure-metadata')).toContainText('Consensus API');
+  await expect(failure.locator('.failure-metadata')).toContainText('beacon.example');
+  await expect(failure.locator('.failure-metadata')).not.toContainText('eth.drpc.org');
+  await page.evaluate(() => { (window as any).__failureService='verifier'; });
+  await page.getByRole('button', { name: 'Refresh ' + a, exact:true }).click();
+  await expect(failure.locator('.failure-metadata')).toContainText('Application host');
+  await expect(failure.locator('.failure-metadata')).toContainText('app.example');
+  await page.evaluate(() => { (window as any).__failureService='generic'; });
+  await page.getByRole('button', { name: 'Refresh ' + a, exact:true }).click();
+  await expect(failure).toContainText('Failed to fetch');
+  await expect(failure.locator('.failure-metadata')).not.toContainText('RPC');
+  await expect(failure.locator('.failure-metadata')).not.toContainText('eth.drpc.org');
+});

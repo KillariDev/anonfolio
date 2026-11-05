@@ -6,7 +6,7 @@ import { addressDisplay } from './address-display';
 import { parseTrackedAddresses } from './addresses';
 import { config, defaultConfig } from './config';
 import { saveSettings, validateSettings, type NetworkSettings } from './settings';
-import { errorMessage, explainFailure, readFailure, type ReadFailure } from './errors';
+import { errorMessage, explainFailure, failureEndpoint, readFailure, type ReadFailure } from './errors';
 import { Connection, type ConnectionState } from './connection';
 import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance, setTokenBalance, type Balance, type Wallet } from './balances';
 import { loadPortfolio, savePortfolio } from './storage';
@@ -185,10 +185,11 @@ function failureReport(label: string, failure: ReadFailure, rpcHost?: string) {
   const help = document.createElement('p'); help.className = 'failure-action'; help.textContent = action;
   report.append(header, help);
   const metadata = document.createElement('dl'); metadata.className = 'failure-metadata';
-  if (rpcHost) {
+  const endpoint = failureEndpoint(failure, rpcHost);
+  if (endpoint) {
     const entry = document.createElement('div');
-    const name = document.createElement('dt'); name.textContent = 'RPC';
-    const value = document.createElement('dd'); value.textContent = rpcHost;
+    const name = document.createElement('dt'); name.textContent = endpoint.label;
+    const value = document.createElement('dd'); value.textContent = endpoint.host;
     entry.append(name, value); metadata.append(entry);
   }
   if (failure.at) {
@@ -370,7 +371,7 @@ function walletDetails(wallet: Wallet) {
   const verification = document.createElement('p');
   verification.className = 'verification-progress';
   verification.setAttribute('role', 'status');
-  verification.textContent = wallet.verificationStatus || 'Waiting to verify balances.';
+  verification.textContent = (tokens.some(token => tokenBalance(wallet, token).failed) ? 'Retry in progress · ' : '') + (wallet.verificationStatus || 'Waiting to verify balances.');
   content.append(fullAddress, timestamps);
   if (wallet.loading) content.append(verification);
   for (const token of tokens) {

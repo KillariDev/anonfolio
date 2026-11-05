@@ -71,6 +71,9 @@ export function explainFailure(failure: ReadFailure) {
   } else if (/timeout|timed out|aborted/.test(message)) {
     summary = 'Request timed out';
     action = 'Retry when the connection is stable. If timeouts persist, check the configured Tor gateway and RPC endpoints in Settings → Network connection.';
+  } else if (/private eth_\w+ response from .* could not be read/.test(message)) {
+    summary = 'RPC response interrupted';
+    action = 'The private RPC response could not be read completely. Refresh to retry through Anon-RPC. If it keeps failing, check the gateway or choose another compatible balance RPC endpoint in Settings.';
   } else if (/proof|bytecode|state root|pinned finalized block/.test(message)) {
     summary = 'Proof verification rejected';
     action = 'The returned data could not be verified. Retry with a compatible mainnet RPC endpoint; the application will keep the previous value until verification succeeds.';
@@ -84,4 +87,16 @@ export function explainFailure(failure: ReadFailure) {
   if (/starting the private/.test(context) && !/checkpoint|digest|hash|offline/.test(message)) action = 'Check Tor gateways in Settings → Network connection, then save and reconnect. Failed balance reads retry automatically.';
   if (/pricing/.test(context) && /automatic/.test(action)) action = 'Use the address Refresh button to retry the price read. Check the network settings if the request keeps failing.';
   return { summary, action };
+}
+
+export function failureEndpoint(failure: ReadFailure, walletRpcHost?: string): { label: string; host: string } | undefined {
+  const consensus = /Consensus GET ([^\s/]+)/i.exec(failure.message);
+  if (consensus) return { label: 'Consensus API', host: consensus[1]! };
+  const verifier = /Helios WASM download from ([^\s]+) failed/i.exec(failure.message);
+  if (verifier) return { label: 'Application host', host: verifier[1]! };
+  const execution = /Private eth_\w+ (?:to|response from) ([^\s]+) (?:failed|could)/i.exec(failure.message);
+  if (execution) return { label: 'RPC', host: execution[1]! };
+  // A bare fetch failure identifies no destination. Do not blame the wallet RPC.
+  if (/^(?:failed to fetch|networkerror.*|load failed)[.!]?$/i.test(failure.message)) return undefined;
+  return walletRpcHost ? { label: 'RPC', host: walletRpcHost } : undefined;
 }
