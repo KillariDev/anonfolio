@@ -1,4 +1,4 @@
-import { openAddressForm } from './helpers';
+import { openAddressForm, openTokenSettings } from './helpers';
 import { expect, test } from '@playwright/test';
 
 const a = '0x0000000000000000000000000000000000000001';
@@ -95,7 +95,7 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
     if (req.method() === 'POST' && (body.includes('eth_getBalance') || body.includes('70a08231'))) publicBalanceCalls.push(req.url());
   });
   await page.goto('/');
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   await page.getByLabel('Token contract address', { exact: true }).fill('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
   await page.getByLabel('Symbol', { exact: true }).fill('USDC');
   await page.getByLabel('Decimals', { exact: true }).fill('6');

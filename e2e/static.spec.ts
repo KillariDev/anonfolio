@@ -1,4 +1,4 @@
-import { openAddressForm } from './helpers';
+import { openAddressForm, openTokenSettings } from './helpers';
 import { expect, test } from '@playwright/test';
 
 test('static build loads and handles unavailable bootstrap without public balance requests', async ({ page }) => {
@@ -69,7 +69,7 @@ test('static build reopens completely offline with saved wallets, token settings
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Refresh ' + a, exact: true })).toBeEnabled();
   expect(await page.locator('.balance time').first().getAttribute('datetime')).toBe(new Date(timestamp).toISOString());
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   await expect(page.getByRole('button', { name: 'Remove token USDC' })).toBeVisible();
   await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
   await page.reload();

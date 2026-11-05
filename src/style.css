@@ -167,7 +167,8 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 #token-list small[role='status']:empty { display: none; }
 #token-form button .spinner { margin-right: 6px; }
 
-#network-settings { grid-column: 1 / -1; }
+#network-settings > .token-settings { margin: 12px 14px 0; }
+#settings-form h2 { margin-bottom: 14px; }
 #settings-form { max-width: 760px; }
 #settings-form textarea, #settings-form input { width: 100%; box-sizing: border-box; }
 #settings-form textarea { min-height: 70px; resize: vertical; }

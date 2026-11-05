@@ -1,4 +1,4 @@
-import { openAddressForm } from './helpers';
+import { openAddressForm, openTokenSettings } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const a = '0x0000000000000000000000000000000000000001';
@@ -35,7 +35,7 @@ async function mockConnection(page: Page, paused = false, failure = false) {
   ` }));
 }
 async function addToken(page: Page) {
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   await page.getByLabel('Token contract address', { exact: true }).fill(usdc);
   await page.getByLabel('Symbol', { exact: true }).fill('USDC');
   await page.getByLabel('Decimals', { exact: true }).fill('6');
@@ -103,7 +103,7 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
   await expect(page.locator('.error')).toHaveCount(3);
   expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))).toEqual(originalTimes);
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   await page.getByRole('button', { name: 'Remove token USDC' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
   await page.reload();
@@ -297,20 +297,20 @@ test('default tokens have icons and can be removed and re-added like other token
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   await page.getByRole('button', { name: 'Remove token ETH', exact: true }).click();
   await expect(page.locator('.total-label')).toHaveText(['WETH']);
   await page.reload();
   await expect(page.locator('.amount')).toHaveText(['0']);
   const calls = await page.evaluate(() => (window as any).__calls);
   expect(calls.every((call: any) => call.body.method === 'eth_call')).toBe(true);
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   await page.getByRole('button', { name: 'Remove token WETH', exact: true }).click();
   await expect(page.locator('.amount')).toHaveCount(0);
   await page.reload();
   await expect(page.locator('.total')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__calls.length)).toBe(0);
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   for (const preset of ['eth', 'weth']) {
     await page.locator('#token-preset').selectOption(preset);
     await page.getByRole('button', { name: 'Add token', exact: true }).click();
@@ -329,7 +329,7 @@ test('uploaded token icons are saved locally, can be changed on defaults, and ma
   });
   await mockConnection(page);
   await page.goto('/');
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   await page.getByLabel('Token contract address', { exact: true }).fill(usdc);
   await page.getByLabel('Symbol', { exact: true }).fill('USDC');
   await page.getByLabel('Decimals', { exact: true }).fill('6');
@@ -354,7 +354,7 @@ test('uploaded token icons are saved locally, can be changed on defaults, and ma
 test('invalid icon files leave the tracked list unchanged', async ({ page }) => {
   await mockConnection(page);
   await page.goto('/');
-  await page.locator('.token-settings summary').click();
+  await openTokenSettings(page);
   await page.getByLabel('Token contract address', { exact: true }).fill(usdc);
   await page.getByLabel('Symbol', { exact: true }).fill('USDC');
   await page.getByLabel('Decimals', { exact: true }).fill('6');
@@ -371,7 +371,7 @@ test('network settings validate, reconnect with new private RPCs, preserve cache
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1', '0']);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
-  await page.locator('#network-settings summary').click();
+  await page.locator('#network-settings > summary').click();
   const originalGateway = await page.getByLabel('Tor gateways', { exact: true }).inputValue();
   const originalRpcs = await page.getByLabel('Balance RPC endpoints').inputValue();
   await page.getByLabel('Balance RPC endpoints').fill('http://unsafe.example');
@@ -390,7 +390,7 @@ test('network settings validate, reconnect with new private RPCs, preserve cache
   await expect(page.locator('.balance small.cached')).toHaveCount(4);
   await expect(page.locator('#connection')).toContainText('152.236.3.22:12299');
   expect(await page.evaluate(() => (window as any).__calls)).toEqual([]);
-  await page.locator('#network-settings summary').click();
+  await page.locator('#network-settings > summary').click();
   await expect(page.getByLabel('Tor gateways', { exact: true })).toHaveValue(customGateway);
   await expect(page.getByLabel('Public discovery RPC')).toHaveValue('https://discovery.example/rpc');
   await page.evaluate(() => (window as any).__releaseConnection());
@@ -400,7 +400,7 @@ test('network settings validate, reconnect with new private RPCs, preserve cache
   expect(new Set(calls.map((call: any) => call.url))).toEqual(new Set(['https://one.example/rpc', 'https://two.example/rpc']));
   expect(new Set(calls.map((call: any) => call.key)).size).toBe(2);
   await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Restore defaults' }).click()]);
-  await page.locator('#network-settings summary').click();
+  await page.locator('#network-settings > summary').click();
   await expect(page.getByLabel('Tor gateways', { exact: true })).toHaveValue(originalGateway);
   await expect(page.getByLabel('Balance RPC endpoints')).toHaveValue(originalRpcs);
   expect(await page.evaluate(() => localStorage.getItem('anonfolio.network.v1'))).toBeNull();
@@ -410,7 +410,7 @@ test('network settings validate, reconnect with new private RPCs, preserve cache
 test('blocked storage keeps the current settings and connection in use', async ({ page }) => {
   await mockConnection(page);
   await page.goto('/');
-  await page.locator('#network-settings summary').click();
+  await page.locator('#network-settings > summary').click();
   await page.evaluate(() => { Storage.prototype.setItem = () => { throw new Error('Blocked'); }; });
   await page.getByRole('button', { name: 'Save settings and reconnect' }).click();
   await expect(page.locator('#settings-error')).toContainText('could not be saved');
@@ -444,7 +444,7 @@ test('saved gateways and discovery RPC reach the actual connection class; balanc
     `,
   }));
   await page.goto('/');
-  await page.locator('#network-settings summary').click();
+  await page.locator('#network-settings > summary').click();
   const gateway = (await page.getByLabel('Tor gateways', { exact: true }).inputValue()).replace(':12298:', ':12299:');
   await page.getByLabel('Tor gateways', { exact: true }).fill(gateway);
   await page.getByLabel('Public discovery RPC').fill('https://lookup.example/rpc');
@@ -466,7 +466,7 @@ test('saved gateways and discovery RPC reach the actual connection class; balanc
   expect(new Set(calls.map((call: any) => call.key)).size).toBe(1);
   expect(publicRequests.every(request => request.body.method === 'eth_getCode'
     && request.body.params[0] === '0x700dA3193D35fA54Cd3fBf29B66f2a2A0385659e')).toBe(true);
-  await page.locator('#network-settings summary').click();
+  await page.locator('#network-settings > summary').click();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/network-settings-mobile.png', fullPage: true });

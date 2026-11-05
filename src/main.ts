@@ -23,8 +23,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="input-row"><textarea id="address" name="address" rows="2" placeholder="0x… Paste one address or a list" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="wallet-hint input-error" required></textarea><button class="primary" type="submit">add address to track <span aria-hidden="true">↗</span></button></div>
 <p class="form-hint" id="wallet-hint">One address per line, or separate addresses with commas. Each wallet has its own refresh.</p>
 <p id="input-error" class="input-error" role="alert"></p><p id="wallet-notice" class="form-hint" role="status"></p></form></details>
+<details id="network-settings"><summary>Settings</summary>
 <details class="token-settings"><summary>Tracked tokens <span id="token-count"></span></summary>
-<p class="form-hint">Choose the tokens to track across every address.</p>
+<p class="form-hint">Choose the tokens to track across every address. Token changes save automatically.</p>
 <ul id="token-list" aria-label="Tracked tokens"></ul>
 <form id="token-form" novalidate>
 <label for="token-preset">Token</label><select id="token-preset"><option value="custom">Custom ERC-20 token</option><option value="eth">ETH</option><option value="weth">WETH</option></select>
@@ -35,8 +36,8 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <label for="token-icon">Icon (optional)</label><input id="token-icon" type="file" accept="image/png,image/jpeg,image/webp"><p class="form-hint">Upload a PNG, JPEG or WebP up to 1 MB. Icons are stored in this browser.</p>
 <p class="form-hint">Use the token's actual symbol and decimals (for example, USDC uses 6). You supply these display settings; adding a token sends only balanceOf reads, never approvals or transactions.</p>
 <button type="submit">Add token</button><p id="token-error" class="input-error" role="alert"></p></form></details>
-<details id="network-settings"><summary>Settings</summary>
 <form id="settings-form" novalidate>
+<h2>Network connection</h2>
 <label for="settings-gateways">Tor gateways</label><textarea id="settings-gateways" rows="2" spellcheck="false" autocomplete="off" aria-describedby="gateway-hint settings-error"></textarea>
 <p id="gateway-hint" class="form-hint">One ip:port:certhash entry per line. IPv6 addresses use [ipv6]:port:certhash. The default is a development demo gateway.</p>
 <label for="settings-rpcs">Balance RPC endpoints</label><textarea id="settings-rpcs" rows="3" spellcheck="false" autocomplete="off" aria-describedby="rpc-hint settings-error"></textarea>
@@ -489,6 +490,7 @@ document.querySelector('#wallet-form')!.addEventListener('submit', event => {
   input.value = '';
   addressPanel.open = false;
   document.querySelector<HTMLDetailsElement>('.token-settings')!.open = false;
+  document.querySelector<HTMLDetailsElement>('#network-settings')!.open = false;
   added.forEach(wallet => { void refreshWallet(wallet); });
 });
 document.querySelector<HTMLSelectElement>('#token-preset')!.addEventListener('change', event => {
