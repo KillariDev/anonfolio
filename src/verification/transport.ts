@@ -3,6 +3,7 @@ import { errorMessage } from '../errors';
 import { CONSENSUS_RPC } from './trust';
 import type { PrivateWorker, Wallet } from '../balances';
 export type RpcRequest = { jsonrpc: '2.0'; id: number | string; method: string; params: any[] };
+export class ProofHistoryUnavailable extends Error {}
 const methods = new Set(['eth_getProof', 'eth_getCode', 'eth_getBlockByHash', 'eth_getBlockByNumber']);
 // The only execution-network capability. No ordinary fetch or public fallback.
 export async function privateExecutionRpc(worker: PrivateWorker, wallet: Pick<Wallet, 'rpcUrl' | 'isolationKey'>, request: RpcRequest, signal?: AbortSignal, progress?: (state: 'waiting' | 'reading' | 'received') => void) {
@@ -17,12 +18,14 @@ export async function privateExecutionRpc(worker: PrivateWorker, wallet: Pick<Wa
     const data = await response.json().catch(error => {
       throw new Error('Private ' + request.method + ' response from ' + new URL(wallet.rpcUrl).hostname + ' could not be read: ' + errorMessage(error));
     });
+    progress?.('received');
     if (data?.error && data.id === request.id && data.jsonrpc === '2.0') {
       const reason = typeof data.error.message === 'string' ? data.error.message.slice(0, 300) : 'request rejected';
-      throw new Error('Private ' + request.method + ' rejected (' + String(data.error.code) + '): ' + reason);
+      const message = 'Private ' + request.method + ' to ' + new URL(wallet.rpcUrl).hostname + ' rejected (' + String(data.error.code) + '): ' + reason;
+      if (request.method === 'eth_getProof' && Number.isInteger(data.error.code) && /maximum proof window|proof window|historical.*proof|missing trie node|historical state.*unavailable|state.*pruned/i.test(reason)) throw new ProofHistoryUnavailable(message);
+      throw new Error(message);
     }
     if (!data || data.id !== request.id || data.jsonrpc !== '2.0' || !('result' in data)) throw new Error('Private RPC response is unavailable or invalid.');
-    progress?.('received');
     return data;
   }, 90_000, 'Private ' + request.method + ' to ' + new URL(wallet.rpcUrl).hostname + ' timed out after 90 seconds.', signal);
 }

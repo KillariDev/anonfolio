@@ -1,3 +1,4 @@
+import { operatorRoute, executionWithOperators, type OperatorRoute } from './operators';
 import type { NetworkProgress, VerificationStage } from './progress';
 import { config } from '../config';
 import { DEFAULT_CHECKPOINT } from './trust';
@@ -5,14 +6,14 @@ import type { PrivateWorker, Wallet } from '../balances';
 import { loadPricing, type Estimate, type PricingSettings } from '../pricing';
 import type { Token } from '../tokens';
 import type { VerifiedBlock } from './trust';
-import { privateExecutionRpc, privateConsensusGet } from './transport';
+import { privateConsensusGet } from './transport';
 export type VerifiedAmount = { asset: string; amount: string; decimals: number; block: VerifiedBlock; estimate?: Estimate };
 export type VerificationEvent = { type: string; message?: string; asset?: string; error?: string; stage?: VerificationStage; request?: NetworkProgress } & Partial<VerifiedAmount>;
 let shared: Worker | undefined;
 let verifierAbort: AbortController | undefined;
 let consensusRoute: { worker: PrivateWorker; key: string } | undefined;
 type Session = { wallet: Wallet; privateWorker: PrivateWorker; event: (event: VerificationEvent) => void; resolve: () => void; reject: (error: Error) => void;
-  remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAssets: Set<string>; controller: AbortController; timer?: ReturnType<typeof setTimeout>; request: object };
+  route:OperatorRoute; remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAssets: Set<string>; controller: AbortController; timer?: ReturnType<typeof setTimeout>; request: object };
 const sessions = new Map<string, Session>();
 let active: string | undefined;
 function resetWorker(error: Error) {
@@ -86,10 +87,17 @@ function getWorker() {
     const session = sessions.get(message.run);
     if (!session || active !== message.run) return;
     if (message.type === 'rpc') {
-      const report = networkReporter(session, { requestId: message.id, method: message.body.method, host: new URL(session.wallet.rpcUrl).hostname, asset: message.asset });
-      report('waiting');
+      let report: ReturnType<typeof networkReporter>;
       try {
-        const data = await privateExecutionRpc(session.privateWorker, session.wallet, message.body, session.controller.signal, report);
+        const data = await executionWithOperators(session.privateWorker,session.route,session.wallet.isolationKey,message.body,session.controller.signal,
+          (url,state)=>{
+            if(state==='waiting') report=networkReporter(session,{requestId:message.id,method:message.body.method,host:new URL(url).hostname,asset:message.asset});
+            report(state);
+          },(from,to)=>{
+            session.wallet.rpcUrl=to;
+            session.event({type:'progress',message:new URL(from).hostname+' cannot serve proofs at the selected finalized block. Retrying the identical request through Anon-RPC at '+new URL(to).hostname+' with the same address isolation key.'});
+            worker.postMessage({type:'rpc-operator',run:message.run,host:new URL(to).host});
+          });
         if (shared === worker && active === message.run && sessions.has(message.run)) worker.postMessage({ type: 'reply', id: message.id, data });
       } catch (error) {
         if (shared === worker && active === message.run && sessions.has(message.run)) finish(message.run, error instanceof Error ? error : new Error(String(error)), true);
@@ -116,7 +124,7 @@ export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker,
   const id = crypto.randomUUID();
   event({ type: 'queued', message: 'Queued for the shared Helios verifier; waiting for the active address to finish.' });
   return new Promise<void>((resolve, reject) => {
-    sessions.set(id, { wallet, privateWorker, event, resolve, reject, remaining: new Set(tokens.map(token => token.address)), succeeded: 0, pricingAssets: new Set(), controller: new AbortController(),
+    sessions.set(id, { wallet, privateWorker, event, resolve, reject, route:operatorRoute(wallet.rpcUrl,[...config.rpcUrls]), remaining: new Set(tokens.map(token => token.address)), succeeded: 0, pricingAssets: new Set(), controller: new AbortController(),
       request: { type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, checkpoint: config.checkpoint || DEFAULT_CHECKPOINT, tokens, pricing } });
     pump();
   });

@@ -48,8 +48,8 @@ export function explainFailure(failure: ReadFailure) {
     summary = 'Verifier integrity check failed';
     action = 'Reload from a trusted, updated application deployment. The downloaded verifier or Tor worker did not match its pinned hash.';
   } else if (/proof window|historical.*(proof|state)|missing trie node|pruned|archive/.test(message)) {
-    summary = 'RPC proof history unavailable';
-    action = 'In Settings → Network connection, choose a balance RPC endpoint that supports account and storage proofs at finalized block hashes, then save and reconnect.';
+    summary = 'RPC cannot prove this finalized block';
+    action = 'The RPC does not retain the proofs needed for this finalized block. The app tries other configured RPCs through Anon-RPC when available. If none can serve it, add an endpoint with historical eth_getProof support in Settings → Network connection, then save and reconnect.';
   } else if (/offline/.test(message)) {
     summary = 'Browser is offline';
     action = 'Reconnect to the internet. Pending balance reads retry automatically when the browser comes online.';
@@ -94,7 +94,7 @@ export function failureEndpoint(failure: ReadFailure, walletRpcHost?: string): {
   if (consensus) return { label: 'Consensus API', host: consensus[1]! };
   const verifier = /Helios WASM download from ([^\s]+) failed/i.exec(failure.message);
   if (verifier) return { label: 'Application host', host: verifier[1]! };
-  const execution = /Private eth_\w+ (?:to|response from) ([^\s]+) (?:failed|could)/i.exec(failure.message);
+  const execution = /Private eth_\w+ (?:to|response from) ([^\s]+) (?:failed|could|rejected)/i.exec(failure.message);
   if (execution) return { label: 'RPC', host: execution[1]! };
   // A bare fetch failure identifies no destination. Do not blame the wallet RPC.
   if (/^(?:failed to fetch|networkerror.*|load failed)[.!]?$/i.test(failure.message)) return undefined;

@@ -663,13 +663,13 @@ test('saved balance errors expose per-asset causes and recovery actions, then cl
   await page.goto('/');
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
   await expect(page.locator('.balance small.error')).toHaveText(['Unverified saved value · verification failed', 'Unverified saved value · verification failed']);
-  await expect(page.locator('.failure-link').first()).toHaveText('RPC proof history unavailable · Details');
+  await expect(page.locator('.failure-link').first()).toHaveText('RPC cannot prove this finalized block · Details');
   const ethFailure = page.getByRole('region', { name: 'ETH balance failure', exact: true });
   await expect(ethFailure).toBeHidden();
   await page.getByRole('button', { name: 'Explain ETH failure for ' + a, exact: true }).click();
   await expect(ethFailure).toBeVisible();
   await expect(ethFailure).toContainText('distance to target block exceeds maximum proof window');
-  await expect(ethFailure).toContainText('supports account and storage proofs at finalized block hashes');
+  await expect(ethFailure).toContainText('historical eth_getProof support');
   await expect(ethFailure.locator('.failure-message')).toBeHidden();
   await ethFailure.getByText('Technical details', { exact: true }).click();
   await expect(ethFailure.locator('.failure-message')).toBeVisible();
@@ -880,9 +880,9 @@ async function stalledVerifier(page: Page) {
   await page.addInitScript(() => {
     (window as any).__verifiers=[];
     (window as any).Worker = class {
-      onmessage: any; onerror: any; request: any; terminated=false;
+      onmessage: any; onerror: any; request: any; sent: any[]=[]; terminated=false;
       constructor() { (window as any).__verifiers.push(this); }
-      postMessage(request: any) { this.request=request; }
+      postMessage(request: any) { this.sent.push(request); if(request.type==='refresh') this.request=request; }
       terminate() { this.terminated=true; }
     };
   });
@@ -1281,4 +1281,62 @@ test('expandable timestamped retrieval stream keeps history, follows new entries
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'/tmp/anonfolio-retrieval-log-mobile.png',fullPage:true});
+});
+
+for(const available of [true,false]) test('proof-window '+(available?'recovery':'exhaustion')+' stays on private configured RPCs',async({page})=>{
+  await stalledVerifier(page);
+  await page.addInitScript(()=>{
+    localStorage.setItem('anonfolio.network.v1',JSON.stringify({gateways:['152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ'],rpcUrls:['https://short.example/','https://history.example/']}));
+  });
+  await page.route('**/src/connection.ts*',route=>route.fulfill({contentType:'text/javascript',body:`
+    window.__proofCalls=[];
+    export class Connection {
+      constructor(state) {this.state=state;}
+      get() {this.state('ready');return Promise.resolve({fetch:async(url,init)=>{
+        const body=JSON.parse(init.body);window.__proofCalls.push({url,body,key:init.anonOptions.isolationKey});
+        return Response.json(url.includes('short.example')||!${available}?{jsonrpc:'2.0',id:body.id,error:{code:-32602,message:'distance to target block exceeds maximum proof window'}}:{jsonrpc:'2.0',id:body.id,result:'0x'});
+      }});}
+      close() {}
+    }
+  `}));
+  const ordinary:string[]=[];
+  page.on('request',request=>{if(/https:\/\/(short|history)\.example/.test(request.url()))ordinary.push(request.url());});
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await openWalletDetails(page,a);
+  await page.evaluate(async()=>{
+    const worker=(window as any).__verifiers[0];
+    await worker.onmessage({data:{type:'rpc',run:worker.request.id,id:9,body:{jsonrpc:'2.0',id:1,method:'eth_getProof',params:[worker.request.address,[],{blockHash:'0x'+'11'.repeat(32)}]}}});
+  });
+  const calls=await page.evaluate(()=>(window as any).__proofCalls);
+  expect(calls.map((call:any)=>call.url)).toEqual(['https://short.example/','https://history.example/']);
+  expect(calls[0].body).toEqual(calls[1].body);
+  expect(calls[0].key).toBe(calls[1].key);
+  expect(ordinary).toEqual([]);
+  if(available) {
+    expect(await page.evaluate(()=>(window as any).__verifiers[0].sent.some((message:any)=>message.type==='reply'&&message.id===9))).toBe(true);
+    await page.evaluate(async()=>{
+      const worker=(window as any).__verifiers[0];
+      await worker.onmessage({data:{type:'rpc',run:worker.request.id,id:10,body:{jsonrpc:'2.0',id:2,method:'eth_getCode',params:['0x0000000000000000000000000000000000000001',{blockHash:'0x'+'11'.repeat(32)}]}}});
+    });
+    expect(await page.evaluate(()=>(window as any).__proofCalls.at(-1).url)).toBe('https://history.example/');
+    await page.locator('.retrieval-log > summary').click();
+    await expect(page.locator('.log-stream')).toContainText('short.example cannot serve proofs');
+    await expect(page.locator('.log-stream')).toContainText('same address isolation key');
+    await expect(page.locator('.read-failure')).toHaveCount(0);
+    await page.evaluate(()=>{
+      const worker=(window as any).__verifiers[0], run=worker.request.id;
+      const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
+      for(const asset of ['eth','0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'])worker.onmessage({data:{type:'balance',run,asset,amount:'0',block}});
+      worker.onmessage({data:{type:'done',run}});
+    });
+    await page.getByRole('button',{name:'Refresh '+a,exact:true}).click();
+    expect(await page.evaluate(()=>(window as any).__verifiers[0].request.rpcHost)).toBe('history.example');
+    await page.evaluate(()=>{const worker=(window as any).__verifiers[0];worker.onmessage({data:{type:'fatal',run:worker.request.id,error:'Test cleanup'}});});
+  } else {
+    await expect(page.locator('.wallet .spinner')).toHaveCount(0);
+    await expect(page.getByRole('region',{name:'ETH balance failure',exact:true})).toContainText('RPC cannot prove this finalized block');
+    await expect(page.getByRole('region',{name:'ETH balance failure',exact:true}).locator('.failure-action')).toContainText('historical eth_getProof support');
+  }
 });

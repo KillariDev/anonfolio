@@ -14,7 +14,7 @@ test('checkpoint expiry and proof-window rejection have different actionable exp
   expect(checkpoint.summary).toBe('Consensus checkpoint needs updating');
   expect(checkpoint.action).toContain('updated application release');
   const proof = explainFailure(readFailure('Private eth_getProof rejected (-32602): distance to target block exceeds maximum proof window'));
-  expect(proof.summary).toBe('RPC proof history unavailable');
+  expect(proof.summary).toBe('RPC cannot prove this finalized block');
   expect(proof.action).toContain('Settings → Network connection');
 });
 test('errors distinguish public consensus, offline, rate limits, timeouts and invalid proofs', () => {

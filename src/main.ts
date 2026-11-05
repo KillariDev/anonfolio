@@ -49,7 +49,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <label for="settings-gateways">Tor gateways</label><textarea id="settings-gateways" rows="2" spellcheck="false" autocomplete="off" aria-describedby="gateway-hint settings-error"></textarea>
 <p id="gateway-hint" class="form-hint">One ip:port:certhash entry per line. IPv6 addresses use [ipv6]:port:certhash. The default is a development demo gateway.</p>
 <label for="settings-rpcs">Balance RPC endpoints</label><textarea id="settings-rpcs" rows="3" spellcheck="false" autocomplete="off" aria-describedby="rpc-hint settings-error"></textarea>
-<p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses use separate endpoints where possible. Every balance request goes through the private worker.</p>
+<p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses start on separate endpoints where possible. If an endpoint cannot serve finalized-block proofs, another configured endpoint is tried with the same private isolation key. Every request goes through Anon-RPC.</p>
 <p class="form-hint">The Tor worker is bundled and hash-verified locally. Startup never queries an Ethereum RPC. Consensus, balance and oracle requests all use Anon-RPC.</p>
 <h2>Tor worker</h2>
 <label for="settings-tor-worker">Tor worker source</label><select id="settings-tor-worker"><option value="bundled">Bundled release worker (default)</option><option value="updated">Saved worker from PublicNode</option></select>

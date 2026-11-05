@@ -161,6 +161,7 @@ async function refresh(message: any) {
 }
 scope.onmessage = event => {
   const message = event.data;
+  if(message.type === 'rpc-operator') { if(current && current.id===message.run) current.rpcHost=message.host; return; }
   if (message.type === 'reply' || message.type === 'consensus-reply') {
     const reply = replies.get(message.id);
     replies.delete(message.id);

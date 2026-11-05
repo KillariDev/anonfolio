@@ -67,7 +67,7 @@ test('wallet proofs/code and retries cannot escape worker.fetch or change isolat
     expect(calls.every(call => !Array.isArray(call.body))).toBe(true);
     await expect(privateExecutionRpc(worker, wallet, { ...body, method: 'eth_getBalance' })).rejects.toThrow('Disallowed');
     const rejected = { fetch: async () => Response.json({ jsonrpc: '2.0', id: 1, error: { code: -32000, message: 'Historical proof unavailable' } }) };
-    await expect(privateExecutionRpc(rejected, wallet, body)).rejects.toThrow('Private eth_getProof rejected (-32000): Historical proof unavailable');
+    await expect(privateExecutionRpc(rejected, wallet, body)).rejects.toThrow('Private eth_getProof to one.example rejected (-32000): Historical proof unavailable');
   } finally { globalThis.fetch = original; }
 });
 test('the pinned WASM bytes are exact and expired weak-subjectivity checkpoints fail closed', async () => {
