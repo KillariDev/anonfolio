@@ -94,7 +94,7 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
     const body = req.postData() || '';
     if (req.method() === 'POST' && (body.includes('eth_getBalance') || body.includes('70a08231'))) publicBalanceCalls.push(req.url());
   });
-  await page.goto('/');
+  await page.goto(process.env.IPFS_GATEWAY_URL || '/');
   await openTokenSettings(page);
   await page.getByLabel('Token contract address', { exact: true }).fill('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
   await page.getByLabel('Symbol', { exact: true }).fill('USDC');
