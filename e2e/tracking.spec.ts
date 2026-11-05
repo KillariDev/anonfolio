@@ -1160,3 +1160,69 @@ test('portfolio value and token subtotals sum each address quote with explicit p
   await expect(page.locator('.token-value-amount')).toHaveText(['≈ 5000 USDC','≈ 4000 USDC','≈ 12 USDC']);
   await expect(page.locator('#estimated-total .status-stale')).toHaveAttribute('title',/3 saved or stale/);
 });
+
+test('read history groups shared blocks and keeps per-token read times and full hash details', async ({page}) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await expect(page.locator('.amount')).toHaveText(['1','0']);
+  await openWalletDetails(page,a);
+  const history=page.getByRole('region',{name:'Balance read history',exact:true});
+  await expect(history.locator('.read-snapshot')).toHaveCount(1);
+  await expect(history.locator('tbody th')).toHaveText(['ETH','WETH']);
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances);
+  for(const [index,asset] of ['eth','0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'].entries()) {
+    await expect(history.locator('tbody time').nth(index)).toHaveAttribute('datetime',new Date(saved[asset].updatedAt).toISOString());
+  }
+  await expect(history.locator('.snapshot-time time')).toHaveAttribute('datetime',new Date(saved.eth.verifiedBlock.timestamp).toISOString());
+  const hash=history.locator('.snapshot-hash');
+  await expect(hash.locator('code')).not.toBeVisible();
+  await hash.locator('summary').click();
+  await expect(hash.locator('code')).toHaveText(saved.eth.verifiedBlock.hash);
+  await page.evaluate(()=>{(window as any).__delay=2000;});
+  await page.getByRole('button',{name:'Refresh '+a,exact:true}).click();
+  await expect(hash).toHaveJSProperty('open',true);
+  await expect(page.getByRole('button',{name:'Refresh '+a,exact:true})).toBeEnabled();
+  await expect(hash).toHaveJSProperty('open',true);
+  await page.screenshot({path:'/tmp/anonfolio-read-history-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'/tmp/anonfolio-read-history-mobile.png',fullPage:true});
+  // Distinct finalized blocks must never be represented by one shared header.
+  await page.evaluate(()=>{
+    const key='anonfolio.portfolio.v2', data=JSON.parse(localStorage.getItem(key)!);
+    data.wallets[0].balances['0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'].verifiedBlock.hash='0x'+'44'.repeat(32);
+    localStorage.setItem(key,JSON.stringify(data));
+  });
+  await page.unroute('**/src/connection.ts*');
+  await mockConnection(page,true);
+  await page.reload();
+  await openWalletDetails(page,a);
+  await expect(history.locator('.read-snapshot')).toHaveCount(2);
+  await expect(history.locator('.read-snapshot').nth(0).locator('tbody th')).toContainText('ETH');
+  await expect(history.locator('.read-snapshot').nth(1).locator('tbody th')).toContainText('WETH');
+});
+
+test('read history keeps legacy saved values separate from tokens with no successful read', async ({page}) => {
+  await mockConnection(page,true,true);
+  const timestamp=Date.now()-60_000;
+  await page.addInitScript(({address,weth,timestamp})=>{
+    localStorage.setItem('anonfolio.portfolio.v2',JSON.stringify({version:3,
+      tokens:[{address:'eth',symbol:'ETH',decimals:18},{address:weth,symbol:'WETH',decimals:18}],
+      wallets:[{address,balances:{eth:{amount:'1000000000000000000',updatedAt:timestamp}}}]}));
+  },{address:a,weth:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',timestamp});
+  await page.goto('/');
+  await openWalletDetails(page,a);
+  const history=page.getByRole('region',{name:'Balance read history',exact:true});
+  const legacy=history.getByRole('article',{name:'Unverified saved values',exact:true});
+  const pending=history.getByRole('article',{name:'Awaiting first read',exact:true});
+  await expect(legacy.locator('tbody th')).toContainText('ETH');
+  await expect(legacy.locator('tbody time')).toHaveAttribute('datetime',new Date(timestamp).toISOString());
+  await expect(pending.locator('tbody th')).toHaveText('WETH');
+  await expect(pending.locator('tbody td')).toHaveText('—');
+  await expect(history.locator('.snapshot-hash')).toHaveCount(0);
+  await page.evaluate(()=>(window as any).__releaseConnection());
+  await expect(pending.getByRole('img',{name:/no successful read is available/})).toBeVisible();
+  await expect(legacy.locator('tbody time')).toHaveAttribute('datetime',new Date(timestamp).toISOString());
+});

@@ -1,3 +1,4 @@
+import { readHistory } from './read-history';
 import { stageLabels, progressTime, waitingReason, type VerificationStage } from './verification/progress';
 import chevronDown from './assets/chevron-down.svg?raw';
 import { discoverTorWorker, cacheTorWorker } from './worker-update';
@@ -465,11 +466,7 @@ function walletDetails(wallet: Wallet) {
   content.dataset.address = wallet.address;
   content.tabIndex = 0;
   content.setAttribute('aria-label', 'Read progress and results for ' + wallet.address);
-  const timestamps = document.createElement('p');
-  timestamps.className = 'detail-times';
-  timestamps.textContent = tokens.map(token => ({ symbol: token.symbol, balance: tokenBalance(wallet, token) })).map(({ symbol, balance }) => symbol + ': ' + (balance.updatedAt
-    ? 'last read ' + new Date(balance.updatedAt).toLocaleString() + (balance.verifiedBlock ? ' · finalized ' + balance.verifiedBlock.hash + ' at ' + new Date(balance.verifiedBlock.timestamp).toLocaleString() : ' · unverified legacy value') : 'not verified yet')).join(' · ');
-  content.append(timestamps);
+  content.append(readHistory(wallet, tokens));
   if (wallet.loading) content.append(verificationPanel(wallet));
   for (const token of tokens) {
     const balance = tokenBalance(wallet, token);
@@ -511,6 +508,7 @@ function walletDetails(wallet: Wallet) {
 function render() {
   const detailPositions = new Map([...walletList.querySelectorAll<HTMLElement>('.detail-scroll')].map(node => [node.dataset.address, node.scrollTop]));
   const openFailures = new Set([...walletList.querySelectorAll('.failure-technical[open]')].map(node => node.closest('.detail-scroll')?.getAttribute('data-address') + ':' + node.closest('.read-failure')?.getAttribute('aria-label')));
+  const openBlocks = new Set([...walletList.querySelectorAll<HTMLElement>('.snapshot-hash[open]')].map(node => node.closest<HTMLElement>('.wallet')?.dataset.address + ':' + node.dataset.block));
   syncProgressClock();
   renderTotals();
   document.querySelector('#count')!.textContent = String(wallets.length);
@@ -660,6 +658,7 @@ function render() {
   walletList.querySelectorAll<HTMLDetailsElement>('.failure-technical').forEach(node => {
     node.open = openFailures.has(node.closest('.detail-scroll')?.getAttribute('data-address') + ':' + node.closest('.read-failure')?.getAttribute('aria-label'));
   });
+  walletList.querySelectorAll<HTMLDetailsElement>('.snapshot-hash').forEach(node => { node.open = openBlocks.has(node.closest<HTMLElement>('.wallet')?.dataset.address + ':' + node.dataset.block); });
   walletList.querySelectorAll<HTMLElement>('.detail-scroll').forEach(node => { node.scrollTop = detailPositions.get(node.dataset.address) || 0; });
   walletList.scrollLeft = scrollLeft;
   walletList.scrollTop = scrollTop;

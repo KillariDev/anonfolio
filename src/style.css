@@ -76,9 +76,9 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .scroll-hint { display: none; }
 #wallets { position: relative; overflow: auto; max-height: 70vh; border: 1px solid #35422f; border-radius: 9px; }
 .wallet-table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
-.wallet-table thead th { position: sticky; top: 0; z-index: 2; font-size: 10px; font-weight: 500; color: #829876; padding: 10px 14px; background: #151d14; border-bottom: 1px solid #35422f; white-space: nowrap; }
-.wallet-table thead th:first-child, .wallet-head { position: sticky; left: 0; z-index: 1; }
-.wallet-table thead th:first-child { z-index: 3; }
+.wallet-table > thead > tr > th { position: sticky; top: 0; z-index: 2; font-size: 10px; font-weight: 500; color: #829876; padding: 10px 14px; background: #151d14; border-bottom: 1px solid #35422f; white-space: nowrap; }
+.wallet-table > thead > tr > th:first-child, .wallet-head { position: sticky; left: 0; z-index: 1; }
+.wallet-table > thead > tr > th:first-child { z-index: 3; }
 .wallet-head { font-weight: 400; min-width: 200px; width: clamp(200px, 34vw, 430px); max-width: 430px; }
 .balances > th, .balances > td { padding: 6px 14px; border-bottom: 1px solid #2b3826; background: #192019; vertical-align: middle; height: 54px; }
 .wallet:last-child .balances > th, .wallet:last-child .balances > td { border-bottom: 0; }
@@ -109,7 +109,24 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .detail-scroll { height: clamp(20rem, 50vh, 28rem); overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; overflow-anchor: none; padding-right: 8px; }
 .detail-scroll:focus-visible { outline: 2px solid #b8ec8c; outline-offset: 2px; }
 .full-address { font: 12px ui-monospace, monospace; color: #c1d6b5; overflow-wrap: anywhere; }
-.detail-times { font-size: 10px; color: #8fa681; margin: 7px 0; line-height: 1.7; overflow-wrap: anywhere; }
+.read-history { display: grid; gap: 10px; margin: 3px 0 12px; }
+.read-snapshot { min-width: 0; padding: 10px 12px; border: 1px solid #34442e; border-radius: 7px; background: #162013; }
+.snapshot-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11px; color: #b7cca8; }
+.snapshot-heading strong { font-weight: 500; }
+.snapshot-time { margin-left: auto; display: flex; flex-wrap: wrap; gap: 5px 10px; color: #91a485; font-size: 10px; }
+.snapshot-time > span { color: #718669; }
+.read-times { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; color: #a5ba98; }
+.read-times th, .read-times td { padding: 6px 0; border-bottom: 1px solid #2b3826; text-align: left; font-weight: 400; }
+.read-times thead th { color: #7c9170; font-size: 9px; padding-top: 0; }
+.read-times th:first-child { width: 30%; }
+.read-times tbody th > .status-icon { margin-left: 6px; }
+.history-token { display: inline-flex; align-items: center; gap: 7px; vertical-align: middle; }
+.history-token .token-icon { width: 17px; height: 17px; flex-basis: 17px; font-size: 8px; }
+.read-times time { font-variant-numeric: tabular-nums; }
+.snapshot-hash > summary { padding: 8px 0 0; font-size: 10px; color: #829675; }
+.snapshot-hash[open] > summary { border: 0; }
+.snapshot-hash code { display: block; margin-top: 7px; font-size: 10px; line-height: 1.7; color: #b4c6a7; overflow-wrap: anywhere; user-select: all; }
+@media (max-width: 720px) { .snapshot-time { flex-basis: 100%; margin-left: 0; } }
 .activity { font-size: 11px; color: #9fb492; border-top: 1px solid #2d3829; margin-top: 10px; padding-top: 9px; }
 .activity > p { margin: 0 0 8px; line-height: 1.6; }
 .activity-item { display: flex; gap: 8px; margin-top: 8px; line-height: 1.6; }
@@ -148,7 +165,7 @@ footer { border-top: 1px solid #273223; max-width: 1216px; margin: 20px auto 0; 
   .connection > summary::after { font-size: 9px; }
   .section-heading .local-note { font-size: 9px; }
   .scroll-hint { display: block; color: #819777; font-size: 10px; margin: 0 0 7px; }
-  .wallet-head, .wallet-table thead th:first-child { min-width: 200px; width: 200px; max-width: 200px; }
+  .wallet-head, .wallet-table > thead > tr > th:first-child { min-width: 200px; width: 200px; max-width: 200px; }
   .address-line { gap: 6px; }
   .balances > th, .balances > td { padding: 6px 11px; }
   .address-value { font-size: 10px; }
