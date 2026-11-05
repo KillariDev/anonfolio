@@ -96,9 +96,13 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .balance .cached:empty { display: none; }
 .row-status { font-size: 10px; color: #96b283; white-space: nowrap; min-width: 105px; }
 .row-status.warning { color: #d1b997; }
-.actions { white-space: nowrap; min-width: 100px; }
-.actions button { font-size: 10px; padding: 5px 8px; background: transparent; }
-.actions .remove { border: 0; font-size: 17px; color: #84947c; padding: 2px 6px; margin-left: 3px; }
+.actions { white-space: nowrap; width: 1%; }
+.actions .details-toggle { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #a8bd9b; }
+.actions .details-toggle:hover { background: #2b3926; color: #d1e4c5; }
+.details-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.detail-actions { display: flex; justify-content: flex-end; margin-top: 14px; padding-top: 10px; border-top: 1px solid #2d3829; }
+.detail-actions .remove-address { padding: 6px 10px; border: 1px solid #514036; background: transparent; color: #c7a592; font-size: 11px; }
+.detail-actions .remove-address:hover { border-color: #8b5a47; background: #302219; color: #edc5af; }
 .wallet-details[hidden] { display: none; }
 .wallet-details > td { background: #121b11; border-bottom: 1px solid #35422f; padding: 0; }
 .detail-inner { padding: 13px 16px; max-width: 1100px; }

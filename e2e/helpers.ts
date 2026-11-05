@@ -49,3 +49,8 @@ export async function mockVerification(page: Page, priced = false) {
     }
   ` }));
 }
+
+export async function openWalletDetails(page: Page, label: string) {
+  const toggle = page.getByRole('button', { name: 'Details ' + label, exact: true });
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+}

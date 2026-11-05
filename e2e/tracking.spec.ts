@@ -1,5 +1,5 @@
 import { encodeAbiParameters, keccak256, stringToBytes } from 'viem';
-import { openAddressForm, openTokenSettings, mockVerification } from './helpers';
+import { openWalletDetails, openAddressForm, openTokenSettings, mockVerification } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const a = '0x0000000000000000000000000000000000000001';
@@ -194,6 +194,7 @@ test('offline reads resume automatically on reconnect and removed addresses neve
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.activity')).toContainText('Automatic retry 1 scheduled');
   page.once('dialog', dialog => dialog.accept());
+  await openWalletDetails(page, a);
   await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
   const removedCount = await page.evaluate(() => (window as any).__calls.length);
   await page.waitForTimeout(2500);
@@ -258,6 +259,7 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   await page.getByRole('button', { name: 'Details ' + a, exact: true }).click();
   await page.screenshot({ path: 'test-results/compact-desktop.png', fullPage: true });
   page.once('dialog', dialog => dialog.accept());
+  await openWalletDetails(page, a);
   await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
   await expect(page.locator('.total-amount')).toHaveText(['9', '0', '11.11']);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -577,6 +579,10 @@ test('address removal requires confirmation and cancellation preserves saved bal
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
   const saved = await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2'));
   const remove = page.getByRole('button', { name: 'Remove ' + a + ' · Savings', exact: true });
+  await expect(remove).toBeHidden();
+  await openWalletDetails(page, a + ' · Savings');
+  await expect(page.locator('.balances .remove-address')).toHaveCount(0);
+  await expect(page.locator('.details-toggle').first().locator('svg')).toBeVisible();
   const cancelled = page.waitForEvent('dialog');
   const cancelClick = remove.click();
   const prompt = await cancelled;
@@ -591,6 +597,7 @@ test('address removal requires confirmation and cancellation preserves saved bal
   await page.reload();
   await expect(page.locator('.wallet-head .address-name')).toHaveText('Savings');
   await expect(page.getByRole('button', { name: 'Refresh ' + a + ' · Savings', exact: true })).toBeEnabled();
+  await openWalletDetails(page, a + ' · Savings');
   page.once('dialog', dialog => dialog.accept());
   await remove.click();
   await expect(page.locator('.wallet')).toHaveCount(0);

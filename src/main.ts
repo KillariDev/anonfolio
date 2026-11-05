@@ -1,3 +1,4 @@
+import chevronDown from './assets/chevron-down.svg?raw';
 import { discoverTorWorker, cacheTorWorker } from './worker-update';
 import type { WorkerMetadata } from './worker-metadata';
 import { DEFAULT_CHECKPOINT, checkCheckpointAge } from './verification/trust';
@@ -428,13 +429,14 @@ function render() {
   table.style.minWidth = (460 + assets.length * 130) + 'px';
   const caption = document.createElement('caption');
   caption.className = 'sr-only';
-  caption.textContent = 'Token balances by tracked address. Use Details for full addresses, timestamps and private request progress.';
+  caption.textContent = 'Token balances by tracked address. Expand a row for timestamps and private request progress.';
   const head = document.createElement('thead');
   const columns = document.createElement('tr');
   for (const entry of ['Address / refresh', ...assets, 'Status', 'Actions']) {
     const column = document.createElement('th');
     column.scope = 'col';
-    if (typeof entry === 'string') column.textContent = entry;
+    if (entry === 'Actions') { column.setAttribute('aria-label', 'Address details'); }
+    else if (typeof entry === 'string') column.textContent = entry;
     else {
       const label = document.createElement('span');
       label.className = 'column-token';
@@ -496,7 +498,10 @@ function render() {
     actions.className = 'actions';
     const expanded = expandedAddresses.has(wallet.address);
     const toggle = document.createElement('button');
-    toggle.textContent = expanded ? 'Close' : 'Details';
+    toggle.type = 'button';
+    toggle.className = 'details-toggle';
+    toggle.innerHTML = chevronDown;
+    toggle.title = expanded ? 'Collapse address details' : 'Expand address details';
     toggle.setAttribute('aria-label', 'Details ' + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
     toggle.setAttribute('aria-expanded', String(expanded));
     toggle.setAttribute('aria-controls', 'details-' + wallet.address);
@@ -506,8 +511,9 @@ function render() {
       render();
     };
     const remove = document.createElement('button');
-    remove.className = 'remove';
-    remove.textContent = '×';
+    remove.type = 'button';
+    remove.className = 'remove-address';
+    remove.textContent = 'Remove address';
     remove.title = 'Remove address';
     remove.setAttribute('aria-label', 'Remove ' + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
     remove.onclick = () => {
@@ -518,7 +524,7 @@ function render() {
       wallets.splice(wallets.indexOf(wallet), 1);
       persist(); render();
     };
-    actions.append(toggle, remove);
+    actions.append(toggle);
     row.append(status, actions);
     const details = document.createElement('tr');
     details.id = 'details-' + wallet.address;
@@ -526,7 +532,12 @@ function render() {
     details.hidden = !expanded;
     const detailCell = document.createElement('td');
     detailCell.colSpan = assets.length + 3;
-    detailCell.append(walletDetails(wallet));
+    const content = walletDetails(wallet);
+    const detailActions = document.createElement('div');
+    detailActions.className = 'detail-actions';
+    detailActions.append(remove);
+    content.append(detailActions);
+    detailCell.append(content);
     details.append(detailCell);
     card.append(row, details);
     table.append(card);

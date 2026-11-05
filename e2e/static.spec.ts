@@ -1,4 +1,4 @@
-import { openAddressForm, openTokenSettings } from './helpers';
+import { openWalletDetails, openAddressForm, openTokenSettings } from './helpers';
 import { expect, test } from '@playwright/test';
 
 test.describe('Tor bootstrap failure injection', () => {
@@ -82,6 +82,7 @@ test('static build reopens completely offline with saved wallets, token settings
   await expect(page.getByRole('button', { name: 'Remove token USDC' })).toBeVisible();
   await page.locator('#network-settings > summary').click();
   page.once('dialog', dialog => dialog.accept());
+  await openWalletDetails(page, a + ' · Offline savings');
   await page.getByRole('button', { name: 'Remove ' + a + ' · Offline savings', exact: true }).click();
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(0);

@@ -1,4 +1,4 @@
-import { openAddressForm, openTokenSettings, mockVerification } from './helpers';
+import { openWalletDetails, openAddressForm, openTokenSettings, mockVerification } from './helpers';
 import { expect, test } from '@playwright/test';
 
 const a = '0x0000000000000000000000000000000000000001';
@@ -74,6 +74,7 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
   await expect(page.getByRole('alert')).toContainText('already on your watchlist');
   await expect(page.locator('.wallet')).toHaveCount(2);
   page.once('dialog', dialog => dialog.accept());
+  await openWalletDetails(page, a);
   await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
   await expect(page.locator('.wallet')).toHaveCount(1);
   await expect(page.locator('.wallet-head .wallet-address')).toHaveText(b);
@@ -81,6 +82,7 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
   await expect(page.locator('.wallet')).toHaveCount(1);
   await expect(page.locator('.wallet-head .wallet-address')).toHaveText(b);
   page.once('dialog', dialog => dialog.accept());
+  await openWalletDetails(page, b);
   await page.getByRole('button', { name: 'Remove ' + b, exact: true }).click();
   await expect(page.locator('.empty')).toContainText('Your watchlist starts here');
   await page.reload();
