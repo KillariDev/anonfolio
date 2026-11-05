@@ -289,9 +289,6 @@ function walletDetails(wallet: Wallet) {
   const content = document.createElement('div');
   content.className = 'detail-inner';
   const fullAddress = addressDisplay(wallet);
-  const route = document.createElement('div');
-  route.className = 'route';
-  route.textContent = 'Private RPC operator: ' + new URL(wallet.rpcUrl).hostname + ' · wallet-specific Tor isolation';
   const timestamps = document.createElement('p');
   timestamps.className = 'detail-times';
   timestamps.textContent = tokens.map(token => ({ symbol: token.symbol, balance: tokenBalance(wallet, token) })).map(({ symbol, balance }) => symbol + ': ' + (balance.updatedAt
@@ -300,7 +297,7 @@ function walletDetails(wallet: Wallet) {
   verification.className = 'verification-progress';
   verification.setAttribute('role', 'status');
   verification.textContent = wallet.verificationStatus || 'Waiting to verify balances.';
-  content.append(fullAddress, route, timestamps, verification);
+  content.append(fullAddress, timestamps, verification);
   if (wallet.activity.length) {
     const activity = document.createElement('div');
     activity.className = 'activity';
@@ -321,8 +318,7 @@ function walletDetails(wallet: Wallet) {
         : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' on the same private route; verifying finalized state' : 'Verifying locally; fetching private proofs as needed')
         : item.phase === 'received' ? 'Balance received' : 'Read failed; previous amount kept if available');
       const payload = document.createElement('small');
-      payload.append(document.createTextNode(item.description + ' · wallet '), addressDisplay(wallet, true),
-        document.createTextNode(' → ' + new URL(wallet.rpcUrl).hostname));
+      payload.textContent = item.description + ' → ' + new URL(wallet.rpcUrl).hostname;
       detail.append(title, payload);
       line.append(detail);
       activity.append(line);

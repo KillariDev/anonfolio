@@ -103,7 +103,7 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .wallet-details > td { background: #121b11; border-bottom: 1px solid #35422f; padding: 0; }
 .detail-inner { padding: 13px 16px; max-width: 1100px; }
 .full-address { font: 12px ui-monospace, monospace; color: #c1d6b5; overflow-wrap: anywhere; }
-.route, .detail-times { font-size: 10px; color: #8fa681; margin: 7px 0; line-height: 1.7; overflow-wrap: anywhere; }
+.detail-times { font-size: 10px; color: #8fa681; margin: 7px 0; line-height: 1.7; overflow-wrap: anywhere; }
 .activity { font-size: 11px; color: #9fb492; border-top: 1px solid #2d3829; margin-top: 10px; padding-top: 9px; }
 .activity > p { margin: 0 0 8px; line-height: 1.6; }
 .activity-item { display: flex; gap: 8px; margin-top: 8px; line-height: 1.6; }

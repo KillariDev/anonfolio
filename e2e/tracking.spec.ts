@@ -494,7 +494,9 @@ test('named addresses use reusable blockies in rows and details, persist, and ke
   await expect(detail.locator('.address-name')).toHaveText('Savings');
   await expect(detail.locator('.wallet-address')).toHaveText(a);
   expect(await detail.locator('svg').innerHTML()).toBe(blockie);
-  await expect(page.locator('.activity-item .address-name')).toHaveText(['Savings', 'Savings']);
+  await expect(page.locator('.activity-item .address-display')).toHaveCount(0);
+  await expect(page.locator('.activity')).not.toContainText(a);
+  await expect(page.locator('.detail-inner')).not.toContainText('Private RPC operator:');
   expect(await page.evaluate(() => JSON.stringify((window as any).__calls))).not.toContain('Savings');
   await page.reload();
   await expect(page.locator('.wallet-head .address-name')).toHaveText('Savings');
