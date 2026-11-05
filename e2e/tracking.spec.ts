@@ -393,7 +393,7 @@ test('network settings validate, reconnect with new private RPCs, preserve cache
   await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Save settings and reconnect' }).click()]);
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1', '0']);
   await expect(page.locator('.balance small.cached')).toHaveCount(4);
-  await expect(page.locator('#connection')).toContainText('152.236.3.22:12299');
+  await expect(page.locator('#connection')).not.toContainText('152.236.3.22');
   expect(await page.evaluate(() => (window as any).__calls)).toEqual([]);
   await page.locator('#network-settings > summary').click();
   await expect(page.getByLabel('Tor gateways', { exact: true })).toHaveValue(customGateway);
@@ -531,6 +531,11 @@ test('header settings icon, responsive full addresses and application favicon', 
   await expect(settings).toBeVisible();
   await expect(page.locator('header #connection')).toBeVisible();
   await expect(page.locator('main #connection')).toHaveCount(0);
+  await expect(page.locator('#connection')).toContainText('Private worker ready');
+  await expect(page.locator('#connection')).toContainText('Separate private route per address');
+  await expect(page.locator('details#connection, #connection summary, #connection button')).toHaveCount(0);
+  await expect(page.locator('#connection')).not.toContainText('Tor gateway');
+  await expect(page.locator('#connection')).not.toContainText('152.236.3.22');
   await expect(page.locator('#settings-panel')).not.toBeVisible();
   const box = await settings.boundingBox();
   expect(box!.y).toBeLessThan(80);
@@ -726,8 +731,8 @@ test('private startup failures expose Tor warning causes, preserve wallet detail
     `,
   }));
   await page.goto('/');
-  await expect(page.locator('#connection > summary')).toContainText('Gateway connection refused (ECONNREFUSED)');
-  await expect(page.locator('#connection > summary')).toContainText('Tor bootstrap failed');
+  await expect(page.locator('#connection .connection-heading')).toContainText('Gateway connection refused (ECONNREFUSED)');
+  await expect(page.locator('#connection .connection-heading')).toContainText('Tor bootstrap failed');
   expect(await page.locator('#connection').textContent()).not.toMatch(/password|token-secret|key=secret/);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
@@ -739,7 +744,7 @@ test('private startup failures expose Tor warning causes, preserve wallet detail
   await expect(page.getByRole('region', { name: 'ETH balance failure', exact: true })).toContainText('Tor bootstrap failed');
   await page.evaluate(() => { (window as any).__recover = true; });
   await page.getByRole('button', { name: 'Retry connection', exact: true }).click();
-  await expect(page.locator('#connection > summary')).toContainText('Private worker ready');
+  await expect(page.locator('#connection .connection-heading')).toContainText('Private worker ready');
   await expect(page.locator('#connection')).not.toContainText('ECONNREFUSED');
 });
 
@@ -820,7 +825,7 @@ test('manual PublicNode worker update is explicit, cached, applied on save and f
     for (const key of await cache.keys()) await cache.put(key, new Response('tampered'));
   });
   await page.reload();
-  await expect(page.locator('#connection > summary')).toContainText('Saved Tor worker digest mismatch');
+  await expect(page.locator('#connection .connection-heading')).toContainText('Saved Tor worker digest mismatch');
   expect(requests).toHaveLength(3); expect(downloads).toBe(1);
   await page.getByRole('button', {name:'Settings',exact:true}).click();
   await page.getByLabel('Tor worker source',{exact:true}).selectOption('bundled');

@@ -23,7 +23,7 @@ import { readIcon, tokenIcon, statusIcon, type StatusIcon } from './icons';
 import './style.css';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<header><a class="brand" href="./" aria-label="Anonfolio home"><img class="brand-mark" src="${appIcon}" width="28" height="28" alt="">anonfolio<span class="brand-dot">.</span></a><details id="connection" aria-label="Private connection details"></details><div class="header-actions"><span class="network"><i></i>Ethereum mainnet</span><details id="network-settings"><summary class="settings-toggle" role="button" aria-label="Settings" title="Settings" aria-controls="settings-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.5"/></svg></summary>
+<header><a class="brand" href="./" aria-label="Anonfolio home"><img class="brand-mark" src="${appIcon}" width="28" height="28" alt="">anonfolio<span class="brand-dot">.</span></a><div id="connection" role="status" aria-label="Private connection"></div><div class="header-actions"><span class="network"><i></i>Ethereum mainnet</span><details id="network-settings"><summary class="settings-toggle" role="button" aria-label="Settings" title="Settings" aria-controls="settings-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.5"/></svg></summary>
 <section id="settings-panel" class="settings-panel" aria-label="Application settings"><div class="settings-heading"><h2>Settings</h2><button id="close-settings" type="button" aria-label="Close settings" title="Close settings">×</button></div>
 <details class="token-settings"><summary>Tracked tokens <span id="token-count"></span></summary>
 <p class="form-hint">Choose the tokens to track across every address. Token changes save automatically.</p>
@@ -159,9 +159,9 @@ function renderConnection() {
   const node = document.querySelector<HTMLElement>('#connection')!;
   node.className = 'connection ' + state;
   node.replaceChildren();
-  const heading = document.createElement('summary');
+  const heading = document.createElement('div');
+  heading.className = 'connection-heading';
   if (state === 'starting') heading.append(spinner());
-  const text = document.createElement('div');
   const title = document.createElement('strong');
   title.textContent = state === 'ready' ? 'Private worker ready'
     : state === 'starting' ? 'Starting private connection…'
@@ -173,16 +173,6 @@ function renderConnection() {
   current.title = current.textContent;
   heading.append(current);
   node.append(heading);
-  const detail = document.createElement('p');
-  detail.className = 'connection-detail';
-  detail.textContent = state === 'starting' ? connectionMessage : retryMessage('connection');
-  const gateway = document.createElement('p');
-  gateway.className = 'connection-detail';
-  gateway.textContent = (config.gateways.length === 1 ? 'Tor gateway: ' : 'Tor gateways: ') + config.gateways.map(entry => entry.slice(0, entry.lastIndexOf(':'))).join(', ');
-  if (state !== 'ready' && detail.textContent) text.append(detail);
-  text.append(gateway);
-  if (state === 'failed' && connection.lastError) text.append(failureReport('Private connection', readFailure(connection.lastError, 'Starting the private worker')));
-  node.append(text);
   if (state === 'failed') {
     const button = document.createElement('button');
     button.textContent = 'Retry connection';

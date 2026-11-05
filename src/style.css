@@ -59,13 +59,9 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .token-inputs > div { min-width: 0; }
 #token-form { padding-top: 5px; }
 .connection { border: 1px solid #303d2b; border-radius: 7px; background: #131b12; min-width: 0; margin: 0; font-size: 11px; }
-.connection > summary { display: flex; align-items: center; gap: 9px; font-size: 11px; padding: 8px 12px; }
-.connection > summary::after { content: "Details ▾"; font-size: 10px; color: #819777; margin-left: auto; white-space: nowrap; }
-.connection[open] > summary::after { content: "Details ▴"; }
+.connection-heading { display: flex; align-items: center; gap: 9px; font-size: 11px; padding: 8px 12px; }
 .connection strong { font-weight: 500; color: #b8caae; white-space: nowrap; }
 .connection-current { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #829975; font-size: 10px; }
-.connection > div { position: absolute; top: calc(100% + 8px); right: 32px; z-index: 9; width: min(620px, calc(100vw - 64px)); max-height: 65dvh; overflow: auto; padding: 10px 14px; background: #131b12; border: 1px solid #43543a; border-radius: 8px; box-shadow: 0 16px 48px #0009; }
-.connection-detail { margin: 5px 0 0; font-size: 11px; color: #8fa181; overflow-wrap: anywhere; line-height: 1.6; }
 .connection button { padding: 4px 8px; font-size: 10px; white-space: nowrap; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; margin: 15px 0 9px; }
 #count { font-size: 10px; background: #283325; border-radius: 4px; padding: 2px 6px; margin-left: 6px; color: #b8ccaa; }
@@ -147,7 +143,6 @@ footer { border-top: 1px solid #273223; max-width: 1216px; margin: 20px auto 0; 
 @media (max-width: 720px) {
   header { padding: 16px; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
   header > .connection { grid-column: 1 / -1; grid-row: 2; }
-  .connection > div { right: 16px; width: calc(100vw - 32px); }
   main { padding: 0 16px; margin-top: 15px; }
   .page-heading { align-items: flex-start; gap: 8px; }
   .page-heading .local-note { max-width: 150px; font-size: 10px; text-align: right; }
@@ -159,10 +154,9 @@ footer { border-top: 1px solid #273223; max-width: 1216px; margin: 20px auto 0; 
   .input-row { flex-direction: column; }
   .token-inputs { grid-template-columns: 1fr 1fr; }
   .token-inputs > div:first-child { grid-column: 1/-1; }
-  .connection > summary { flex-wrap: wrap; }
+  .connection-heading { flex-wrap: wrap; }
   .connection-current { flex-basis: 100%; order: 3; }
   .connection strong { font-size: 10px; white-space: normal; min-width: 0; }
-  .connection > summary::after { font-size: 9px; }
   .section-heading .local-note { font-size: 9px; }
   .scroll-hint { display: block; color: #819777; font-size: 10px; margin: 0 0 7px; }
   .wallet-head, .wallet-table > thead > tr > th:first-child { min-width: 200px; width: 200px; max-width: 200px; }
