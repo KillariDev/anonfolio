@@ -183,7 +183,7 @@ Holding values remain bigint fractions:
 holding value in raw quote units = raw balance × numerator / denominator
 ```
 
-The portfolio adds these fractions and reduces them before display conversion. Display rounding of an individual holding never feeds back into the aggregate. The virtual reserve checks use in-range liquidity and square-root prices; they are liquidity filters, not measurements of total TVL or guarantees of proceeds from selling the holding. Estimates exclude swap fees, price impact, and slippage.
+The portfolio adds these fractions and reduces them before display conversion. The overview presents a prominent portfolio value with separate priced-holding coverage and tooltip icons for partial, stale and mixed-block results. Each token card also computes its own quote-currency subtotal across addresses using the same rational aggregation. It adds each holding’s value at its own verified block/quote rather than applying one address’s price to the aggregate token quantity. A token with no usable quotes shows an unavailable amount; incomplete per-token pricing is explicitly marked partial. The selected quote token and its configured decimals apply to the portfolio and all subtotals. The 30-minute TWAP explanation is available through a methodology icon rather than a long summary sentence. Display rounding of an individual holding never feeds back into the aggregate. The virtual reserve checks use in-range liquidity and square-root prices; they are liquidity filters, not measurements of total TVL or guarantees of proceeds from selling the holding. Estimates exclude swap fees, price impact, and slippage.
 
 ### Cache and failure behavior
 

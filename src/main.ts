@@ -64,7 +64,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="page-heading"><h1>Portfolio</h1><span class="local-note">Ethereum balances · saved on this browser</span></div>
 <section class="overview" aria-label="Portfolio token totals">
 <div class="overview-heading"><h2>Token totals</h2><span id="total-count"></span></div>
-<p id="estimated-total" aria-live="polite"></p>
+<div id="estimated-total" class="portfolio-value" aria-label="Estimated portfolio value" aria-live="polite"></div>
 <div id="totals" class="totals" aria-live="polite"></div></section>
 <div class="controls">
 <details id="address-panel" class="address-settings"><summary>Add addresses</summary>
@@ -334,13 +334,32 @@ function renderTokens() {
     list.append(item);
   }
 }
+function valuationFlags(estimate: ReturnType<typeof estimatedTotal>) {
+  const flags = document.createElement('span'); flags.className = 'valuation-flags';
+  if (estimate.known < estimate.count || estimate.decimalsMismatch) flags.append(statusIcon('partial', 'Partial', 'Partial value: only ' + estimate.known + ' of ' + estimate.count + ' holdings have a usable price. Unpriced holdings are excluded.'));
+  if (estimate.stale) flags.append(statusIcon('stale', 'Stale', 'Includes ' + estimate.stale + ' saved or stale holding values.'));
+  if (estimate.mixedBlocks) flags.append(statusIcon('unverified', 'Mixed finalized blocks', 'Holding values come from different verified finalized blocks.'));
+  return flags;
+}
+function valuationAmount(estimate: ReturnType<typeof estimatedTotal>) {
+  return estimate.known && !estimate.decimalsMismatch ? '≈ ' + formatBalance(displayValue(estimate.value), estimate.decimals + 18) : '—';
+}
 function renderTotals() {
   const estimate = estimatedTotal(wallets, tokens, pricing);
   const summary = document.querySelector('#estimated-total')!;
-  summary.textContent = 'Estimated total: ' + (estimate.known && !estimate.decimalsMismatch ? '≈ ' + formatBalance(displayValue(estimate.value), estimate.decimals + 18) : '—') + ' ' + pricing.quote.symbol
-    + (estimate.known < estimate.count || estimate.decimalsMismatch ? ' · Partial' : '')
-    + ' · ' + estimate.known + '/' + estimate.count + ' holdings priced · 30-minute TWAP'
-    + (estimate.mixedBlocks ? ' · mixed finalized blocks' : '') + (estimate.stale ? ' · stale' : '');
+  const primary = document.createElement('div');
+  const label = document.createElement('div'); label.className = 'portfolio-value-label'; label.textContent = 'Portfolio value';
+  const value = document.createElement('div'); value.className = 'portfolio-value-amount';
+  const number = document.createElement('strong'); number.className = 'portfolio-value-number'; number.textContent = valuationAmount(estimate);
+  const currency = document.createElement('span'); currency.className = 'portfolio-value-currency'; currency.textContent = pricing.quote.symbol;
+  value.append(number, document.createTextNode(' '), currency);
+  primary.append(label, value);
+  const metadata = document.createElement('div'); metadata.className = 'portfolio-value-meta';
+  const coverage = document.createElement('span'); coverage.className = 'valuation-coverage'; coverage.textContent = estimate.known + ' / ' + estimate.count + ' priced';
+  coverage.title = estimate.known + ' of ' + estimate.count + ' address/token holdings have usable price estimates.';
+  const method = statusIcon('waiting', 'Price methodology', 'Estimated using 30-minute Uniswap v3 TWAPs from direct token/' + pricing.quote.symbol + ' pools at verified finalized blocks. Not a live trading quote.');
+  metadata.append(coverage, valuationFlags(estimate), method);
+  summary.replaceChildren(primary, metadata);
   const totals = document.querySelector('#totals')!;
   totals.replaceChildren();
   document.querySelector('#total-count')!.textContent = wallets.length + ' tracked address' + (wallets.length === 1 ? '' : 'es');
@@ -371,8 +390,18 @@ function renderTotals() {
     if (total.mixedBlocks) status.textContent += ' · mixed finalized blocks';
     if (total.stale) status.textContent += ' · ' + total.stale + ' stale';
     if (total.loading) status.textContent += ' · updating';
+    status.title = status.textContent;
     card.classList.toggle('incomplete', total.known < total.addresses || total.stale > 0);
-    card.append(label, amount, status);
+    const valuation = estimatedTotal(wallets, [total], pricing);
+    const quote = document.createElement('div'); quote.className = 'token-value';
+    quote.dataset.state = !valuation.known || valuation.decimalsMismatch ? 'unavailable' : valuation.known < valuation.count ? 'partial' : 'complete';
+    quote.setAttribute('aria-label', total.symbol + ' estimated value in ' + pricing.quote.symbol);
+    quote.title = valuation.known + ' of ' + valuation.count + ' addresses priced; 30-minute direct-pool TWAP.';
+    const subtotal = document.createElement('span'); subtotal.className = 'token-value-amount';
+    subtotal.textContent = valuationAmount(valuation) + ' ' + pricing.quote.symbol;
+    quote.append(subtotal, valuationFlags(valuation));
+    const amounts = document.createElement('div'); amounts.className = 'total-balances'; amounts.append(amount, quote);
+    card.append(label, amounts, status);
     totals.append(card);
   }
 }

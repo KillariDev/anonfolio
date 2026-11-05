@@ -615,12 +615,12 @@ test('TWAP holding estimates, partial totals and custom quote settings persist',
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', '≈ 0 USDC']);
   await expect(page.locator('.price-estimate').first()).toBeVisible();
-  await expect(page.locator('#estimated-total')).toContainText('≈ 2000 USDC');
-  await expect(page.locator('#estimated-total')).not.toContainText('Partial');
+  await expect(page.locator('#estimated-total .portfolio-value-amount')).toHaveText('≈ 2000 USDC');
+  await expect(page.locator('#estimated-total .status-partial')).toHaveCount(0);
   await addToken(page);
   await page.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', '≈ 0 USDC', 'Unpriced']);
-  await expect(page.locator('#estimated-total')).toContainText('Partial · 2/3 holdings priced');
+  await expect(page.locator('#estimated-total .valuation-coverage')).toHaveText('2 / 3 priced');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Quote token', { exact: true }).selectOption('custom');
   await page.getByLabel('Quote contract address').fill('invalid');
@@ -631,10 +631,10 @@ test('TWAP holding estimates, partial totals and custom quote settings persist',
   await page.getByLabel('Quote contract address').fill(b);
   await page.getByLabel('Minimum quote-side liquidity').fill('100');
   await page.getByRole('button', { name: 'Save pricing and refresh' }).click();
-  await expect(page.locator('#estimated-total')).toContainText('— CUSTOM · Partial');
+  await expect(page.locator('#estimated-total .portfolio-value-amount')).toHaveText('— CUSTOM');
   await expect(page.locator('.price-estimate')).toHaveText(['Unpriced', 'Unpriced', 'Unpriced']);
   await page.reload();
-  await expect(page.locator('#estimated-total')).toContainText('CUSTOM · Partial');
+  await expect(page.locator('#estimated-total .status-partial')).toHaveCount(1);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByLabel('Quote token', { exact: true })).toHaveValue('custom');
   await expect(page.getByLabel('Quote contract address')).toHaveValue(b);
@@ -1117,4 +1117,46 @@ test('refresh preserves focus on the same address and token when status icons sh
   await expect(icon).toBeFocused();
   await expect(page.locator('.refresh-icon').first()).toBeEnabled();
   await expect(icon).toBeFocused();
+});
+
+test('portfolio value and token subtotals sum each address quote with explicit partial coverage', async ({page}) => {
+  await mockConnection(page);
+  await page.route('**/src/verification/client.ts*',route=>route.fulfill({contentType:'text/javascript',body:`
+    export async function verifyWallet(wallet,worker,tokens,emit) {
+      if(window.__failValuation) throw new Error('Private route unavailable');
+      const first=wallet.address.toLowerCase()==='${a}';
+      const block={hash:'0x'+(first?'11':'22').repeat(32),stateRoot:'0x'+'33'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
+      for(const token of tokens) {
+        const native=token.address==='eth', quote=token.symbol==='USDC';
+        const amount=quote?(first?5000000n:7000000n):native?(first?10n**18n:3n*10n**18n):(first?2n*10n**18n:4n*10n**18n);
+        emit({type:'balance',asset:token.address,amount:amount.toString(),block});
+        if(!first&&!native&&!quote) {emit({type:'price-error',asset:token.address,error:'No direct pool qualifies'});continue;}
+        emit({type:'price',asset:token.address,block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:'${usdc}',symbol:'USDC',decimals:6,numerator:quote?'1':first?'2000000000':'1000000000',denominator:quote?'1':'1000000000000000000',window:1800,blockHash:block.hash,minLiquidity:'10000'}});
+      }
+    }
+  `}));
+  await page.goto('/');
+  await addToken(page);
+  await openAddressForm(page);
+  await page.locator('#address').fill(a+'\n'+b);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await expect(page.locator('.total-amount')).toHaveText(['4','6','12']);
+  await expect(page.locator('.token-value-amount')).toHaveText(['≈ 5000 USDC','≈ 4000 USDC','≈ 12 USDC']);
+  await expect(page.locator('#estimated-total .portfolio-value-amount')).toHaveText('≈ 9012 USDC');
+  await expect(page.locator('#estimated-total .valuation-coverage')).toHaveText('5 / 6 priced');
+  await expect(page.locator('#estimated-total .status-partial')).toHaveAttribute('title',/only 5 of 6/);
+  await expect(page.locator('#estimated-total .status-unverified')).toHaveAttribute('title',/different verified finalized blocks/);
+  await expect(page.locator('.token-value').nth(0)).toHaveAttribute('data-state','complete');
+  await expect(page.locator('.token-value').nth(2)).toHaveAttribute('data-state','complete');
+  await expect(page.locator('.token-value').nth(1)).toHaveAttribute('data-state','partial');
+  await expect(page.locator('.token-value').nth(1).getByRole('img',{name:/Partial value/})).toHaveAttribute('title',/only 1 of 2/);
+  await expect(page.locator('#estimated-total').getByRole('img',{name:/Estimated using/})).toHaveAttribute('title',/30-minute Uniswap v3 TWAPs/);
+  await page.screenshot({path:'/tmp/anonfolio-value-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'/tmp/anonfolio-value-mobile.png',fullPage:true});
+  await page.evaluate(()=>{(window as any).__failValuation=true;});
+  await page.getByRole('button',{name:'Refresh '+a,exact:true}).click();
+  await expect(page.locator('.token-value-amount')).toHaveText(['≈ 5000 USDC','≈ 4000 USDC','≈ 12 USDC']);
+  await expect(page.locator('#estimated-total .status-stale')).toHaveAttribute('title',/3 saved or stale/);
 });
