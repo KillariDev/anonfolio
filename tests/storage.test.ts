@@ -60,3 +60,64 @@ test('quota errors report that the watchlist was not saved', () => {
   });
   expect(saveAddresses([getAddress(address)])).toBe(false);
 });
+
+import { loadPortfolio, PORTFOLIO_KEY, savePortfolio } from '../src/storage';
+import { makeWallet } from '../src/balances';
+import { validateToken } from '../src/tokens';
+const operators = ['https://one.invalid', 'https://two.invalid'];
+
+test('portfolio migrates a legacy watchlist with fresh random keys', () => {
+  values.set(key, JSON.stringify([address]));
+  const first = loadPortfolio(operators);
+  const second = loadPortfolio(operators);
+  expect(first.wallets[0]!.address).toBe(getAddress(address));
+  expect(first.wallets[0]!.isolationKey).not.toBe(second.wallets[0]!.isolationKey);
+  expect(first.tokens).toEqual([]);
+});
+
+test('portfolio round-trip saves bigint values and token settings, marking restored data as cached', () => {
+  const token = validateToken('0x0000000000000000000000000000000000000001', 'USDC', '6');
+  const wallet = makeWallet(getAddress(address), operators[0]!);
+  const timestamp = Date.now() - 5000;
+  wallet.eth = { amount: 0n, updatedAt: timestamp, failed: false };
+  wallet.weth = { amount: 12345678901234567890123456789n, updatedAt: timestamp, failed: true };
+  wallet.tokens[token.address] = { amount: 1234567n, updatedAt: timestamp, failed: false };
+  expect(savePortfolio([wallet], [token])).toBe(true);
+  const serialized = values.get(PORTFOLIO_KEY)!;
+  expect(serialized).not.toContain(wallet.isolationKey);
+  expect(serialized).not.toContain(wallet.rpcUrl);
+  const restored = loadPortfolio(operators);
+  expect(restored.tokens).toEqual([token]);
+  expect(restored.wallets[0]!.eth).toEqual({ amount: 0n, updatedAt: timestamp, failed: false, cached: true });
+  expect(restored.wallets[0]!.weth.amount).toBe(wallet.weth.amount);
+  expect(restored.wallets[0]!.weth.failed).toBe(true);
+  expect(restored.wallets[0]!.tokens[token.address]!.amount).toBe(1234567n);
+});
+
+test('corrupt cache entries are ignored without hiding valid wallets and token settings', () => {
+  values.set(PORTFOLIO_KEY, JSON.stringify({
+    version: 2,
+    tokens: [{ address: 'bad', symbol: 'bad', decimals: -1 }],
+    wallets: [
+      { address, eth: { amount: '-1', updatedAt: Date.now() }, weth: { amount: '1', updatedAt: 'bad' } },
+      { address: getAddress(address) }, { address: 'bad' },
+    ],
+  }));
+  const restored = loadPortfolio(operators);
+  expect(restored.wallets).toHaveLength(1);
+  expect(restored.wallets[0]!.eth.amount).toBeUndefined();
+  expect(restored.wallets[0]!.weth.amount).toBeUndefined();
+  expect(restored.tokens).toEqual([]);
+});
+
+test('removing all wallets does not resurrect the legacy watchlist', () => {
+  values.set(key, JSON.stringify([address]));
+  savePortfolio([], []);
+  expect(loadPortfolio(operators).wallets).toEqual([]);
+});
+
+test('blocked portfolio storage keeps an in-memory session usable', () => {
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
+  expect(loadPortfolio(operators)).toEqual({ wallets: [], tokens: [] });
+  expect(savePortfolio([], [])).toBe(false);
+});

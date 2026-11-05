@@ -16,7 +16,7 @@ const server = Bun.serve({
     const file = Bun.file(path);
     if (!(await file.exists())) return new Response('Not found', { status: 404 });
     return new Response(request.method === 'HEAD' ? null : file, {
-      headers: { 'Content-Type': file.type, 'Content-Length': String(file.size), 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' },
+      headers: { 'Content-Type': file.type, 'Content-Length': String(file.size), 'Cache-Control': 'no-cache', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' },
     });
   },
 });
