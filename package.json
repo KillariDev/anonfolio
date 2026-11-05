@@ -9,7 +9,9 @@
     "test": "bun test ./tests",
     "serve": "bun scripts/serve.ts",
     "test:browser": "playwright test",
-    "test:live": "LIVE_RPC=1 playwright test --grep \"live mainnet\""
+    "test:live": "LIVE_RPC=1 playwright test --grep \"live mainnet\"",
+    "test:static": "BASE_URL=http://127.0.0.1:4173 playwright test --grep \"static build\"",
+    "test:all": "bun run test && bun run build && bun run test:browser && bun run test:static"
   },
   "dependencies": {
     "@anon-rpc/browser-harness": "^0.4.0",

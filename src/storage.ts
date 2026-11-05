@@ -4,7 +4,7 @@ export function loadAddresses(): Address[] {
   try {
     const data: unknown = JSON.parse(localStorage.getItem(KEY) || '[]');
     if (!Array.isArray(data)) return [];
-    return [...new Set(data.filter((s): s is string => typeof s === 'string' && isAddress(s)).map(getAddress))];
+    return [...new Set(data.filter((s): s is string => typeof s === 'string' && isAddress(s)).map((address) => getAddress(address)))];
   } catch { return []; }
 }
 export function saveAddresses(addresses: Address[]): boolean {

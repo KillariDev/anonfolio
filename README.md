@@ -9,9 +9,10 @@ Install [Bun](https://bun.sh), then:
 ```sh
 bun install --frozen-lockfile
 bun run dev                  # http://localhost:5173
-bun run test                 # transport and balance tests
+bun run test                 # balance, storage and static-server tests
 bunx playwright install chromium
 bun run test:browser         # Chromium UI tests with a simulated private worker
+bun run test:all             # deterministic tests, build and production smoke check
 bun run test:live            # real tor-js worker + mainnet; needs WebRTC/network access
 bun run build               # type-check and produce dist/
 bun run serve               # simple Bun static server, http://localhost:4173
@@ -66,8 +67,15 @@ No analytics, external fonts, address links, address URL parameters or address l
 
 ## Verification
 
+Run `bun run test:all` for the full deterministic suite. It runs Bun tests, type-checks and builds the app, then runs Chromium UI tests and a production static-host smoke test. Install Chromium once with `bunx playwright install chromium` (on Linux CI use `--with-deps`).
+
+The [GitHub Actions template](docs/ci-workflow.yml) runs this suite for pull requests and pushes to main using a locked dependency install. Copy it to `.github/workflows/test.yml` to activate it; pushing that path requires GitHub workflow permission, which the current token lacks. Failed browser runs retain screenshots, traces and an HTML report as artifacts. Live mainnet tests remain opt-in because they depend on external gateway and Tor availability.
+
+Storage regression tests cover malformed data, checksum normalization, duplicate addresses, blocked storage and quota failures. Static-server integration tests start the real Bun service against isolated fixtures and check HTML/assets, MIME and privacy headers, HEAD responses, missing files, rejected methods, traversal attempts, malformed paths and a missing build.
+
+
 Transport tests inspect exact methods, `latest` block tags, WETH calldata, non-batched bodies, distinct isolation keys, retained stale values, partial failures, private retries and blocked CCIP redirects. They make ordinary fetch throw.
 
-Chromium tests exercise local validation, zero results, manual refresh, RPC failure, stale results, recovery, independent wallet states, persistence, route keys, separate operators and mobile overflow. Live Chromium tests exercise the actual worker, mainnet ETH/WETH, a second zero-balance address and refresh, and fail if ordinary browser requests contain balance RPC calls.
+Chromium tests exercise local validation, zero results, manual refresh, RPC failure, stale results, recovery, independent wallet states, duplicate prevention, removal, persistence, route keys, separate operators and mobile overflow. Live Chromium tests exercise the actual worker, mainnet ETH/WETH, a second zero-balance address and refresh, and fail if ordinary browser requests contain balance RPC calls.
 
 References: [Anon-RPC web integration guide](https://ethereum.github.io/anon-rpc/wallets/), [tor-js circuit isolation](https://github.com/ethereum/tor-js#circuit-isolation), and [browser harness](https://github.com/ethereum/anon-rpc/tree/main/impl/browser-harness).
