@@ -529,6 +529,8 @@ test('header settings icon, responsive full addresses and application favicon', 
   await page.goto('/');
   const settings = page.getByRole('button', { name: 'Settings', exact: true });
   await expect(settings).toBeVisible();
+  await expect(page.locator('header #connection')).toBeVisible();
+  await expect(page.locator('main #connection')).toHaveCount(0);
   await expect(page.locator('#settings-panel')).not.toBeVisible();
   const box = await settings.boundingBox();
   expect(box!.y).toBeLessThan(80);

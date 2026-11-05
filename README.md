@@ -60,7 +60,7 @@ Tick exponentiation uses bigint fixed point with 512 fractional bits. Raw holdin
 
 ## Progress and saved balances
 
-Spinners indicate worker startup, wallet refresh and individual pending reads. The connection panel shows loading and hash-checking the bundled Tor worker before private requests begin. Startup performs no Ethereum RPC lookup. Configured gateway endpoints are shown as configuration: the harness does not expose live gateway or circuit-building progress.
+Spinners indicate worker startup, wallet refresh and individual pending reads. The header connection status shows loading and hash-checking the bundled Tor worker before private requests begin. Startup performs no Ethereum RPC lookup. Configured gateway endpoints are shown as configuration: the harness does not expose live gateway or circuit-building progress.
 
 Failed balances show a short cause with a **Details** action. The expanded report retains the original error, failed step, RPC hostname, and last failed attempt time, with specific guidance for checkpoint expiry, RPC proof-history limits, rate limits, and connection failures. Causes stay attached to their assets across later progress and reloads, and clear after successful verification. Credential-bearing endpoint URLs are redacted in saved/displayed error messages.
 
