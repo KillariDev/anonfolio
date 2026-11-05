@@ -1,15 +1,19 @@
 import { openAddressForm, openTokenSettings } from './helpers';
 import { expect, test } from '@playwright/test';
 
-test('static build loads and handles unavailable bootstrap without public balance requests', async ({ page }) => {
+test.describe('Tor bootstrap failure injection', () => {
+  // A valid cached asset must not hide the injected download/hash failure.
+  test.use({ serviceWorkers: 'block' });
+for (const failure of ['unavailable', 'tampered']) test('static build fails closed with ' + failure + ' Tor bundle without direct RPC', async ({ page }) => {
   test.skip(!process.env.BASE_URL, 'Run bun run test:static against the production build.');
   const publicBalanceCalls: string[] = [];
   page.on('request', request => {
     const body = request.postData() || '';
     if (body.includes('eth_getBalance') || body.includes('70a08231')) publicBalanceCalls.push(request.url());
   });
-  // A deterministic production smoke check: the public bootstrap is unavailable.
-  await page.route('https://**', route => route.abort('failed'));
+  // Fail before Tor startup, without permitting remote discovery or fallback.
+  await page.route('**/anon-rpc-worker*.js*', route => route.fulfill({ status: failure === 'unavailable' ? 503 : 200, body: failure === 'unavailable' ? 'Worker unavailable' : 'throw new Error("Tampered bytes must never execute");' }));
+  await page.route('https://**', route => { publicBalanceCalls.push(route.request().url()); return route.abort('failed'); });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Portfolio', exact: true })).toBeVisible();
   await openAddressForm(page);
@@ -23,6 +27,8 @@ test('static build loads and handles unavailable bootstrap without public balanc
   await expect(page.locator('.amount')).toHaveText(['—', '—']);
   await expect(page.locator('.error')).toHaveText(['Unavailable · verification failed', 'Unavailable · verification failed']);
   expect(publicBalanceCalls).toEqual([]);
+});
+
 });
 
 test('static build reopens completely offline with saved wallets, token settings and balances', async ({ page, context }) => {
@@ -56,7 +62,8 @@ test('static build reopens completely offline with saved wallets, token settings
   });
   expect(cachedUrls.length).toBeGreaterThan(0);
   expect(cachedUrls.every(url => url.startsWith(new URL(page.url()).origin + '/'))).toBe(true);
-  expect(cachedUrls.some(url => url.includes('ethereum-rpc') || url.includes('tor-js'))).toBe(false);
+  expect(cachedUrls.some(url => url.includes('ethereum-rpc'))).toBe(false);
+  expect(cachedUrls.some(url => url.includes('anon-rpc-worker'))).toBe(true);
   await context.setOffline(true);
   await page.reload();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);

@@ -1,4 +1,4 @@
-export type NetworkSettings = { bootstrapRpc: string; gateways: string[]; rpcUrls: string[] };
+export type NetworkSettings = { gateways: string[]; rpcUrls: string[] };
 export const SETTINGS_KEY = 'anonfolio.network.v1';
 export function validateSettings(value: unknown): NetworkSettings {
   if (!value || typeof value !== 'object') throw new Error('Invalid network settings.');
@@ -26,7 +26,7 @@ export function validateSettings(value: unknown): NetworkSettings {
       if (hash.length !== 34 || hash.charCodeAt(0) !== 0x12 || hash.charCodeAt(1) !== 0x20) throw new Error();
     } catch { throw new Error('Use Tor gateway format ip:port:certhash (or [ipv6]:port:certhash), with a valid SHA-256 certificate hash and port 1–65535.'); }
   }
-  return { bootstrapRpc: rpc(data.bootstrapRpc), gateways,
+  return { gateways,
     rpcUrls: [...new Set(entries(data.rpcUrls, 'balance RPC endpoint').map(rpc))] };
 }
 export function loadSettings(defaults: NetworkSettings): NetworkSettings {
@@ -34,7 +34,7 @@ export function loadSettings(defaults: NetworkSettings): NetworkSettings {
     const saved = localStorage.getItem(SETTINGS_KEY);
     if (saved) return validateSettings(JSON.parse(saved));
   } catch { /* Corrupt or blocked browser storage uses deployment defaults. */ }
-  return { ...defaults, gateways: [...defaults.gateways], rpcUrls: [...defaults.rpcUrls] };
+  return { gateways: [...defaults.gateways], rpcUrls: [...defaults.rpcUrls] };
 }
 export function saveSettings(settings: NetworkSettings | null): boolean {
   try {

@@ -95,7 +95,7 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   const publicBalanceCalls: string[] = [];
   page.on('request', req => {
     const body = req.postData() || '';
-    if (req.method() === 'POST' && (body.includes('eth_getBalance') || body.includes('eth_getProof') || body.includes('eth_getCode') || body.includes('70a08231'))) publicBalanceCalls.push(req.url());
+    if ((req.method() === 'POST' && body.includes('jsonrpc')) || /https:\/\/(ethereum-rpc\.publicnode\.com|eth\.drpc\.org|rpc\.ankr\.com|ethereum-beacon-api\.publicnode\.com)\//.test(req.url())) publicBalanceCalls.push(req.url());
   });
   await page.goto(process.env.IPFS_GATEWAY_URL || '/');
   if (process.env.LIVE_BALANCE_RPC) {

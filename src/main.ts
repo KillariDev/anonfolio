@@ -42,8 +42,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <p id="gateway-hint" class="form-hint">One ip:port:certhash entry per line. IPv6 addresses use [ipv6]:port:certhash. The default is a development demo gateway.</p>
 <label for="settings-rpcs">Balance RPC endpoints</label><textarea id="settings-rpcs" rows="3" spellcheck="false" autocomplete="off" aria-describedby="rpc-hint settings-error"></textarea>
 <p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses use separate endpoints where possible. Every balance request goes through the private worker.</p>
-<label for="settings-bootstrap">Public discovery RPC</label><input id="settings-bootstrap" type="url" spellcheck="false" autocomplete="off" aria-describedby="bootstrap-hint settings-error">
-<p id="bootstrap-hint" class="form-hint">Mainnet HTTPS RPC used publicly to find the worker contract. Watched addresses are never sent here for discovery.</p>
+<p class="form-hint">The Tor worker is bundled and hash-verified locally. Startup never queries an Ethereum RPC. Consensus, balance and oracle requests all use Anon-RPC.</p>
 <p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and restarts private reads; saved balances remain visible.</p>
 <div class="settings-actions"><button class="primary" type="submit">Save settings and reconnect</button><button id="reset-settings" type="button">Restore defaults</button></div>
 <p id="settings-error" class="input-error" role="alert"></p></form></section></details></div></header>
@@ -71,7 +70,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 </main><footer><span>anonfolio / balance reader</span><span>Ethereum mainnet · Verified finalized state</span></footer>`;
 
 let state: ConnectionState = 'starting';
-let connectionMessage = 'Preparing public worker discovery. Wallet balance requests wait for the private worker.';
+let connectionMessage = 'Preparing the bundled Tor worker. Ethereum requests wait for the private connection.';
 const { wallets, tokens } = loadPortfolio(config.rpcUrls);
 let pricing = loadPricing();
 const walletList = document.querySelector<HTMLElement>('#wallets')!;
@@ -648,7 +647,6 @@ const settingsField = (id: string) => document.querySelector<HTMLInputElement | 
 function showSettings(settings: NetworkSettings) {
   settingsField('gateways').value = settings.gateways.join('\n');
   settingsField('rpcs').value = settings.rpcUrls.join('\n');
-  settingsField('bootstrap').value = settings.bootstrapRpc;
 }
 showSettings(config);
 function applySettings(settings: NetworkSettings | null) {
@@ -666,8 +664,7 @@ document.querySelector('#settings-form')!.addEventListener('submit', event => {
   event.preventDefault();
   try {
     const lines = (value: string) => value.split(/[,\n]/).map(line => line.trim()).filter(Boolean);
-    applySettings(validateSettings({ bootstrapRpc: settingsField('bootstrap').value,
-      gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value) }));
+    applySettings(validateSettings({ gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value) }));
   } catch (cause) { document.querySelector('#settings-error')!.textContent = (cause as Error).message; }
 });
 document.querySelector('#reset-settings')!.addEventListener('click', () => {

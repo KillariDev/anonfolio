@@ -1,3 +1,4 @@
+import { CONSENSUS_RPC } from './trust';
 import type { PrivateWorker, Wallet } from '../balances';
 export type RpcRequest = { jsonrpc: '2.0'; id: number | string; method: string; params: any[] };
 const methods = new Set(['eth_getProof', 'eth_getCode', 'eth_getBlockByHash', 'eth_getBlockByNumber']);
@@ -14,4 +15,22 @@ export async function privateExecutionRpc(worker: PrivateWorker, wallet: Pick<Wa
   }
   if (!data || data.id !== request.id || data.jsonrpc !== '2.0' || !('result' in data)) throw new Error('Private RPC response is unavailable or invalid.');
   return data;
+}
+
+export function assertConsensusUrl(value: string) {
+  const url = new URL(value);
+  if (url.origin !== CONSENSUS_RPC || url.username || url.password || url.hash
+    || !/^\/eth\/v[12]\/(beacon\/(light_client\/|blocks\/|genesis$)|config\/spec$)/.test(url.pathname)) {
+    throw new Error('Disallowed consensus request.');
+  }
+  return url;
+}
+// Consensus shares one route of its own, never a wallet isolation key. It must
+// work during background light-client sync, outside any active wallet session.
+export async function privateConsensusGet(worker: PrivateWorker, isolationKey: string, value: string) {
+  const url = assertConsensusUrl(value);
+  const response = await worker.fetch(url.href, { method: 'GET', headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(90_000), anonOptions: { isolationKey } });
+  if (!response.ok) throw new Error('Consensus GET ' + url.hostname + url.pathname + ' returned HTTP ' + response.status);
+  return { status: response.status, body: await response.text() };
 }

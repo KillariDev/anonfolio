@@ -1,8 +1,8 @@
 import { errorMessage } from './errors';
 import { AnonRpcWorker } from '@anon-rpc/browser-harness';
-import { createPublicClient, decodeAbiParameters, http, toFunctionSelector, type Hex } from 'viem';
-import { mainnet } from 'viem/chains';
-import { config, TOR_SPECIFIER, assertTorWorkerHash } from './config';
+import bundleUrl from '../vendor/tor/anon-rpc-worker.js?url&no-inline';
+import { pinnedSpecifierProvider } from './bootstrap';
+import { config, TOR_SPECIFIER } from './config';
 
 export type ConnectionState = 'starting' | 'ready' | 'failed';
 export class Connection {
@@ -17,40 +17,12 @@ export class Connection {
     if (this.pending) return this.pending;
     this.lastError = undefined;
     this.onState('starting');
-    this.onProgress('Discovering the tor-js worker through ' + new URL(config.bootstrapRpc).hostname + '. This public lookup contains only the worker contract address.');
-    // This public client is ONLY handed to the specifier resolver, never a balance reader.
-    const bootstrap = createPublicClient({ chain: mainnet,
-      transport: http(config.bootstrapRpc, { batch: false, timeout: 20_000, retryCount: 1 }) });
-    let pendingLookups = 0;
-    let discoveryFailed = false;
-    let resolverSummary = '';
+    this.onProgress('Loading the bundled Tor worker and verifying its pinned hash locally. No Ethereum RPC is contacted during startup.');
+    const localBundle = new URL(bundleUrl, document.baseURI);
+    if (localBundle.origin !== window.location.origin) throw new Error('Tor worker bundle must be served with the application.');
     const worker = this.worker = new AnonRpcWorker({
       address: TOR_SPECIFIER, config: { gateways: config.gateways },
-      preExisting: { rpcProvider: { request: async ({ method, params }) => {
-        pendingLookups++;
-        this.onProgress('Requesting ' + method + ' for worker contract ' + TOR_SPECIFIER
-          + ' from ' + new URL(config.bootstrapRpc).hostname + ' (public discovery; no watched wallet sent).');
-        try {
-          const result = await bootstrap.request({ method, params } as Parameters<typeof bootstrap.request>[0]);
-          const call = Array.isArray(params) ? params[0] as { data?: string } | undefined : undefined;
-          if (call?.data === toFunctionSelector('workerHash()')) assertTorWorkerHash(result);
-          if (call?.data === toFunctionSelector('workerResolvers()') && typeof result === 'string') {
-            try {
-              const [resolvers] = decodeAbiParameters([{ type: 'string[]' }], result as Hex);
-              resolverSummary = ' Advertised bundle resolver(s): ' + resolvers.map(url => {
-                try { return new URL(url).host || new URL(url).protocol; } catch { return 'unrecognized resolver'; }
-              }).join(', ') + '.';
-            } catch { /* the harness validates and decodes the actual specifier */ }
-          }
-          return result;
-        } catch (error) {
-          discoveryFailed = true;
-          this.lastError = errorMessage(error);
-          throw error;
-        } finally {
-          if (--pendingLookups === 0 && !discoveryFailed) this.onProgress('Worker contract lookup finished.' + resolverSummary + ' The harness is loading and hash-verifying the bundle, then starting its sandbox. Waiting for worker readiness.');
-        }
-      } } },
+      preExisting: { rpcProvider: pinnedSpecifierProvider(localBundle.href) },
     });
     // Drain logs without sending them to console or an analytics service.
     void (async () => {

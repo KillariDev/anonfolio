@@ -42,7 +42,7 @@ export function explainFailure(failure: ReadFailure) {
     action = 'Check your connection and reload the application. If the verifier file is missing, use an updated deployment.';
   } else if (/consensus get/.test(message) || (/consensus/.test(context) && /fetch|http|network|timed out/.test(message))) {
     summary = 'Consensus API unavailable';
-    action = 'The public beacon request failed before state could be verified. Check your connection and retry. If it persists, the application deployment may need an updated beacon endpoint.';
+    action = 'The private beacon request failed before state could be verified. Check your connection and retry. If it persists, the application deployment may need an updated beacon endpoint.';
   } else if (/429|rate.?limit|too many requests/.test(message)) {
     summary = 'RPC rate limit reached';
     action = 'Wait for the automatic retry, or configure another balance RPC endpoint in Settings → Network connection.';
@@ -65,7 +65,7 @@ export function explainFailure(failure: ReadFailure) {
     summary = 'Connection unavailable';
     action = 'Check your internet connection and the Tor gateway/RPC endpoints in Settings → Network connection. Failed balance reads retry automatically.';
   }
-  if (/starting the private/.test(context) && !/checkpoint|digest|hash|offline/.test(message)) action = 'Check Public discovery RPC and Tor gateways in Settings → Network connection, then save and reconnect. Failed balance reads retry automatically.';
+  if (/starting the private/.test(context) && !/checkpoint|digest|hash|offline/.test(message)) action = 'Check Tor gateways in Settings → Network connection, then save and reconnect. Failed balance reads retry automatically.';
   if (/pricing/.test(context) && /automatic/.test(action)) action = 'Use the address Refresh button to retry the price read. Check the network settings if the request keeps failing.';
   return { summary, action };
 }

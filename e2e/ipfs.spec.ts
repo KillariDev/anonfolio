@@ -34,9 +34,11 @@ for (const mode of ['path', 'subdomain']) {
     const address = '0x0000000000000000000000000000000000000001';
     await page.getByLabel('Address name', { exact: false }).fill('IPFS savings');
     await page.locator('#address').fill(address);
+    // Test the offline shell without starting a real private consensus lookup.
+    // Blocking ordinary HTTPS cannot fail requests carried inside Tor.
+    await context.setOffline(true);
     await page.getByRole('button', { name: 'add address to track' }).click();
     await expect(page.locator('.wallet-head .address-name')).toHaveText('IPFS savings');
-    await context.setOffline(true);
     await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
     // Preserve a successful zero distinctly from an unread balance, as on HTTPS.
     await page.evaluate(() => {

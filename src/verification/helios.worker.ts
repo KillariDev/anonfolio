@@ -4,7 +4,7 @@ import { setHeliosFetch } from '../../vendor/helios/fetch.js';
 import { CHECKPOINT, CONSENSUS_RPC, HELIOS_WASM_SHA256, checkCheckpointAge, verifiedBlock, type VerifiedBlock } from './trust';
 import { assertPinnedBlock, verifyAccountResponse, verifyCode } from './proofs';
 import { TwapOracle } from '../pricing';
-import type { RpcRequest } from './transport';
+import { assertConsensusUrl, type RpcRequest } from './transport';
 
 const EXECUTION_URL = 'https://helios-execution.invalid/';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
@@ -37,11 +37,15 @@ async function rpc(body: RpcRequest) {
 async function internalFetch(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.href !== EXECUTION_URL) {
-    if (url.origin !== CONSENSUS_RPC || request.method !== 'GET'
-      || !/^\/eth\/v[12]\/(beacon\/(light_client\/|blocks\/|genesis)|config\/spec)/.test(url.pathname)) throw new Error('Helios attempted a network escape.');
-    step('Consensus: GET ' + url.hostname + url.pathname + ' (no wallet addresses). Verifying sync committee signatures and finalized headers.');
-    const response = await fetch(request);
-    if (!response.ok) throw new Error('Consensus GET ' + url.hostname + url.pathname + ' returned HTTP ' + response.status);
+    assertConsensusUrl(url.href);
+    if (request.method !== 'GET') throw new Error('Disallowed consensus method.');
+    step('Consensus: GET ' + url.hostname + url.pathname + ' through Anon-RPC on the shared consensus route. Verifying signatures and finalized headers.');
+    const id = ++sequence;
+    const reply = new Promise<{ status: number; body: string }>((resolve, reject) => replies.set(id, { resolve, reject }));
+    scope.postMessage({ type: 'consensus', id, url: url.href });
+    const data = await reply;
+    const response = new Response(data.body, { status: data.status, headers: { 'content-type': 'application/json' } });
+    Object.defineProperty(response, 'url', { value: url.href });
     return response;
   }
   const body = await request.json() as RpcRequest;
@@ -149,7 +153,7 @@ async function refresh(message: any) {
 }
 scope.onmessage = event => {
   const message = event.data;
-  if (message.type === 'reply') {
+  if (message.type === 'reply' || message.type === 'consensus-reply') {
     const reply = replies.get(message.id);
     replies.delete(message.id);
     if (message.error) reply?.reject(new Error(message.error)); else reply?.resolve(message.data);

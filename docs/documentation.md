@@ -20,22 +20,25 @@ The main browser thread owns application state and rendering. It communicates wi
 flowchart TD
     UI[Browser UI and local storage] --> HC[Helios client bridge]
     HC <--> HV[Helios verification worker]
-    HV -->|Public consensus GET requests| BEACON[Beacon API pinned in source]
+    HV -->|Consensus request messages| HC
+    HC -->|Shared consensus isolation key| TOR
+    TOR --> BEACON[Beacon API pinned in source]
     HV -->|Execution request messages| HC
     HC -->|worker.fetch with wallet isolation key| TOR[Anon-RPC worker and Tor route]
     TOR --> RPC[Wallet's configured execution RPC]
-    UI --> DISC[Public worker-contract discovery]
-    DISC --> BOOT[Bootstrap RPC]
+    UI --> PIN[Local worker metadata and bundled Tor bytes]
+    PIN --> TOR
 ```
 
-Public discovery and consensus requests do not contain watched wallet addresses. Application assets and the worker bundle also need to be downloaded; the diagram's private route applies to execution RPC traffic, rather than every browser request.
+Both consensus and execution traffic use Anon-RPC. Consensus has its own isolation key and carries no watched wallet addresses. Ordinary browser HTTP loads local application assets, including the pinned Tor bundle and Helios WASM; it does not query Ethereum execution or beacon endpoints.
 
 | File or directory | Responsibility |
 | --- | --- |
 | [`src/main.ts`](../src/main.ts) | Page construction, application state, event handlers, refresh orchestration, and rendering. |
 | [`src/addresses.ts`](../src/addresses.ts), [`src/address-display.ts`](../src/address-display.ts) | Address/name validation and the reusable address/blockie component. |
 | [`src/tokens.ts`](../src/tokens.ts), [`src/icons.ts`](../src/icons.ts) | Token definitions, validation, presets, and local icon handling. |
-| [`src/connection.ts`](../src/connection.ts) | Discovery and lifecycle of the shared Anon-RPC worker. |
+| [`src/connection.ts`](../src/connection.ts) | Local pinned bootstrap and lifecycle of the shared Anon-RPC worker. |
+| [`src/bootstrap.ts`](../src/bootstrap.ts), [`vendor/tor`](../vendor/tor/README.md) | Local specifier metadata and unchanged hash-pinned Tor bundle. |
 | [`src/config.ts`](../src/config.ts), [`src/settings.ts`](../src/settings.ts) | Deployment defaults, runtime network settings, and the Tor worker digest pin. |
 | [`src/balances.ts`](../src/balances.ts) | Wallet/balance models, verification events, and amount formatting. |
 | [`src/verification/client.ts`](../src/verification/client.ts) | Main-thread sessions and messages to/from the Helios worker. |
@@ -84,7 +87,7 @@ Settings open behind the top-right gear. The panel contains tracked tokens, pric
 
 ## Private connection and execution transport
 
-`Connection.get()` shares one pending startup promise and one long-lived `AnonRpcWorker`. A public viem client queries the mainnet worker specifier contract to discover the Tor worker. This client is used only for discovery. The application checks the advertised worker hash against its source-pinned digest, while the harness loads and hash-verifies the bundle before starting its sandbox.
+`Connection.get()` shares one pending startup promise and one long-lived `AnonRpcWorker`. The application bundles unchanged Tor worker bytes with its source-pinned hash. A local metadata provider answers only `workerHash()` and `workerResolvers()` for the expected specifier identity; unsupported requests are rejected rather than forwarded to an RPC. The only resolver is the same-origin bundled asset. The harness verifies its bytes before starting its sandbox. Startup has no chain lookup or remote resolver fallback. An unavailable or tampered bundle fails closed.
 
 Every wallet receives a random `crypto.randomUUID()` isolation key and an execution RPC endpoint. New addresses prefer an endpoint not already assigned to another address, then reuse configured endpoints when necessary. Restored addresses receive endpoint assignments from the configured list and fresh isolation keys.
 
@@ -104,7 +107,7 @@ The transport allows only `eth_getProof`, `eth_getCode`, `eth_getBlockByHash`, a
 
 Contract calls execute locally rather than using remote `eth_call`. Requests for remote access-list hints receive a synthetic unsupported-method response, allowing Helios to demand-load proven dependencies instead. Retries retain the wallet's endpoint and isolation key. There is no automatic switch to ordinary browser fetch when a private read fails.
 
-The RPC operator still receives the account, code, and storage queries it serves. Isolation keys separate Tor circuits/TLS sessions, but do not promise different exit nodes. The bootstrap provider sees worker discovery, and the beacon provider sees public consensus requests. Wallet names stay local, and the app adds no analytics or wallet-address URL parameters.
+The RPC operator still receives the account, code, and storage queries it serves. Isolation keys separate Tor circuits/TLS sessions, but do not promise different exit nodes. The beacon provider receives consensus requests through Tor on a separate shared isolation key. Consensus can continue syncing outside an active wallet session using that route. It is never sent with a wallet’s isolation key or through ordinary browser fetch. Wallet names stay local, and the app adds no analytics or wallet-address URL parameters.
 
 ## Consensus and balance verification
 
@@ -112,7 +115,7 @@ The RPC operator still receives the account, code, and storage queries it serves
 
 The verifier vendors Helios `0.12.0`, including the requested-address and requested-slot checks described in its [review documentation](../vendor/helios/README.md). Before initializing WASM, the application downloads the bundled binary and checks its SHA-256 against the source pin.
 
-One consensus light client starts from an independently pinned mainnet checkpoint. Helios verifies sync committee signatures and finalized headers. The HTTP adapter permits public consensus GET requests only to the source-configured beacon origin and an allowed set of beacon/configuration paths.
+One consensus light client starts from an independently pinned mainnet checkpoint. Helios verifies sync committee signatures and finalized headers. The HTTP adapter permits consensus GET requests only to the source-configured beacon origin and an allowed set of beacon/configuration paths. The worker posts them to the main-thread bridge, which uses Anon-RPC with the consensus isolation key and returns the response to Helios. This bridge handles background requests even when there is no active wallet session.
 
 The checkpoint and its timestamp live in `verification/trust.ts`; browser settings cannot replace them. Initialization rejects a checkpoint outside its 14-day trust window. Each selected execution block must have valid hash/root fields and a timestamp no more than one hour old or more than one minute in the future. Changing these pins requires a reviewed source update; see the vendored review for the checkpoint evidence and binary hashes.
 
@@ -138,7 +141,7 @@ Each failed asset retains its own error message, failed step, and attempt timest
 
 The UI distinguishes a proven zero, an unavailable first read, an unverified legacy value, and a stale value retained after failure. Failed verification never creates a new trusted amount. Fatal worker failures terminate the shared worker and reject outstanding sessions. A session timeout also resets the verifier; the five-minute session budget includes time spent queued.
 
-Progress messages describe public consensus requests, private RPC submission, proof/code checks, local EVM execution, and oracle stages. Worker readiness means the private worker started; the harness does not expose live Tor circuit-building progress or guarantee that an individual endpoint is reachable.
+Progress messages describe private consensus requests, private RPC submission, proof/code checks, local EVM execution, and oracle stages. Worker readiness means the private worker started; the harness does not expose live Tor circuit-building progress or guarantee that an individual endpoint is reachable.
 
 ## Direct-pool TWAP estimates
 
@@ -197,7 +200,7 @@ The portfolio storage key retains its older name for migration. Bigint amounts a
 
 Isolation keys and request payloads are not persisted. Saved values are restored as cached, and legacy entries lacking block provenance require verification. Successful results and watchlist edits save immediately. A blocked or full localStorage leaves the current in-memory session usable and displays a storage warning. The stored portfolio and any credentials in network-setting URLs are accessible to someone with access to that browser origin's storage.
 
-The production service worker is generated by `vite.config.ts`. It caches an explicit list of built application files, including the WASM binary, and removes older application-shell caches on activation. Navigation tries the network and falls back to cached HTML; other shell assets use the cache first. Requests outside that exact asset list, including RPC and worker/gateway traffic, are not intercepted. The first visit still requires a connection, and offline startup cannot retrieve new balances.
+The bundled Tor worker is cached as a local application asset, and is still hash-checked by the harness when loaded. The production service worker is generated by `vite.config.ts`. It caches an explicit list of built application files, including the WASM binary, and removes older application-shell caches on activation. Navigation tries the network and falls back to cached HTML; other shell assets use the cache first. Requests outside that exact asset list, including RPC and worker/gateway traffic, are not intercepted. The first visit still requires a connection, and offline startup cannot retrieve new balances.
 
 `RetryQueue` maintains one scheduled attempt per address or connection key. Failed balance rounds use delays of 2, 4, 8, 16, 32, then at most 60 seconds. Automatic recovery selects failed or not-yet-verified balances, keeping successful results. Going offline pauses timers; coming online resumes pending work. Manual refresh resets the backoff, and removing an address cancels its scheduled retries. Leaving the page pauses retries and closes the private connection.
 
@@ -205,7 +208,7 @@ An execution HTTP attempt has a 90-second timeout, worker readiness has a two-mi
 
 ## Configuration, builds, and publishing
 
-Deployment defaults come from `VITE_BOOTSTRAP_RPC`, `VITE_ANON_GATEWAYS`, and `VITE_RPC_URLS`, with source defaults in `config.ts`. Browser network settings override those defaults after local validation. The default balance endpoint order starts with dRPC, followed by PublicNode and Ankr; public discovery uses its separate bootstrap setting.
+Deployment defaults come from `VITE_ANON_GATEWAYS` and `VITE_RPC_URLS`, with source defaults in `config.ts`. Browser network settings override those defaults after local validation. The default balance endpoint order starts with dRPC, followed by PublicNode and Ankr. The old `bootstrapRpc` storage property and `VITE_BOOTSTRAP_RPC` variable are ignored; saving settings removes that obsolete field while preserving gateway/RPC choices.
 
 Saving network settings closes the old Anon-RPC worker and reloads the page, replacing wallet routes together. Restoring network defaults removes that override rather than clearing the portfolio or pricing configuration. Saving pricing settings instead updates the pricing configuration and refreshes the current wallets without a page reload.
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { loadSettings, saveSettings, SETTINGS_KEY, validateSettings } from '../src/settings';
 
 const gateway = '152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ';
-const defaults = { bootstrapRpc: 'https://bootstrap.example/', gateways: [gateway], rpcUrls: ['https://rpc.example/'] };
+const defaults = { gateways: [gateway], rpcUrls: ['https://rpc.example/'] };
 const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
 let values: Map<string, string>;
 beforeEach(() => {
@@ -26,8 +26,7 @@ test('invalid settings are rejected before changing saved settings', () => {
   expect(saveSettings(defaults)).toBe(true);
   for (const bad of [null, {}, { ...defaults, gateways: [] }, { ...defaults, rpcUrls: [] },
     ...['http://rpc.example', 'javascript:alert(1)', 'https://user:pass@rpc.example', 'https://rpc.example/#fragment', 'bad'].map(url => ({ ...defaults, rpcUrls: [url] })),
-    ...['not-a-gateway', gateway.replace(':12298:', ':0:'), gateway.replace(':12298:', ':65536:'), gateway.replace('uEiC', 'uAAA'), 'host:443:invalid'].map(value => ({ ...defaults, gateways: [value] })),
-    { ...defaults, bootstrapRpc: 'http://bootstrap.example' }]) {
+    ...['not-a-gateway', gateway.replace(':12298:', ':0:'), gateway.replace(':12298:', ':65536:'), gateway.replace('uEiC', 'uAAA'), 'host:443:invalid'].map(value => ({ ...defaults, gateways: [value] }))]) {
     expect(() => validateSettings(bad)).toThrow();
     expect(values.get(SETTINGS_KEY)).toBe(JSON.stringify(defaults));
   }
@@ -50,4 +49,12 @@ test('corrupt or blocked storage uses defaults and reports save failures', () =>
   expect(loadSettings(defaults)).toEqual(defaults);
   expect(saveSettings(defaults)).toBe(false);
   expect(saveSettings(null)).toBe(false);
+});
+
+test('legacy discovery RPC settings are ignored without discarding gateways or private RPCs', () => {
+  values.set(SETTINGS_KEY, JSON.stringify({ ...defaults, bootstrapRpc: 'https://old-direct-rpc.example/private-key' }));
+  expect(loadSettings(defaults)).toEqual(defaults);
+  expect(saveSettings(loadSettings(defaults))).toBe(true);
+  expect(values.get(SETTINGS_KEY)).not.toContain('bootstrapRpc');
+  expect(values.get(SETTINGS_KEY)).not.toContain('old-direct-rpc');
 });
