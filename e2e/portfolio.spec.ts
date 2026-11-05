@@ -73,12 +73,14 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.getByRole('alert')).toContainText('already on your watchlist');
   await expect(page.locator('.wallet')).toHaveCount(2);
+  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
   await expect(page.locator('.wallet')).toHaveCount(1);
   await expect(page.locator('.wallet-head .wallet-address')).toHaveText(b);
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(1);
   await expect(page.locator('.wallet-head .wallet-address')).toHaveText(b);
+  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Remove ' + b, exact: true }).click();
   await expect(page.locator('.empty')).toContainText('Your watchlist starts here');
   await page.reload();

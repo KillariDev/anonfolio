@@ -192,6 +192,7 @@ test('offline reads resume automatically on reconnect and removed addresses neve
   await page.evaluate(() => { (window as any).__fail = true; });
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.activity')).toContainText('Automatic retry 1 scheduled');
+  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
   const removedCount = await page.evaluate(() => (window as any).__calls.length);
   await page.waitForTimeout(2500);
@@ -255,6 +256,7 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   await expect(page.getByRole('button', { name: 'Details ' + a, exact: true })).toHaveAttribute('aria-expanded', 'true');
   await page.getByRole('button', { name: 'Details ' + a, exact: true }).click();
   await page.screenshot({ path: 'test-results/compact-desktop.png', fullPage: true });
+  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
   await expect(page.locator('.total-amount')).toHaveText(['9', '0', '11.11']);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -570,4 +572,36 @@ test('header settings icon, responsive full addresses and application favicon', 
   await page.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect(page.locator('#settings-panel')).not.toBeVisible();
   await page.screenshot({ path: 'test-results/header-mobile.png', fullPage: true });
+});
+
+
+test('address removal requires confirmation and cancellation preserves saved balances', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.getByLabel('Address name', { exact: false }).fill('Savings');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  const saved = await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2'));
+  const remove = page.getByRole('button', { name: 'Remove ' + a + ' · Savings', exact: true });
+  const cancelled = page.waitForEvent('dialog');
+  const cancelClick = remove.click();
+  const prompt = await cancelled;
+  expect(prompt.type()).toBe('confirm');
+  expect(prompt.message()).toContain('Savings\n' + a);
+  expect(prompt.message()).toContain('saved balances');
+  await prompt.dismiss();
+  await cancelClick;
+  await expect(page.locator('.wallet')).toHaveCount(1);
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  expect(await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2'))).toBe(saved);
+  await page.reload();
+  await expect(page.locator('.wallet-head .address-name')).toHaveText('Savings');
+  await expect(page.getByRole('button', { name: 'Refresh ' + a + ' · Savings', exact: true })).toBeEnabled();
+  page.once('dialog', dialog => dialog.accept());
+  await remove.click();
+  await expect(page.locator('.wallet')).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets)).toEqual([]);
+  await page.reload();
+  await expect(page.locator('.wallet')).toHaveCount(0);
 });

@@ -74,6 +74,7 @@ test('static build reopens completely offline with saved wallets, token settings
   await openTokenSettings(page);
   await expect(page.getByRole('button', { name: 'Remove token USDC' })).toBeVisible();
   await page.locator('#network-settings > summary').click();
+  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Remove ' + a + ' · Offline savings', exact: true }).click();
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(0);

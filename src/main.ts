@@ -433,6 +433,8 @@ function render() {
     remove.title = 'Remove address';
     remove.setAttribute('aria-label', 'Remove ' + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
     remove.onclick = () => {
+      const label = wallet.name ? `${wallet.name}\n${wallet.address}` : wallet.address;
+      if (!window.confirm(`Remove this tracked address?\n\n${label}\n\nIts saved balances will also be removed from this browser.`)) return;
       retries.cancel(wallet);
       expandedAddresses.delete(wallet.address);
       wallets.splice(wallets.indexOf(wallet), 1);
