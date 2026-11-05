@@ -93,6 +93,7 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .balance small { display: none; font-size: 9px; line-height: 1.2; margin-top: 3px; white-space: nowrap; }
 .balance .error { display: block; color: #e5b393; }
 .balance .cached { display: block; color: #c8c093; }
+.balance .cached:empty { display: none; }
 .row-status { font-size: 10px; color: #96b283; white-space: nowrap; min-width: 105px; }
 .row-status.warning { color: #d1b997; }
 .actions { white-space: nowrap; min-width: 100px; }
