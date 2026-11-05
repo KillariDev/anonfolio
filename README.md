@@ -70,7 +70,11 @@ Copy `.env.example` to `.env.local` before building:
 | `VITE_ANON_GATEWAYS` | Comma-separated KPS gateway entries, each `ip:port:certhash`. |
 | `VITE_RPC_URLS` | Comma-separated mainnet HTTPS RPC endpoints, preferably different operators. |
 
-The shipped gateway is the official guide's **development demo gateway**, with limited capacity and availability. Run your own tor-js gateway for deployment and rebuild with its entry. All `VITE_*` settings are public bundle contents; never put secrets there. Endpoints must be Ethereum mainnet; the app does not add chain-ID requests to balance reads.
+The shipped gateway is the official guide's **development demo gateway**, with limited capacity and availability. Run your own tor-js gateway for deployment and configure its entry. All `VITE_*` settings are public bundle contents; never put secrets there. Endpoints must be Ethereum mainnet; the app does not add chain-ID requests to balance reads.
+
+Expand **Settings** to change Tor gateways, private balance RPC endpoints and the public discovery RPC without rebuilding. Enter one gateway or HTTPS RPC URL per line. Gateway entries support `ip:port:certhash` and `[ipv6]:port:certhash`. RPC endpoints must serve Ethereum mainnet; settings are validated locally without querying watched addresses.
+
+**Save settings and reconnect** saves browser-local overrides and reloads the page, closing the previous worker and replacing all wallet clients together. Saved balances and token/address configuration remain visible as stale data while fresh private reads start. Existing requests cannot update the new page or retry using old endpoints. **Restore defaults** clears only the network overrides and reconnects using the deployment's `VITE_*` defaults. Corrupt settings fall back to deployment defaults; failed storage writes keep the existing session and show an error. Settings persist full endpoint URLs, including any query/path API keys, in localStorage; they are accessible to anyone with access to this browser's storage. Overrides apply only in this browser.
 
 Default operators are PublicNode, dRPC and Ankr. Some public endpoints reject Tor exits or require credentials; replace unavailable operators. A wallet uses an unused endpoint where possible, then reuses configured endpoints if the watchlist exceeds the pool.
 

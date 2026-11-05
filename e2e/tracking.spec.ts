@@ -363,3 +363,111 @@ test('invalid icon files leave the tracked list unchanged', async ({ page }) => 
   await expect(page.locator('#token-error')).toContainText('PNG, JPEG or WebP');
   await expect(page.locator('#token-list li')).toHaveCount(2);
 });
+
+test('network settings validate, reconnect with new private RPCs, preserve cached balances and restore defaults', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a + '\n' + b);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.amount')).toHaveText(['1', '0', '1', '0']);
+  await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
+  await page.locator('#network-settings summary').click();
+  const originalGateway = await page.getByLabel('Tor gateways', { exact: true }).inputValue();
+  const originalRpcs = await page.getByLabel('Balance RPC endpoints').inputValue();
+  await page.getByLabel('Balance RPC endpoints').fill('http://unsafe.example');
+  await page.getByRole('button', { name: 'Save settings and reconnect' }).click();
+  await expect(page.locator('#settings-error')).toContainText('HTTPS');
+  expect(await page.evaluate(() => localStorage.getItem('anonfolio.network.v1'))).toBeNull();
+  await page.getByLabel('Balance RPC endpoints').fill('https://one.example/rpc\nhttps://two.example/rpc');
+  await page.getByLabel('Public discovery RPC').fill('https://discovery.example/rpc');
+  const customGateway = originalGateway.replace(':12298:', ':12299:');
+  await page.getByLabel('Tor gateways', { exact: true }).fill(customGateway);
+  // Pause the replacement worker to observe saved amounts during reconnect.
+  await page.unroute('**/src/connection.ts*');
+  await mockConnection(page, true);
+  await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Save settings and reconnect' }).click()]);
+  await expect(page.locator('.amount')).toHaveText(['1', '0', '1', '0']);
+  await expect(page.locator('.balance small.cached')).toHaveCount(4);
+  await expect(page.locator('#connection')).toContainText('152.236.3.22:12299');
+  expect(await page.evaluate(() => (window as any).__calls)).toEqual([]);
+  await page.locator('#network-settings summary').click();
+  await expect(page.getByLabel('Tor gateways', { exact: true })).toHaveValue(customGateway);
+  await expect(page.getByLabel('Public discovery RPC')).toHaveValue('https://discovery.example/rpc');
+  await page.evaluate(() => (window as any).__releaseConnection());
+  await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(calls).toHaveLength(4);
+  expect(new Set(calls.map((call: any) => call.url))).toEqual(new Set(['https://one.example/rpc', 'https://two.example/rpc']));
+  expect(new Set(calls.map((call: any) => call.key)).size).toBe(2);
+  await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Restore defaults' }).click()]);
+  await page.locator('#network-settings summary').click();
+  await expect(page.getByLabel('Tor gateways', { exact: true })).toHaveValue(originalGateway);
+  await expect(page.getByLabel('Balance RPC endpoints')).toHaveValue(originalRpcs);
+  expect(await page.evaluate(() => localStorage.getItem('anonfolio.network.v1'))).toBeNull();
+  await expect(page.locator('.amount')).toHaveText(['1', '0', '1', '0']);
+});
+
+test('blocked storage keeps the current settings and connection in use', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('#network-settings summary').click();
+  await page.evaluate(() => { Storage.prototype.setItem = () => { throw new Error('Blocked'); }; });
+  await page.getByRole('button', { name: 'Save settings and reconnect' }).click();
+  await expect(page.locator('#settings-error')).toContainText('could not be saved');
+  await expect(page.locator('#connection')).toContainText('Private worker ready');
+});
+
+test('saved gateways and discovery RPC reach the actual connection class; balance outage stays private', async ({ page }) => {
+  const publicRequests: { url: string; body: any }[] = [];
+  await page.route('https://**/*', async route => {
+    publicRequests.push({ url: route.request().url(), body: route.request().postDataJSON() });
+    await route.fulfill({ json: { jsonrpc: '2.0', id: route.request().postDataJSON().id, result: '0x00' } });
+  });
+  // Exercise the real Connection and viem transports, replacing only the worker.
+  await page.route('**/node_modules/.vite/deps/@anon-rpc_browser-harness.js*', route => route.fulfill({
+    contentType: 'text/javascript', body: `
+      window.__calls = [];
+      export class AnonRpcWorker {
+        constructor(options) {
+          window.__workerConfig = options.config;
+          this.ready = options.preExisting.rpcProvider.request({ method: 'eth_getCode', params: [options.address, 'latest'] });
+        }
+        acceptLog() { return new Promise(() => {}); }
+        close() {}
+        async fetch(url, init) {
+          const body = JSON.parse(init.body);
+          window.__calls.push({ url, body, key: init.anonOptions.isolationKey });
+          if (window.__fail) throw new Error('private route unavailable');
+          return Response.json({ jsonrpc: '2.0', id: body.id, result: body.method === 'eth_getBalance' ? '0xde0b6b3a7640000' : '0x' + '0'.repeat(64) });
+        }
+      }
+    `,
+  }));
+  await page.goto('/');
+  await page.locator('#network-settings summary').click();
+  const gateway = (await page.getByLabel('Tor gateways', { exact: true }).inputValue()).replace(':12298:', ':12299:');
+  await page.getByLabel('Tor gateways', { exact: true }).fill(gateway);
+  await page.getByLabel('Public discovery RPC').fill('https://lookup.example/rpc');
+  await page.getByLabel('Balance RPC endpoints').fill('https://private.example/rpc');
+  await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Save settings and reconnect' }).click()]);
+  await expect(page.locator('#connection')).toContainText('Private worker ready');
+  expect(await page.evaluate(() => (window as any).__workerConfig)).toEqual({ gateways: [gateway] });
+  expect(publicRequests.some(request => request.url === 'https://lookup.example/rpc')).toBe(true);
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await page.evaluate(() => { (window as any).__fail = true; });
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await expect(page.locator('.balance small.error')).toHaveCount(2);
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(calls.length).toBeGreaterThanOrEqual(6);
+  expect(calls.every((call: any) => call.url === 'https://private.example/rpc')).toBe(true);
+  expect(new Set(calls.map((call: any) => call.key)).size).toBe(1);
+  expect(publicRequests.every(request => request.body.method === 'eth_getCode'
+    && request.body.params[0] === '0x700dA3193D35fA54Cd3fBf29B66f2a2A0385659e')).toBe(true);
+  await page.locator('#network-settings summary').click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/network-settings-mobile.png', fullPage: true });
+});

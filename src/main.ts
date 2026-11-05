@@ -1,4 +1,5 @@
-import { config } from './config';
+import { config, defaultConfig } from './config';
+import { saveSettings, validateSettings, type NetworkSettings } from './settings';
 import { Connection, type ConnectionState } from './connection';
 import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance, setTokenBalance, type Balance, type Wallet } from './balances';
 import { loadPortfolio, savePortfolio } from './storage';
@@ -34,6 +35,17 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <label for="token-icon">Icon (optional)</label><input id="token-icon" type="file" accept="image/png,image/jpeg,image/webp"><p class="form-hint">Upload a PNG, JPEG or WebP up to 1 MB. Icons are stored in this browser.</p>
 <p class="form-hint">Use the token's actual symbol and decimals (for example, USDC uses 6). You supply these display settings; adding a token sends only balanceOf reads, never approvals or transactions.</p>
 <button type="submit">Add token</button><p id="token-error" class="input-error" role="alert"></p></form></details>
+<details id="network-settings"><summary>Settings</summary>
+<form id="settings-form" novalidate>
+<label for="settings-gateways">Tor gateways</label><textarea id="settings-gateways" rows="2" spellcheck="false" autocomplete="off" aria-describedby="gateway-hint settings-error"></textarea>
+<p id="gateway-hint" class="form-hint">One ip:port:certhash entry per line. IPv6 addresses use [ipv6]:port:certhash. The default is a development demo gateway.</p>
+<label for="settings-rpcs">Balance RPC endpoints</label><textarea id="settings-rpcs" rows="3" spellcheck="false" autocomplete="off" aria-describedby="rpc-hint settings-error"></textarea>
+<p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses use separate endpoints where possible. Every balance request goes through the private worker.</p>
+<label for="settings-bootstrap">Public discovery RPC</label><input id="settings-bootstrap" type="url" spellcheck="false" autocomplete="off" aria-describedby="bootstrap-hint settings-error">
+<p id="bootstrap-hint" class="form-hint">Mainnet HTTPS RPC used publicly to find the worker contract. Watched addresses are never sent here for discovery.</p>
+<p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and restarts private reads; saved balances remain visible.</p>
+<div class="settings-actions"><button class="primary" type="submit">Save settings and reconnect</button><button id="reset-settings" type="button">Restore defaults</button></div>
+<p id="settings-error" class="input-error" role="alert"></p></form></details>
 </div>
 <details id="connection" aria-label="Private connection details"></details>
 <p id="offline-notice" role="status"></p><p id="storage-warning" role="status"></p>
@@ -108,7 +120,7 @@ function renderConnection() {
     : 'Saved balances remain visible. ' + retryMessage('connection');
   const gateway = document.createElement('p');
   gateway.className = 'connection-detail';
-  gateway.textContent = 'Configured Tor gateway(s): ' + config.gateways.map(entry => entry.split(':').slice(0, 2).join(':')).join(', ')
+  gateway.textContent = 'Configured Tor gateway(s): ' + config.gateways.map(entry => entry.slice(0, entry.lastIndexOf(':'))).join(', ')
     + '. The worker manages gateway connections and circuits; their live progress is not exposed by the harness.';
   text.append(detail, gateway);
   node.append(text);
@@ -521,6 +533,36 @@ document.querySelector('#token-form')!.addEventListener('submit', async event =>
     wallets.forEach(wallet => { void refreshWallet(wallet); });
   } catch (error) { tokenError.textContent = (error as Error).message; }
   finally { savingToken = false; submit.disabled = false; submit.textContent = 'Add token'; }
+});
+const settingsField = (id: string) => document.querySelector<HTMLInputElement | HTMLTextAreaElement>('#settings-' + id)!;
+function showSettings(settings: NetworkSettings) {
+  settingsField('gateways').value = settings.gateways.join('\n');
+  settingsField('rpcs').value = settings.rpcUrls.join('\n');
+  settingsField('bootstrap').value = settings.bootstrapRpc;
+}
+showSettings(config);
+function applySettings(settings: NetworkSettings | null) {
+  const message = document.querySelector('#settings-error')!;
+  if (!saveSettings(settings)) {
+    message.textContent = 'Browser storage is unavailable or full. Settings could not be saved; the current connection is still in use.';
+    return;
+  }
+  // Navigation discards the old worker and all clients together. No in-flight read
+  // can update a wallet or retry on an old endpoint in the new session.
+  connection.close();
+  window.location.reload();
+}
+document.querySelector('#settings-form')!.addEventListener('submit', event => {
+  event.preventDefault();
+  try {
+    const lines = (value: string) => value.split(/[,\n]/).map(line => line.trim()).filter(Boolean);
+    applySettings(validateSettings({ bootstrapRpc: settingsField('bootstrap').value,
+      gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value) }));
+  } catch (cause) { document.querySelector('#settings-error')!.textContent = (cause as Error).message; }
+});
+document.querySelector('#reset-settings')!.addEventListener('click', () => {
+  showSettings(defaultConfig);
+  applySettings(null);
 });
 function renderOffline() {
   document.querySelector('#offline-notice')!.textContent = navigator.onLine ? ''
