@@ -7,6 +7,7 @@ import { config, TOR_SPECIFIER } from './config';
 export type ConnectionState = 'starting' | 'ready' | 'failed';
 export class Connection {
   lastError?: string;
+  private warnings: string[] = [];
   private worker?: AnonRpcWorker;
   private pending?: Promise<AnonRpcWorker>;
   constructor(
@@ -16,6 +17,7 @@ export class Connection {
   get(): Promise<AnonRpcWorker> {
     if (this.pending) return this.pending;
     this.lastError = undefined;
+    this.warnings = [];
     this.onState('starting');
     this.onProgress('Loading the bundled Tor worker and verifying its pinned hash locally. No Ethereum RPC is contacted during startup.');
     const localBundle = new URL(bundleUrl, document.baseURI);
@@ -24,12 +26,22 @@ export class Connection {
       address: TOR_SPECIFIER, config: { gateways: config.gateways },
       preExisting: { rpcProvider: pinnedSpecifierProvider(localBundle.href) },
     });
-    // Drain logs without sending them to console or an analytics service.
+    // Keep only bounded, redacted warning/error diagnostics locally; never log request payloads.
     void (async () => {
-      try { for (;;) await worker.acceptLog(); }
+      try {
+        for (;;) {
+          const entry = await worker.acceptLog();
+          if (this.worker !== worker) return;
+          if (entry.level !== 'warn' && entry.level !== 'error') continue;
+          const message = errorMessage(entry.args.map(arg => errorMessage(arg)).join(' ')).slice(0, 350);
+          this.warnings.push(message);
+          this.warnings = this.warnings.slice(-2);
+          if (!this.lastError) this.onProgress('Tor worker: ' + message);
+        }
+      }
       catch (error) {
         if (this.worker === worker) {
-          this.lastError ||= 'Private worker stopped: ' + errorMessage(error);
+          this.lastError ||= this.failureMessage(error);
           this.worker = undefined;
           this.pending = undefined;
           this.onState('failed');
@@ -46,7 +58,7 @@ export class Connection {
         this.onState('ready');
         return worker;
       } catch (error) {
-        this.lastError ||= errorMessage(error);
+        this.lastError ||= this.failureMessage(error);
         worker.close();
         if (this.worker === worker) {
           this.worker = undefined;
@@ -57,6 +69,11 @@ export class Connection {
       } finally { clearTimeout(timer); }
     })();
     return this.pending;
+  }
+  private failureMessage(error: unknown) {
+    const reason = errorMessage(error);
+    const diagnostics = this.warnings.length ? ' Recent Tor diagnostics: ' + this.warnings.join(' · ') : ' The Tor worker supplied no additional diagnostics.';
+    return reason + diagnostics;
   }
   close() {
     const worker = this.worker;

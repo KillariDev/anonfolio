@@ -1,3 +1,4 @@
+import { errorMessage } from '../errors';
 import { CONSENSUS_RPC } from './trust';
 import type { PrivateWorker, Wallet } from '../balances';
 export type RpcRequest = { jsonrpc: '2.0'; id: number | string; method: string; params: any[] };
@@ -6,7 +7,9 @@ const methods = new Set(['eth_getProof', 'eth_getCode', 'eth_getBlockByHash', 'e
 export async function privateExecutionRpc(worker: PrivateWorker, wallet: Pick<Wallet, 'rpcUrl' | 'isolationKey'>, request: RpcRequest) {
   if (!request || Array.isArray(request) || !methods.has(request.method) || !Array.isArray(request.params)) throw new Error('Disallowed execution request.');
   const response = await worker.fetch(wallet.rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request),
-    signal: AbortSignal.timeout(90_000), anonOptions: { isolationKey: wallet.isolationKey } });
+    signal: AbortSignal.timeout(90_000), anonOptions: { isolationKey: wallet.isolationKey } }).catch(error => {
+    throw new Error('Private ' + request.method + ' to ' + new URL(wallet.rpcUrl).hostname + ' failed: ' + errorMessage(error));
+  });
   if (!response.ok) throw new Error('Private RPC returned HTTP ' + response.status);
   const data = await response.json();
   if (data?.error && data.id === request.id && data.jsonrpc === '2.0') {
@@ -30,7 +33,9 @@ export function assertConsensusUrl(value: string) {
 export async function privateConsensusGet(worker: PrivateWorker, isolationKey: string, value: string) {
   const url = assertConsensusUrl(value);
   const response = await worker.fetch(url.href, { method: 'GET', headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(90_000), anonOptions: { isolationKey } });
+    signal: AbortSignal.timeout(90_000), anonOptions: { isolationKey } }).catch(error => {
+    throw new Error('Consensus GET ' + url.hostname + url.pathname + ' through Anon-RPC failed: ' + errorMessage(error));
+  });
   if (!response.ok) throw new Error('Consensus GET ' + url.hostname + url.pathname + ' returned HTTP ' + response.status);
   return { status: response.status, body: await response.text() };
 }

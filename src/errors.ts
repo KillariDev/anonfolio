@@ -1,11 +1,24 @@
 export type ReadFailure = { message: string; stage?: string; at: number };
 
 export function errorMessage(error: unknown): string {
-  let message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'No error details were returned.';
-  if (error instanceof Error && error.cause) {
-    const cause = error.cause instanceof Error ? error.cause.message : typeof error.cause === 'string' ? error.cause : '';
-    if (cause && !message.includes(cause)) message += ' · ' + cause;
+  // Worker boundaries can return plain error records rather than Error instances.
+  // Follow a bounded cause chain, including error codes, without serializing payloads.
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current = error;
+  for (let depth = 0; current && depth < 5 && !seen.has(current); depth++) {
+    seen.add(current);
+    if (typeof current === 'string') { parts.push(current); break; }
+    if (typeof current !== 'object') break;
+    const record = current as { message?: unknown; code?: unknown; name?: unknown; cause?: unknown };
+    const detail = typeof record.message === 'string' ? record.message : '';
+    const code = typeof record.code === 'string' || typeof record.code === 'number' ? String(record.code) : '';
+    if (detail) parts.push(detail + (code && !detail.includes(code) ? ' (' + code + ')' : ''));
+    else if (code) parts.push(code);
+    else if (typeof record.name === 'string' && record.name !== 'Error') parts.push(record.name);
+    current = record.cause;
   }
+  const message = [...new Set(parts)].join(' · ') || 'No error details were returned.';
   // Provider/library errors can echo credential-bearing endpoint URLs. Keep only
   // their origin; the UI identifies the RPC separately by hostname.
   return message.replace(/https?:\/\/[^\s"'<>]+/gi, value => {

@@ -26,3 +26,30 @@ test('errors distinguish public consensus, offline, rate limits, timeouts and in
     ['Helios WASM digest mismatch.', 'Verifier integrity check failed'],
   ]) expect(explainFailure(readFailure(message)).summary).toBe(summary!);
 });
+
+test('worker error records retain nested causes and codes without exposing URLs or payloads', () => {
+  const failure = errorMessage({ message: 'Private connection unavailable; no unverified fallback.', code: 'PRIVATE_ROUTE_FAILED',
+    cause: { message: 'Gateway handshake failed at https://user:secret@gateway.example/api-key?token=secret', cause: { message: 'Connection refused', code: 'ECONNREFUSED' } },
+    body: 'wallet request must not be serialized',
+  });
+  expect(failure).toContain('PRIVATE_ROUTE_FAILED');
+  expect(failure).toContain('Gateway handshake failed');
+  expect(failure).toContain('Connection refused (ECONNREFUSED)');
+  expect(failure).not.toMatch(/secret|api-key|wallet request/);
+  const cycle: any = { message: 'Circular cause' }; cycle.cause = cycle;
+  expect(errorMessage(cycle)).toBe('Circular cause');
+});
+
+test('private transport failures identify request, endpoint and worker cause without public fallback', async () => {
+  const { privateExecutionRpc, privateConsensusGet } = await import('../src/verification/transport');
+  const { CONSENSUS_RPC } = await import('../src/verification/trust');
+  const calls: any[] = [];
+  const worker = { fetch: async (url: any, init: any) => {
+    calls.push({ url, key: init.anonOptions.isolationKey });
+    throw { message: 'Private connection unavailable; no unverified fallback.', cause: { message: 'Circuit construction failed', code: 'TOR_TIMEOUT' } };
+  } };
+  await expect(privateExecutionRpc(worker, { rpcUrl: 'https://rpc.example/api-secret', isolationKey: 'wallet-key' },
+    { jsonrpc: '2.0', id: 1, method: 'eth_getProof', params: [] })).rejects.toThrow('Private eth_getProof to rpc.example failed: Private connection unavailable; no unverified fallback. · Circuit construction failed (TOR_TIMEOUT)');
+  await expect(privateConsensusGet(worker, 'consensus-key', CONSENSUS_RPC + '/eth/v1/beacon/light_client/finality_update')).rejects.toThrow('Circuit construction failed (TOR_TIMEOUT)');
+  expect(calls.map(call => call.key)).toEqual(['wallet-key', 'consensus-key']);
+});

@@ -697,3 +697,38 @@ test('an expired checkpoint explains the required application update instead of 
   await expect(report.getByRole('button', { name: 'Open network settings' })).toHaveCount(0);
   await expect(page.locator('.amount')).toHaveText(['—', '—']);
 });
+
+test('private startup failures expose Tor warning causes, preserve wallet details and clear on recovery', async ({ page }) => {
+  await page.route('https://**/*', route => route.abort('failed'));
+  await page.route('**/node_modules/.vite/deps/@anon-rpc_browser-harness.js*', route => route.fulfill({
+    contentType: 'text/javascript', body: `
+      export class AnonRpcWorker {
+        constructor() {
+          this.logs = window.__recover ? [] : [
+            {level:'warn',args:['tor-js worker: bootstrap attempt 1 failed; retrying:',{message:'Gateway connection refused',code:'ECONNREFUSED'}]},
+            {level:'error',args:['Handshake failed at https://user:password@gateway.example/token-secret?key=secret']}
+          ];
+          this.ready = window.__recover ? Promise.resolve() : new Promise((resolve,reject) => setTimeout(() => reject({message:'Private connection unavailable; no unverified fallback.',cause:{message:'Tor bootstrap failed'}}),50));
+        }
+        acceptLog() { return this.logs.length ? Promise.resolve(this.logs.shift()) : new Promise(() => {}); }
+        close() {}
+      }
+    `,
+  }));
+  await page.goto('/');
+  await expect(page.locator('#connection > summary')).toContainText('Gateway connection refused (ECONNREFUSED)');
+  await expect(page.locator('#connection > summary')).toContainText('Tor bootstrap failed');
+  expect(await page.locator('#connection').textContent()).not.toMatch(/password|token-secret|key=secret/);
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.failure-link').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Explain ETH failure for ' + a, exact: true }).click();
+  await expect(page.getByRole('region', { name: 'ETH balance failure', exact: true })).toContainText('Gateway connection refused');
+  await page.reload();
+  await page.getByRole('button', { name: 'Explain ETH failure for ' + a, exact: true }).click();
+  await expect(page.getByRole('region', { name: 'ETH balance failure', exact: true })).toContainText('Tor bootstrap failed');
+  await page.evaluate(() => { (window as any).__recover = true; });
+  await page.getByRole('button', { name: 'Retry connection', exact: true }).click();
+  await expect(page.locator('#connection > summary')).toContainText('Private worker ready');
+  await expect(page.locator('#connection')).not.toContainText('ECONNREFUSED');
+});
