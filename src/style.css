@@ -3,8 +3,21 @@
   color: #e8ece5;
   background: #101510;
   font-synthesis: none;
+  color-scheme: dark;
+  --scrollbar-track: #131b12;
+  --scrollbar-thumb: #536749;
 }
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
+/* Older WebKit browsers use the same palette with rounded, inset thumbs. */
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--scrollbar-track); }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid var(--scrollbar-track); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #819777; }
+}
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+}
 body { margin: 0; }
 button, input, textarea { font: inherit; }
 button, a, input, summary { -webkit-tap-highlight-color: transparent; }
