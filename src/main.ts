@@ -159,14 +159,12 @@ function renderConnection() {
   node.append(heading);
   const detail = document.createElement('p');
   detail.className = 'connection-detail';
-  detail.textContent = state === 'starting' ? connectionMessage
-    : state === 'ready' ? 'Balance requests use the configured RPC operators. Worker readiness does not guarantee that every Tor route or operator is reachable.'
-    : 'Saved balances remain visible. ' + retryMessage('connection');
+  detail.textContent = state === 'starting' ? connectionMessage : retryMessage('connection');
   const gateway = document.createElement('p');
   gateway.className = 'connection-detail';
-  gateway.textContent = 'Configured Tor gateway(s): ' + config.gateways.map(entry => entry.slice(0, entry.lastIndexOf(':'))).join(', ')
-    + '. The worker manages gateway connections and circuits; their live progress is not exposed by the harness.';
-  text.append(detail, gateway);
+  gateway.textContent = (config.gateways.length === 1 ? 'Tor gateway: ' : 'Tor gateways: ') + config.gateways.map(entry => entry.slice(0, entry.lastIndexOf(':'))).join(', ');
+  if (state !== 'ready' && detail.textContent) text.append(detail);
+  text.append(gateway);
   if (state === 'failed' && connection.lastError) text.append(failureReport('Private connection', readFailure(connection.lastError, 'Starting the private worker')));
   node.append(text);
   if (state === 'failed') {
