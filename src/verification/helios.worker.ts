@@ -140,6 +140,7 @@ async function refresh(message: any) {
     }
     // Oracle outages must not delay proving the remaining wallet balances.
     for (const token of pricedTokens) {
+      send('price-start', { asset: token.address });
       try {
         const estimate = await oracle.estimate(token, message.pricing, block, async (to, input) => {
           executionFailure = '';

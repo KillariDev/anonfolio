@@ -27,6 +27,7 @@ export type Wallet = {
   activity: RequestActivity[];
   loading: boolean;
   queuedRefresh?: boolean;
+  queuedForVerifier?: boolean;
   verificationStatus?: string;
 };
 export function makeWallet(address: Address, rpcUrl: string): Wallet {
@@ -58,11 +59,16 @@ export async function readBalances(
   const selected = tokens.filter(token => !onlyFailed || tokenBalance(wallet, token).failed || !tokenBalance(wallet, token).verifiedBlock);
   prepareActivity(wallet, selected);
   wallet.verificationStatus = 'Starting balance verification.';
+  wallet.queuedForVerifier = false;
   const pending = new Set(selected.map(token => token.address as string));
   const reported = new Set<string>();
   let fatal: ReadFailure | undefined;
   try {
     await verifier(wallet, worker, selected, event => {
+      if (event.type === 'queued' || event.type === 'started') {
+        wallet.queuedForVerifier = event.type === 'queued';
+        wallet.verificationStatus = event.message;
+      }
       if (event.type === 'progress') wallet.verificationStatus = event.message ? errorMessage(event.message) : undefined;
       const activity = wallet.activity.find(item => item.asset === event.asset);
       const token = selected.find(token => token.address === event.asset);
@@ -88,6 +94,7 @@ export async function readBalances(
       onChange();
     });
   } catch (error) { fatal = readFailure(error, wallet.verificationStatus); wallet.verificationStatus = fatal.message; }
+  wallet.queuedForVerifier = false;
   for (const token of selected) if (pending.has(token.address)) {
     tokenBalance(wallet, token).failed = true;
     if (!reported.has(token.address)) tokenBalance(wallet, token).failure = fatal || readFailure('Verifier finished without returning a verified balance.', wallet.verificationStatus);

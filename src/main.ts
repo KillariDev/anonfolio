@@ -384,7 +384,7 @@ function walletDetails(wallet: Wallet) {
     activity.className = 'activity';
     const summary = document.createElement('p');
     const finished = wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length;
-    summary.textContent = wallet.loading ? (finished + '/' + wallet.activity.length + ' reads finished · ' + (wallet.activity.some(item => item.attempt > 0) ? 'Verifying finalized state locally.' : 'Waiting for the private worker; balance calls have not been submitted yet.'))
+    summary.textContent = wallet.queuedForVerifier ? 'Queued for the shared verifier. No balance request is running for this address yet.' : wallet.loading ? (finished + '/' + wallet.activity.length + ' reads finished · ' + (wallet.activity.some(item => item.attempt > 0) ? 'Verifying finalized state locally.' : 'Waiting for the private worker; balance calls have not been submitted yet.'))
       : finished + '/' + wallet.activity.length + ' reads finished. Each amount shows its own result and last successful time.';
     const retry = retryMessage(wallet);
     if (retry) summary.textContent += ' ' + retry;
@@ -392,7 +392,7 @@ function walletDetails(wallet: Wallet) {
     wallet.activity.filter(item => tokens.some(token => token.address === item.asset)).forEach(item => {
       const line = document.createElement('div');
       line.className = 'activity-item ' + item.phase;
-      if (item.phase === 'waiting' || item.phase === 'requesting') line.append(spinner());
+      if (wallet.loading && !wallet.queuedForVerifier && (item.phase === 'waiting' || item.phase === 'requesting')) line.append(spinner());
       const detail = document.createElement('div');
       const title = document.createElement('strong');
       title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? 'Waiting for finalized verification'
@@ -460,10 +460,11 @@ function render() {
     const refresh = document.createElement('button');
     refresh.className = 'refresh-icon';
     refresh.textContent = wallet.loading ? '' : '↻';
-    if (wallet.loading) refresh.append(spinner());
+    if (wallet.loading && !wallet.queuedForVerifier) refresh.append(spinner());
+    else if (wallet.queuedForVerifier) refresh.textContent = '…';
     refresh.disabled = wallet.loading || !tokens.length;
-    refresh.title = wallet.loading ? 'Reading balances' : !tokens.length ? 'Add a token to retrieve balances' : 'Refresh this address';
-    refresh.setAttribute('aria-label', (wallet.loading ? 'Reading ' : 'Refresh ') + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
+    refresh.title = wallet.queuedForVerifier ? 'Queued for verification' : wallet.loading ? 'Reading balances' : !tokens.length ? 'Add a token to retrieve balances' : 'Refresh this address';
+    refresh.setAttribute('aria-label', (wallet.queuedForVerifier ? 'Queued ' : wallet.loading ? 'Reading ' : 'Refresh ') + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
     refresh.onclick = () => { void refreshWallet(wallet); };
     const addressLine = document.createElement('div');
     addressLine.className = 'address-line';
@@ -476,7 +477,7 @@ function render() {
       identity.append(progress);
     }
     row.append(identity);
-    const pending = (asset: string) => wallet.loading && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
+    const pending = (asset: string) => wallet.loading && !wallet.queuedForVerifier && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
     row.append(...assets.map(token => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address === 'eth')));
     const status = document.createElement('td');
     status.className = 'row-status';
@@ -486,7 +487,7 @@ function render() {
     const cached = values.some(balance => balance.cached);
     const known = values.filter(balance => balance.amount !== undefined).length;
     const retry = retries.info(wallet);
-    status.textContent = !tokens.length ? 'No tokens' : wallet.loading ? 'Reading ' + wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length + '/' + wallet.activity.length
+    status.textContent = !tokens.length ? 'No tokens' : wallet.queuedForVerifier ? 'Queued' : wallet.loading ? 'Reading ' + wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length + '/' + wallet.activity.length
       : retry ? (retry.dueAt ? 'Retry ' + new Date(retry.dueAt).toLocaleTimeString() : 'Retry paused')
       : failed ? 'Read failed' : known < values.length ? 'Partial' : cached ? 'Saved' : 'Current';
     status.title = wallet.verificationStatus || retryMessage(wallet) || (failed ? 'Some reads failed; previous amounts are retained' : 'Expand Details for read timestamps');
@@ -551,6 +552,7 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   else retries.cancel(wallet);
   const selectedTokens = [...tokens];
   wallet.loading = true;
+  wallet.queuedForVerifier = false;
   prepareActivity(wallet, selectedTokens, onlyFailed);
   render();
   try {
@@ -567,11 +569,13 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
     });
   } finally {
     wallet.loading = false;
+    wallet.queuedForVerifier = false;
     pruneTokenBalances(wallet);
     persist(); render();
     if (!wallets.includes(wallet)) { retries.cancel(wallet); return; }
-    if (wallet.queuedRefresh) { wallet.queuedRefresh = false; void refreshWallet(wallet); }
-    else if (tokens.some(token => tokenBalance(wallet, token).failed)) retries.schedule(wallet);
+    const failed = tokens.some(token => tokenBalance(wallet, token).failed);
+    if (wallet.queuedRefresh && !failed) { wallet.queuedRefresh = false; void refreshWallet(wallet); }
+    else if (failed) { wallet.queuedRefresh = false; retries.schedule(wallet); }
     else retries.cancel(wallet);
   }
 }

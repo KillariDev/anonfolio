@@ -17,7 +17,7 @@ export function portfolioTotals(wallets: Wallet[], tokens: Token[]) {
         known++;
         if (balance.cached || balance.failed) stale++;
       }
-      if (wallet.loading && wallet.activity.some(item => item.asset === token.address
+      if (wallet.loading && !wallet.queuedForVerifier && wallet.activity.some(item => item.asset === token.address
         && (item.phase === 'waiting' || item.phase === 'requesting'))) loading++;
     }
     return { ...token, mixedBlocks: blocks.size > 1, id: token.address, amount: known ? amount : undefined, known, stale, loading, addresses: wallets.length };

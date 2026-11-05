@@ -41,7 +41,7 @@ remain bound to one immutable wallet session. No proof or code request is
 allowed without that session's verified finalized block. Background execution
 metadata requests outside a wallet refresh are rejected; private beacon sync
 continues. Header-cache lag is bounded to one hour and the exact finalized
-block/time is shown. A fatal error terminates the worker and fails queued reads.
+block/time is shown. A fatal error terminates the worker and fails its active read; the host keeps queued addresses pending and starts the next one with a fresh verifier.
 
 The checkpoint at slot 15589024 (2026-11-05 15:25:11 UTC) was compared with
 PublicNode's finalized beacon header and independently with beaconcha.in,

@@ -250,7 +250,7 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   expect(table!.height).toBeLessThan(600);
   expect(table!.y + table!.height).toBeLessThan(1000);
   await page.getByRole('button', { name: 'Details ' + a, exact: true }).click();
-  await expect(page.locator('.wallet').first().locator('.full-address')).toBeVisible();
+  await expect(page.locator('.wallet').first().locator('.full-address')).toHaveCount(0);
   await expect(page.locator('.wallet').first().locator('.activity')).toBeVisible();
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh ' + a, exact: true })).toBeEnabled();
@@ -865,4 +865,60 @@ test('failure cards identify the actual service and do not blame the wallet RPC 
   await expect(failure).toContainText('Failed to fetch');
   await expect(failure.locator('.failure-metadata')).not.toContainText('RPC');
   await expect(failure.locator('.failure-metadata')).not.toContainText('eth.drpc.org');
+});
+
+async function stalledVerifier(page: Page) {
+  await page.unroute('**/src/verification/client.ts*');
+  await mockConnection(page);
+  await page.addInitScript(() => {
+    (window as any).__verifiers=[];
+    (window as any).Worker = class {
+      onmessage: any; onerror: any; request: any; terminated=false;
+      constructor() { (window as any).__verifiers.push(this); }
+      postMessage(request: any) { this.request=request; }
+      terminate() { this.terminated=true; }
+    };
+  });
+}
+
+test('queued addresses do not spin and a failed active read stops before retry backoff', async ({page}) => {
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a+'\n'+b);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  const first=page.locator('.wallet').nth(0), second=page.locator('.wallet').nth(1);
+  await expect(first.locator('.refresh-icon .spinner')).toHaveCount(1);
+  await expect(second.locator('.row-status')).toHaveText('Queued');
+  await expect(second.locator('.spinner')).toHaveCount(0);
+  await page.evaluate(() => {
+    const worker=(window as any).__verifiers[0];
+    worker.onmessage({data:{type:'fatal',run:worker.request.id,error:'Private eth_getProof failed: Tor route unavailable'}});
+  });
+  await expect(first).toHaveAttribute('data-loading','false');
+  await expect(first.locator('.spinner')).toHaveCount(0);
+  await expect(first.locator('.row-status')).toContainText('Retry');
+  await expect(first.locator('.refresh-icon')).toBeEnabled();
+  await expect(second.locator('.refresh-icon .spinner')).toHaveCount(1);
+  expect(await page.evaluate(()=>(window as any).__verifiers[0].terminated)).toBe(true);
+  await page.evaluate(() => {
+    const worker=(window as any).__verifiers[1];
+    worker.onmessage({data:{type:'fatal',run:worker.request.id,error:'Private route unavailable'}});
+  });
+  await expect(page.locator('.wallet .spinner')).toHaveCount(0);
+});
+
+test('an unresponsive verifier times out, terminates and clears every wallet spinner', async ({page}) => {
+  await page.clock.install();
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await expect(page.locator('.wallet .refresh-icon .spinner')).toHaveCount(1);
+  await page.clock.fastForward(300_001);
+  await expect(page.locator('.wallet')).toHaveAttribute('data-loading','false');
+  await expect(page.locator('.wallet .spinner')).toHaveCount(0);
+  await expect(page.locator('.row-status')).toContainText('Retry');
+  await expect(page.locator('.refresh-icon')).toBeEnabled();
+  await expect(page.locator('.failure-link').first()).toContainText('Verification timed out');
+  expect(await page.evaluate(()=>(window as any).__verifiers[0].terminated)).toBe(true);
 });
