@@ -1,3 +1,4 @@
+import { updateChildren } from './dom';
 import { appendRetrievalLog } from './retrieval-log';
 import { logStream } from './log-stream';
 import { readHistory } from './read-history';
@@ -158,7 +159,6 @@ function retryMessage(key: Wallet | 'connection') {
 function renderConnection() {
   const node = document.querySelector<HTMLElement>('#connection')!;
   node.className = 'connection ' + state;
-  node.replaceChildren();
   const heading = document.createElement('div');
   heading.className = 'connection-heading';
   if (state === 'starting') heading.append(spinner());
@@ -172,13 +172,13 @@ function renderConnection() {
   current.textContent = state === 'starting' ? connectionMessage : state === 'failed' ? [connection.lastError, retryMessage('connection')].filter(Boolean).join(' · ') : 'Separate private route per address';
   current.title = current.textContent;
   heading.append(current);
-  node.append(heading);
   if (state === 'failed') {
     const button = document.createElement('button');
     button.textContent = 'Retry connection';
     button.onclick = event => { event.preventDefault(); event.stopPropagation(); void start(); };
     heading.append(button);
   }
+  updateChildren(node, [heading]);
 }
 function failureReport(label: string, failure: ReadFailure, rpcHost?: string) {
   const report = document.createElement('section'); report.className = 'read-failure';
@@ -363,9 +363,8 @@ function renderTotals() {
   coverage.title = estimate.known + ' of ' + estimate.count + ' address/token holdings have usable price estimates.';
   const method = statusIcon('waiting', 'Price methodology', 'Estimated using 30-minute Uniswap v3 TWAPs from direct token/' + pricing.quote.symbol + ' pools at verified finalized blocks. Not a live trading quote.');
   metadata.append(coverage, valuationFlags(estimate), method);
-  summary.replaceChildren(primary, metadata);
-  const totals = document.querySelector('#totals')!;
-  totals.replaceChildren();
+  updateChildren(summary, [primary, metadata]);
+  const totals = document.createDocumentFragment();
   document.querySelector('#total-count')!.textContent = wallets.length + ' tracked address' + (wallets.length === 1 ? '' : 'es');
   if (!tokens.length) {
     const empty = document.createElement('p');
@@ -408,6 +407,7 @@ function renderTotals() {
     card.append(label, amounts, status);
     totals.append(card);
   }
+  updateChildren(document.querySelector('#totals')!, [...totals.childNodes]);
 }
 let progressTimer: ReturnType<typeof setInterval> | undefined;
 function progressClock(startedAt: number, deadline?: number) {
@@ -444,6 +444,7 @@ function verificationPanel(wallet: Wallet) {
   const title = document.createElement('strong'); title.textContent = stageLabels[stage];
   heading.append(title, progressClock(wallet.stageStartedAt || Date.now()));
   panel.append(steps, heading);
+  const requestArea = document.createElement('div'); requestArea.className = 'progress-requests';
   const requests = wallet.networkRequests || [];
   if (requests.length) {
     for (const request of requests) {
@@ -451,16 +452,17 @@ function verificationPanel(wallet: Wallet) {
       const operation = document.createElement('p'); operation.textContent = request.method + ' → ' + request.host;
       const state = document.createElement('span'); state.textContent = request.state === 'waiting' ? 'Submitted to Anon-RPC · waiting for response headers' : 'Response headers received · reading response body';
       row.append(operation, state, progressClock(request.startedAt, request.deadline));
-      panel.append(row);
+      requestArea.append(row);
     }
     const hint = document.createElement('p'); hint.className = 'progress-hint';
     hint.textContent = 'The private route and RPC do not report intermediate progress while a request is waiting.';
-    panel.append(hint);
+    requestArea.append(hint);
   } else {
     const operation = document.createElement('p'); operation.className = 'verification-progress';
     operation.setAttribute('role', 'status'); operation.textContent = wallet.verificationStatus || stageLabels[stage];
-    panel.append(operation);
+    requestArea.append(operation);
   }
+  panel.append(requestArea);
   return panel;
 }
 function walletDetails(wallet: Wallet, logOpen=false) {
@@ -525,18 +527,22 @@ function render() {
   const focusAsset = activeElement?.closest<HTMLElement>('.balance')?.dataset.asset;
   const scrollLeft = walletList.scrollLeft;
   const scrollTop = walletList.scrollTop;
-  walletList.replaceChildren();
   if (!wallets.length) {
     const empty = document.createElement('div');
     empty.className = 'empty';
     empty.innerHTML = '<h3>Your watchlist starts here</h3><p>Add an Ethereum address or a list to read its balances.</p>';
-    walletList.append(empty);
+    updateChildren(walletList, [empty]);
     return;
   }
   const assets = tokens;
   const table = document.createElement('table');
   table.className = 'wallet-table';
-  table.style.minWidth = (460 + assets.length * 130) + 'px';
+  table.style.setProperty('--token-count', String(assets.length));
+  const colgroup = document.createElement('colgroup');
+  for (const kind of ['address', ...assets.map(() => 'token'), 'status', 'actions']) {
+    const col = document.createElement('col'); col.className = 'wallet-column-' + kind; colgroup.append(col);
+  }
+  table.append(colgroup);
   const caption = document.createElement('caption');
   caption.className = 'sr-only';
   caption.textContent = 'Token balances by tracked address. Expand a row for timestamps and private request progress.';
@@ -661,7 +667,7 @@ function render() {
     card.append(row, details);
     table.append(card);
   });
-  walletList.append(table);
+  updateChildren(walletList, [table]);
   walletList.querySelectorAll<HTMLElement>('.log-stream').forEach(stream => {
     const previous=logs.get(stream.closest<HTMLElement>('.wallet')!.dataset.address);
     if(previous?.open) stream.scrollTop=previous.tail?stream.scrollHeight:previous.top;

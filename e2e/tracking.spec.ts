@@ -1345,3 +1345,42 @@ for(const available of [true,false]) test('proof-window '+(available?'recovery':
     await expect(page.getByRole('region',{name:'ETH balance failure',exact:true}).locator('.failure-action')).toContainText('historical eth_getProof support');
   }
 });
+
+for (const width of [1280, 390]) test(`balance updates keep mounted rows, icons and column widths at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a + '\n' + b);
+  await page.getByRole('button', { name: 'add address to track', exact: true }).click();
+  await openWalletDetails(page, a);
+  await page.locator('.retrieval-log > summary').first().click();
+  await expect(page.locator('.log-stream li').first()).toHaveAttribute('data-log-id', /\d+/);
+  await page.evaluate(() => {
+    const nodes = ['.wallet-table', '.wallet', '.blockie', '.refresh-icon .spinner', '.balance .amount', '.total', '.total .spinner', '.detail-scroll', '.log-stream', '.log-stream li'];
+    (window as any).__stableNodes = nodes.map(selector => ({ selector, node: document.querySelector(selector) }));
+    (window as any).__panelHeight = document.querySelector('.verification-panel')!.getBoundingClientRect().height;
+    (window as any).__columnWidths = [...document.querySelectorAll('.wallet-table > thead > tr > th')].map(node => node.getBoundingClientRect().width);
+  });
+  const block = { hash: '0x' + '11'.repeat(32), stateRoot: '0x' + '22'.repeat(32), number: '0x100', timestamp: Date.now() - 60_000 };
+  const request = { requestId: 1, method: 'eth_getProof', host: 'rpc.example', state: 'waiting', startedAt: Date.now(), deadline: Date.now() + 90_000 };
+  for (const event of [
+    { type: 'network', request },
+    { type: 'network', request: { ...request, requestId: 2 } },
+    { type: 'network', request: { ...request, state: 'received' } },
+    { type: 'network', request: { ...request, requestId: 2, state: 'received' } },
+    { type: 'progress', stage: 'consensus', message: 'Checking finalized signatures.' },
+    { type: 'progress', stage: 'balances-pricing', message: 'Checking private proofs and executing the token contract locally. '.repeat(8) },
+    { type: 'balance', asset: 'eth', amount: '123456789123456789123456789', block },
+    { type: 'asset-error', asset: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', error: 'Private proof request failed' },
+  ]) {
+    await page.evaluate(event => {
+      const worker = (window as any).__verifiers[0];
+      worker.onmessage({ data: { ...event, run: worker.request.id } });
+    }, event);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(await page.evaluate(loading => (window as any).__stableNodes.filter(({selector, node}: any) => (loading || selector !== '.total .spinner') && document.querySelector(selector) !== node).map(({selector}: any) => selector), event.type === 'progress' || event.type === 'network')).toEqual([]);
+    const shifts = await page.evaluate(() => [...document.querySelectorAll('.wallet-table > thead > tr > th')].map((node, i) => Math.abs(node.getBoundingClientRect().width - (window as any).__columnWidths[i])));
+    expect(Math.max(...shifts)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => Math.abs(document.querySelector('.verification-panel')!.getBoundingClientRect().height - (window as any).__panelHeight))).toBeLessThanOrEqual(1);
+  }
+});

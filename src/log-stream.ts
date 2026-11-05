@@ -8,11 +8,14 @@ export function logStream(wallet:Wallet,open=false) {
   const hint=document.createElement('p'); hint.className='log-hint';
   hint.textContent='Current browser session · oldest first'+(wallet.droppedLogEntries?' · '+wallet.droppedLogEntries+' earlier entries omitted (latest '+LOG_LIMIT+' kept)':'');
   const stream=document.createElement('ol'); stream.className='log-stream'; stream.setAttribute('role','log'); stream.setAttribute('aria-label','Retrieval messages'); stream.setAttribute('aria-live','off'); stream.tabIndex=0;
-  let filled=false;
-  const fill=()=>{
-    if(filled) return; filled=true;
+  const fill=(target:HTMLDetailsElement)=>{
+    const stream=target.querySelector<HTMLOListElement>('.log-stream')!;
+    const version=(wallet.logSequence||0)+':'+(wallet.retrievalLog?.length||0);
+    if(stream.dataset.logVersion===version) return;
+    stream.dataset.logVersion=version;
+    stream.replaceChildren();
     for(const entry of wallet.retrievalLog||[]) {
-      const row=document.createElement('li'); row.dataset.level=entry.level;
+      const row=document.createElement('li'); row.dataset.level=entry.level; row.dataset.logId=String(entry.id);
       const date=new Date(entry.at), time=document.createElement('time'); time.dateTime=date.toISOString(); time.title=date.toLocaleString()+' · '+Intl.DateTimeFormat().resolvedOptions().timeZone;
       time.textContent=date.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:3,hour12:false});
       const message=document.createElement('span'); message.textContent=entry.message;
@@ -20,8 +23,11 @@ export function logStream(wallet:Wallet,open=false) {
     }
     if(!stream.children.length) { const empty=document.createElement('li'); empty.textContent='No retrieval messages in this session yet.'; stream.append(empty); }
   };
-  if(open) fill();
-  details.addEventListener('toggle',()=>{if(details.open&&!filled) {fill();stream.scrollTop=stream.scrollHeight;}});
   details.append(summary,hint,stream);
+  if(open) fill(details);
+  details.ontoggle=event=>{
+    const target=event.currentTarget as HTMLDetailsElement;
+    if(target.open) {fill(target);const stream=target.querySelector('.log-stream')!;stream.scrollTop=stream.scrollHeight;}
+  };
   return details;
 }

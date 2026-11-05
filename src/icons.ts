@@ -15,7 +15,7 @@ export function tokenIcon(token: Token) {
     img.alt = '';
     img.width = img.height = 22;
     img.src = icon === 'builtin:eth' ? ethIcon : icon === 'builtin:weth' ? wethIcon : icon;
-    img.onerror = fallback;
+    img.onerror = () => { if (img.parentElement) img.parentElement.textContent = token.symbol.slice(0, 2).toUpperCase(); };
     wrapper.replaceChildren(img);
   }
   return wrapper;
