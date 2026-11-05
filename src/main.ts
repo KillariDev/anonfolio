@@ -37,7 +37,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div><label for="token-symbol">Symbol</label><input id="token-symbol" placeholder="USDC" maxlength="16" autocomplete="off" aria-describedby="token-error"></div>
 <div><label for="token-decimals">Decimals</label><input id="token-decimals" type="number" min="0" max="255" step="1" value="18" aria-describedby="token-error"></div></div>
 <label for="token-icon">Icon (optional)</label><input id="token-icon" type="file" accept="image/png,image/jpeg,image/webp"><p class="form-hint">Upload a PNG, JPEG or WebP up to 1 MB. Icons are stored in this browser.</p>
-<p class="form-hint">Use the token's actual symbol and decimals (for example, USDC uses 6). You supply these display settings; adding a token sends only balanceOf reads, never approvals or transactions.</p>
+<p class="form-hint">Use the token's actual symbol and decimals (for example, USDC uses 6). You supply these display settings; balanceOf and decimals are executed locally against proven code and storage, with no approvals or transactions.</p>
 <button type="submit">Add token</button><p id="token-error" class="input-error" role="alert"></p></form></details>
 <form id="settings-form" novalidate>
 <h2>Network connection</h2>
@@ -56,7 +56,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="section-heading"><h2>Addresses <span id="count">0</span></h2><span class="local-note">Expand a row for request details</span></div>
 <p class="scroll-hint">Swipe the table to see more tokens and controls.</p>
 <section id="wallets" aria-label="Watched wallets"></section>
-</main><footer><span>anonfolio / balance reader</span><span>Ethereum mainnet · Latest RPC state</span></footer>`;
+</main><footer><span>anonfolio / balance reader</span><span>Ethereum mainnet · Verified finalized state</span></footer>`;
 
 let state: ConnectionState = 'starting';
 let connectionMessage = 'Preparing public worker discovery. Wallet balance requests wait for the private worker.';
@@ -135,7 +135,7 @@ function renderConnection() {
     heading.append(button);
   }
 }
-function balanceNode(symbol: string, decimals: number, balance: Balance, pending: boolean) {
+function balanceNode(symbol: string, decimals: number, balance: Balance, pending: boolean, native = false) {
   const box = document.createElement('td');
   box.className = 'balance';
   const label = document.createElement('div');
@@ -144,13 +144,22 @@ function balanceNode(symbol: string, decimals: number, balance: Balance, pending
 
   const amount = document.createElement('div');
   amount.className = 'amount';
-  amount.textContent = balance.amount === undefined ? '—' : formatBalance(balance.amount, decimals);
+  amount.textContent = balance.amount === undefined ? '—' : formatBalance(balance.amount, balance.decimals ?? decimals);
   if (pending) amount.prepend(spinner());
   const status = document.createElement('small');
-  status.className = balance.failed ? 'error' : balance.cached ? 'cached' : '';
-  status.textContent = balance.failed ? (balance.amount === undefined ? 'Lookup failed · retry available' : 'Stale · refresh failed')
-    : balance.cached ? 'Saved balance · stale until refreshed' : balance.updatedAt ? 'Latest successful read' : 'Awaiting first read';
+  status.className = balance.failed ? 'error' : balance.cached ? 'cached' : balance.verifiedBlock ? 'proven' : '';
+  status.textContent = balance.failed ? (balance.amount === undefined ? 'Unavailable · verification failed' : 'Stale · refresh failed')
+    : balance.cached ? (balance.verifiedBlock ? 'Saved verified balance · reverify pending' : 'Unverified saved value · reverify required') : balance.updatedAt ? (balance.verifiedBlock ? 'Verified finalized' + (balance.amount === 0n ? ' · proven zero' : '') : 'Unverified · reverify required') : 'Awaiting first read';
+  if (balance.amount !== undefined && !balance.verifiedBlock) status.textContent = 'Unverified saved value · ' + (balance.failed ? 'verification failed' : 'reverify required');
   box.append(label, amount, status);
+  if (balance.verifiedBlock) box.title = 'Finalized block ' + BigInt(balance.verifiedBlock.number) + ' · ' + balance.verifiedBlock.hash + ' · ' + new Date(balance.verifiedBlock.timestamp).toLocaleString();
+  if (!native) {
+    box.title += balance.decimalsVerified ? ' · decimals verified by local EVM' : ' · decimals are user-supplied';
+    if (!balance.decimalsVerified) {
+      const source = document.createElement('small'); source.className = 'decimals-source';
+      source.textContent = 'User-supplied decimals'; box.append(source);
+    }
+  }
   if (balance.updatedAt) {
     const time = document.createElement('time');
     time.className = 'sr-only';
@@ -171,7 +180,7 @@ function renderTokens() {
     const text = document.createElement('div');
     text.className = 'token-metadata';
     const name = document.createElement('strong');
-    name.textContent = token.symbol + ' · ' + token.decimals + ' decimals';
+    name.textContent = token.symbol + ' · ' + token.decimals + (token.address === 'eth' ? ' native decimals' : ' fallback decimals (user-supplied)');
     const address = document.createElement('small');
     address.textContent = token.address === 'eth' ? 'Native Ethereum' : token.address;
     const status = document.createElement('small');
@@ -247,6 +256,9 @@ function renderTotals() {
     const coverage = total.known + '/' + total.addresses + ' addresses';
     status.textContent = !total.addresses ? 'Add an address to start'
       : total.known < total.addresses ? 'Partial · ' + coverage : coverage;
+    if (total.decimalsMismatch) status.textContent += ' · decimals differ; total unavailable';
+    if (total.mixedBlocks) status.textContent += ' · mixed finalized blocks';
+    if (total.userSuppliedDecimals) status.textContent += ' · user-supplied decimals';
     if (total.stale) status.textContent += ' · ' + total.stale + ' stale';
     if (total.loading) status.textContent += ' · updating';
     card.classList.toggle('incomplete', total.known < total.addresses || total.stale > 0);
@@ -264,14 +276,18 @@ function walletDetails(wallet: Wallet) {
   const timestamps = document.createElement('p');
   timestamps.className = 'detail-times';
   timestamps.textContent = tokens.map(token => ({ symbol: token.symbol, balance: tokenBalance(wallet, token) })).map(({ symbol, balance }) => symbol + ': ' + (balance.updatedAt
-    ? 'last read ' + new Date(balance.updatedAt).toLocaleString() : 'not read yet')).join(' · ');
-  content.append(fullAddress, route, timestamps);
+    ? 'last read ' + new Date(balance.updatedAt).toLocaleString() + (balance.verifiedBlock ? ' · finalized ' + balance.verifiedBlock.hash + ' at ' + new Date(balance.verifiedBlock.timestamp).toLocaleString() : ' · unverified legacy value') : 'not verified yet')).join(' · ');
+  const verification = document.createElement('p');
+  verification.className = 'verification-progress';
+  verification.setAttribute('role', 'status');
+  verification.textContent = wallet.verificationStatus || 'Waiting to verify balances.';
+  content.append(fullAddress, route, timestamps, verification);
   if (wallet.activity.length) {
     const activity = document.createElement('div');
     activity.className = 'activity';
     const summary = document.createElement('p');
     const finished = wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length;
-    summary.textContent = wallet.loading ? (finished + '/' + wallet.activity.length + ' reads finished · ' + (wallet.activity.some(item => item.attempt > 0) ? 'Waiting for private RPC responses.' : 'Waiting for the private worker; balance calls have not been submitted yet.'))
+    summary.textContent = wallet.loading ? (finished + '/' + wallet.activity.length + ' reads finished · ' + (wallet.activity.some(item => item.attempt > 0) ? 'Verifying finalized state locally.' : 'Waiting for the private worker; balance calls have not been submitted yet.'))
       : finished + '/' + wallet.activity.length + ' reads finished. Each amount shows its own result and last successful time.';
     const retry = retryMessage(wallet);
     if (retry) summary.textContent += ' ' + retry;
@@ -282,8 +298,8 @@ function walletDetails(wallet: Wallet) {
       if (item.phase === 'waiting' || item.phase === 'requesting') line.append(spinner());
       const detail = document.createElement('div');
       const title = document.createElement('strong');
-      title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? 'Waiting for private connection'
-        : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' submitted on the same private route; waiting for response' : 'Submitted to private worker; waiting for response')
+      title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? 'Waiting for finalized verification'
+        : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' on the same private route; verifying finalized state' : 'Verifying locally; fetching private proofs as needed')
         : item.phase === 'received' ? 'Balance received' : 'Read failed; previous amount kept if available');
       const payload = document.createElement('small');
       payload.append(document.createTextNode(item.description + ' · wallet '), addressDisplay(wallet, true),
@@ -357,9 +373,15 @@ function render() {
     addressLine.className = 'address-line';
     addressLine.append(address, refresh);
     identity.append(addressLine);
+    if (wallet.loading && wallet.verificationStatus) {
+      const progress = document.createElement('small');
+      progress.className = 'verification-progress compact-progress';
+      progress.textContent = wallet.verificationStatus; progress.title = wallet.verificationStatus;
+      identity.append(progress);
+    }
     row.append(identity);
     const pending = (asset: string) => wallet.loading && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
-    row.append(...assets.map(token => balanceNode(token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address))));
+    row.append(...assets.map(token => balanceNode(token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address === 'eth')));
     const status = document.createElement('td');
     status.className = 'row-status';
     status.setAttribute('aria-live', 'polite');
@@ -371,7 +393,7 @@ function render() {
     status.textContent = !tokens.length ? 'No tokens' : wallet.loading ? 'Reading ' + wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length + '/' + wallet.activity.length
       : retry ? (retry.dueAt ? 'Retry ' + new Date(retry.dueAt).toLocaleTimeString() : 'Retry paused')
       : failed ? 'Read failed' : known < values.length ? 'Partial' : cached ? 'Saved' : 'Current';
-    status.title = retryMessage(wallet) || (failed ? 'Some reads failed; previous amounts are retained' : 'Expand Details for read timestamps');
+    status.title = wallet.verificationStatus || retryMessage(wallet) || (failed ? 'Some reads failed; previous amounts are retained' : 'Expand Details for read timestamps');
     status.classList.toggle('warning', failed || cached || known < values.length);
     const actions = document.createElement('td');
     actions.className = 'actions';
@@ -438,6 +460,7 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
     const worker = await connection.get();
     if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { pruneTokenBalances(wallet); persist(); render(); }, onlyFailed);
   } catch {
+    wallet.verificationStatus = navigator.onLine ? 'Private connection unavailable; no unverified fallback.' : 'Offline; saved values require reverification.';
     wallet.activity.forEach(item => {
       const token = selectedTokens.find(token => token.address === item.asset);
       if (token) tokenBalance(wallet, token).failed = true;

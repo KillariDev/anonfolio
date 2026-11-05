@@ -21,7 +21,7 @@ test('static build loads and handles unavailable bootstrap without public balanc
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.getByRole('button', { name: 'Retry connection' })).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('.amount')).toHaveText(['—', '—']);
-  await expect(page.locator('.error')).toHaveText(['Lookup failed · retry available', 'Lookup failed · retry available']);
+  await expect(page.locator('.error')).toHaveText(['Unavailable · verification failed', 'Unavailable · verification failed']);
   expect(publicBalanceCalls).toEqual([]);
 });
 
@@ -67,7 +67,7 @@ test('static build reopens completely offline with saved wallets, token settings
     images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
   await expect(page.locator('#offline-notice')).toContainText('offline');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(page.locator('.error')).toHaveText(['Stale · refresh failed', 'Stale · refresh failed', 'Stale · refresh failed']);
+  await expect(page.locator('.error')).toHaveText(['Unverified saved value · verification failed', 'Unverified saved value · verification failed', 'Unverified saved value · verification failed']);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Refresh ' + a + ' · Offline savings', exact: true })).toBeEnabled();
   expect(await page.locator('.balance time').first().getAttribute('datetime')).toBe(new Date(timestamp).toISOString());

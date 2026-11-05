@@ -49,7 +49,7 @@ for (const mode of ['path', 'subdomain']) {
     await expect(page.locator('.wallet-head .address-name')).toHaveText('IPFS savings');
     await expect(page.locator('.wallet-head svg rect')).toHaveCount(64);
     await expect(page.locator('.amount')).toHaveText(['0', '—', '—']);
-    await expect(page.locator('.balance small.error').first()).toHaveText('Stale · refresh failed');
+    await expect(page.locator('.balance small.error').first()).toHaveText('Unverified saved value · verification failed');
     await expect(page.locator('#offline-notice')).toContainText('offline');
     await openTokenSettings(page);
     await expect(page.getByRole('button', { name: 'Remove token USDC', exact: true })).toBeVisible();

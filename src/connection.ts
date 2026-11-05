@@ -1,7 +1,7 @@
 import { AnonRpcWorker } from '@anon-rpc/browser-harness';
 import { createPublicClient, decodeAbiParameters, http, toFunctionSelector, type Hex } from 'viem';
 import { mainnet } from 'viem/chains';
-import { config, TOR_SPECIFIER } from './config';
+import { config, TOR_SPECIFIER, assertTorWorkerHash } from './config';
 
 export type ConnectionState = 'starting' | 'ready' | 'failed';
 export class Connection {
@@ -30,6 +30,7 @@ export class Connection {
         try {
           const result = await bootstrap.request({ method, params } as Parameters<typeof bootstrap.request>[0]);
           const call = Array.isArray(params) ? params[0] as { data?: string } | undefined : undefined;
+          if (call?.data === toFunctionSelector('workerHash()')) assertTorWorkerHash(result);
           if (call?.data === toFunctionSelector('workerResolvers()') && typeof result === 'string') {
             try {
               const [resolvers] = decodeAbiParameters([{ type: 'string[]' }], result as Hex);

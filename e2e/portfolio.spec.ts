@@ -1,8 +1,9 @@
-import { openAddressForm, openTokenSettings } from './helpers';
+import { openAddressForm, openTokenSettings, mockVerification } from './helpers';
 import { expect, test } from '@playwright/test';
 
 const a = '0x0000000000000000000000000000000000000001';
 const b = '0x0000000000000000000000000000000000000002';
+test.beforeEach(async ({ page }, info) => { if (!info.title.includes('live mainnet') && !process.env.BASE_URL && !process.env.IPFS_GATEWAY_URL) await mockVerification(page); });
 
 test('browser watchlist, exact zero, refresh, stale state, recovery, persistence and route isolation', async ({ page }) => {
   test.skip(!!process.env.BASE_URL, 'Module boundary injection runs against the Vite dev server.');
@@ -92,7 +93,7 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   const publicBalanceCalls: string[] = [];
   page.on('request', req => {
     const body = req.postData() || '';
-    if (req.method() === 'POST' && (body.includes('eth_getBalance') || body.includes('70a08231'))) publicBalanceCalls.push(req.url());
+    if (req.method() === 'POST' && (body.includes('eth_getBalance') || body.includes('eth_getProof') || body.includes('eth_getCode') || body.includes('70a08231'))) publicBalanceCalls.push(req.url());
   });
   await page.goto(process.env.IPFS_GATEWAY_URL || '/');
   await openTokenSettings(page);
@@ -104,9 +105,17 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   await page.locator('#address').fill('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount').first()).not.toHaveText('—', { timeout: 210_000 });
-  await expect(page.locator('.amount').nth(1)).not.toHaveText('—', { timeout: 20_000 });
-  await expect(page.locator('.amount').nth(2)).not.toHaveText('—', { timeout: 20_000 });
+  await expect(page.locator('.amount').nth(1)).not.toHaveText('—', { timeout: 180_000 });
+  await expect(page.locator('.amount').nth(2)).not.toHaveText('—', { timeout: 180_000 });
   expect(publicBalanceCalls).toEqual([]);
+  const proven = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances) as any[]);
+  expect(proven).toHaveLength(3);
+  await test.info().attach('verified-balances', { body: JSON.stringify(proven, null, 2), contentType: 'application/json' });
+  expect(proven.every(balance => balance.verifiedBlock?.hash && balance.verifiedBlock.timestamp)).toBe(true);
+  for (let index = 0; index < proven.length; index++) if (!proven[index]!.decimalsVerified) {
+    await expect(page.locator('.wallet').first().locator('.balance').nth(index).locator('.decimals-source')).toHaveText('User-supplied decimals');
+  }
+  expect(new Set(proven.map(balance => balance.verifiedBlock.hash)).size).toBe(1);
   await page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true })).toBeEnabled({ timeout: 180_000 });
   await expect(page.locator('.error')).toHaveCount(0);
@@ -152,7 +161,7 @@ test('failed private startup shows retry and never displays a false zero', async
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.error')).toHaveText(['Lookup failed · retry available', 'Lookup failed · retry available']);
+  await expect(page.locator('.error')).toHaveText(['Unavailable · verification failed', 'Unavailable · verification failed']);
   await expect(page.locator('.amount')).toHaveText(['—', '—']);
   await expect(page.getByRole('button', { name: 'Retry connection' })).toBeVisible();
   expect(rpcRequests).toEqual([]);

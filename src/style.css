@@ -183,3 +183,8 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .address-display.full-address .wallet-address { overflow-wrap: anywhere; min-width: 0; }
 .activity-item small .address-display { margin: 3px 0; }
 .activity-item .blockie { width: 20px; height: 20px; flex-basis: 20px; }
+
+.verification-progress { font-size: 10px; line-height: 1.5; color: #bdcda8; overflow-wrap: anywhere; }
+.compact-progress { display: block; max-width: 230px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.balance .proven, .balance .decimals-source { display: block; color: #a4be91; }

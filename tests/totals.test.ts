@@ -67,3 +67,24 @@ test('totals add exact balances before applying the two-decimal display rule', (
   expect(formatBalance(portfolioTotals([first, second], defaultTokens())[0]!.amount!)).toBe('0.01');
   expect(portfolioTotals([first, second], [])).toEqual([]);
 });
+
+test('totals explicitly detect balances from mixed finalized blocks', () => {
+  const first = makeWallet(a.address, a.rpcUrl);
+  const second = makeWallet(b.address, b.rpcUrl);
+  const block = { hash: '0x' + '11'.repeat(32), stateRoot: '0x' + '22'.repeat(32), number: '0x100', timestamp: Date.now() - 60_000 };
+  first.eth = { amount: 1n, failed: false, verifiedBlock: block };
+  second.eth = { amount: 2n, failed: false, verifiedBlock: { ...block, hash: '0x' + '33'.repeat(32) } };
+  expect(portfolioTotals([first, second], defaultTokens())[0]!.mixedBlocks).toBe(true);
+  second.eth.verifiedBlock = block;
+  expect(portfolioTotals([first, second], defaultTokens())[0]!.mixedBlocks).toBe(false);
+});
+
+test('conflicting verified decimals suppress the aggregate instead of misformatting it', () => {
+  const first = makeWallet(a.address, a.rpcUrl);
+  const second = makeWallet(b.address, b.rpcUrl);
+  first.weth = { amount: 1000000n, decimals: 6, decimalsVerified: true, failed: false };
+  second.weth = { amount: 1000000000000000000n, decimals: 18, decimalsVerified: true, failed: false };
+  const total = portfolioTotals([first, second], defaultTokens())[1]!;
+  expect(total.decimalsMismatch).toBe(true);
+  expect(total.amount).toBeUndefined();
+});

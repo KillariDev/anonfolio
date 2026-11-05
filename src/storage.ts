@@ -26,7 +26,16 @@ function restoreBalance(value: unknown): Balance {
     || value.updatedAt <= 0 || value.updatedAt > Date.now() + 60_000) return { failed: false };
   const amount = BigInt(value.amount);
   if (amount >= 2n ** 256n) return { failed: false };
-  return { amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true };
+  const block = record(value.verifiedBlock) && typeof value.verifiedBlock.hash === 'string' && /^0x[0-9a-f]{64}$/i.test(value.verifiedBlock.hash)
+    && typeof value.verifiedBlock.stateRoot === 'string' && /^0x[0-9a-f]{64}$/i.test(value.verifiedBlock.stateRoot)
+    && typeof value.verifiedBlock.number === 'string' && /^0x[0-9a-f]+$/i.test(value.verifiedBlock.number)
+    && typeof value.verifiedBlock.timestamp === 'number' && value.verifiedBlock.timestamp > 0 && value.verifiedBlock.timestamp <= Date.now() + 60_000
+    ? value.verifiedBlock as import('./verification/trust').VerifiedBlock : undefined;
+  return { amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true,
+    ...(block ? { verifiedBlock: block } : {}),
+    ...(typeof value.decimals === 'number' && Number.isInteger(value.decimals) && value.decimals >= 0 && value.decimals <= 255
+      ? { decimals: value.decimals, decimalsVerified: value.decimalsVerified === true } : {}),
+  };
 }
 export function loadPortfolio(rpcUrls: string[]): { wallets: Wallet[]; tokens: Token[] } {
   let data: unknown;
@@ -75,7 +84,7 @@ export function loadPortfolio(rpcUrls: string[]): { wallets: Wallet[]; tokens: T
 }
 function savedBalance(balance: Balance) {
   return balance.amount === undefined ? undefined
-    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed };
+    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, decimalsVerified: balance.decimalsVerified };
 }
 export function savePortfolio(wallets: Wallet[], tokens: Token[]): boolean {
   try {

@@ -1,4 +1,4 @@
-import { openAddressForm, openTokenSettings } from './helpers';
+import { openAddressForm, openTokenSettings, mockVerification } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const a = '0x0000000000000000000000000000000000000001';
@@ -41,7 +41,8 @@ async function addToken(page: Page) {
   await page.getByLabel('Decimals', { exact: true }).fill('6');
   await page.getByRole('button', { name: 'Add token', exact: true }).click();
 }
-test.beforeEach(async () => {
+test.beforeEach(async ({ page }) => {
+  await mockVerification(page);
   test.skip(!!process.env.BASE_URL, 'Connection injection is only used with the development server.');
 });
 
@@ -63,7 +64,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   expect(await page.evaluate(() => (window as any).__calls.length)).toBe(0);
   await page.evaluate(() => { (window as any).__delay = 1000; (window as any).__releaseConnection(); });
   await expect(page.locator('.activity-item.requesting')).toHaveCount(6);
-  await expect(page.locator('.activity').first()).toContainText('eth_getBalance(address, latest)');
+  await expect(page.locator('.activity').first()).toContainText('eth_getProof(address)');
   await expect(page.locator('.activity').first()).toContainText(usdc);
   await expect(page.locator('.route').first()).toContainText('ethereum-rpc.publicnode.com');
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23', '1', '0', '1.23']);

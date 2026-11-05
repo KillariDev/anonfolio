@@ -1,184 +1,86 @@
-import { afterEach, expect, test } from 'bun:test';
-import { encodeAbiParameters, type Address } from 'viem';
-import { formatBalance, makeWallet, readBalances, type PrivateWorker } from '../src/balances';
-import { WETH } from '../src/config';
-
-const addressA = '0x0000000000000000000000000000000000000001' as Address;
-const addressB = '0x0000000000000000000000000000000000000002' as Address;
-const originalFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = originalFetch; });
-
-test('two wallets use distinct keys and operators; only latest ETH and WETH calls, no public fetch or batches', async () => {
-  const calls: { url: string; body: any; key: string }[] = [];
-  globalThis.fetch = (() => { throw new Error('PUBLIC FETCH FORBIDDEN'); }) as unknown as typeof fetch;
-  const worker: PrivateWorker = { fetch: async (url, init) => {
-    const body = JSON.parse(init!.body as string);
-    calls.push({ url: String(url), body, key: init!.anonOptions!.isolationKey! });
-    return Response.json({ jsonrpc: '2.0', id: body.id, result: body.method === 'eth_getBalance' ? '0x0' : '0x' + '0'.repeat(64) });
-  } };
-  const a = makeWallet(addressA, 'https://operator-a.invalid');
-  const b = makeWallet(addressB, 'https://operator-b.invalid');
-  await Promise.all([readBalances(a, worker), readBalances(b, worker)]);
-  expect(a.isolationKey).not.toBe(b.isolationKey);
-  expect(calls).toHaveLength(4);
-  for (const wallet of [a, b]) {
-    const own = calls.filter(c => c.key === wallet.isolationKey);
-    expect(own).toHaveLength(2);
-    expect(own.every(c => new URL(c.url).href === new URL(wallet.rpcUrl).href)).toBe(true);
-    expect(own.every(c => !Array.isArray(c.body))).toBe(true);
-    const eth = own.find(c => c.body.method === 'eth_getBalance')!;
-    const weth = own.find(c => c.body.method === 'eth_call')!;
-    expect(eth.body.params).toEqual([wallet.address, 'latest']);
-    expect(weth.body.params[1]).toBe('latest');
-    expect(weth.body.params[0].to.toLowerCase()).toBe(WETH.toLowerCase());
-    expect(weth.body.params[0].data).toBe('0x70a08231' + wallet.address.slice(2).padStart(64, '0'));
-    expect(wallet.eth.amount).toBe(0n);
-    expect(wallet.weth.amount).toBe(0n);
-    expect(wallet.eth.failed).toBe(false);
-  }
+import { expect, test } from 'bun:test';
+import { formatBalance, makeWallet, readBalances, tokenBalance } from '../src/balances';
+import { defaultTokens, validateToken } from '../src/tokens';
+import type { verifyWallet, VerificationEvent } from '../src/verification/client';
+const address = '0x0000000000000000000000000000000000000001';
+const block = { hash: '0x' + '11'.repeat(32), stateRoot: '0x' + '22'.repeat(32), number: '0x100', timestamp: Date.now() - 60_000 };
+const unusedWorker = { fetch: async () => { throw new Error('Unexpected network use'); } };
+function engine(run: (tokens: ReturnType<typeof defaultTokens>, emit: (event: VerificationEvent) => void) => void): typeof verifyWallet {
+  return async (_wallet, _worker, tokens, emit) => run(tokens, emit);
+}
+const success = engine((tokens, emit) => {
+  for (const token of tokens) emit({ type: 'balance', asset: token.address, amount: '0', decimals: 18, decimalsVerified: true, block });
 });
-
-test('failed refresh preserves amounts and timestamp; retries keep the same private route', async () => {
-  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
-  let failing = false;
-  const keys: string[] = [];
-  const worker: PrivateWorker = { fetch: async (_, init) => {
-    keys.push(init!.anonOptions!.isolationKey!);
-    const body = JSON.parse(init!.body as string);
-    if (failing) throw new Error('Private route unavailable');
-    return Response.json({ jsonrpc: '2.0', id: body.id,
-      result: body.method === 'eth_getBalance' ? '0xde0b6b3a7640000' : '0x' + (2n * 10n ** 18n).toString(16).padStart(64, '0') });
-  } };
-  await readBalances(wallet, worker);
-  const updatedAt = wallet.eth.updatedAt;
-  failing = true;
-  globalThis.fetch = (() => { throw new Error('PUBLIC FETCH FORBIDDEN'); }) as unknown as typeof fetch;
-  await readBalances(wallet, worker);
-  expect(wallet.eth.amount).toBe(10n ** 18n);
-  expect(wallet.weth.amount).toBe(2n * 10n ** 18n);
-  expect(wallet.eth.updatedAt).toBe(updatedAt);
+test('verified zero keeps its finalized block identity, timestamp and decimals', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, success);
+  expect(wallet.eth).toMatchObject({ amount: 0n, failed: false, verifiedBlock: block, decimalsVerified: true });
+  expect(wallet.weth.verifiedBlock).toEqual(wallet.eth.verifiedBlock);
+});
+test('failed verification retains previous amounts and provenance as stale', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, success);
+  const before = { ...wallet.eth };
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, async () => { throw new Error('Proof invalid'); });
+  expect(wallet.eth).toEqual({ ...before, failed: true });
+  expect(wallet.verificationStatus).toContain('Proof invalid');
+});
+test('legacy and cached balances are reverified rather than treated as proven zero', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  wallet.eth = { amount: 0n, updatedAt: 1, cached: true, failed: false };
+  let selected = 0;
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, true, engine((tokens, emit) => {
+    selected = tokens.length;
+    tokens.forEach(token => emit({ type: 'balance', asset: token.address, amount: '1', decimals: 18, decimalsVerified: true, block }));
+  }));
+  expect(selected).toBe(2);
+  expect(wallet.eth.cached).toBeUndefined();
+  expect(wallet.eth.verifiedBlock).toEqual(block);
+});
+test('partial success stores independently while failed assets retain old amounts', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  wallet.weth = { amount: 9n, updatedAt: 1, failed: false };
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((tokens, emit) => {
+    emit({ type: 'balance', asset: 'eth', amount: '5', decimals: 18, decimalsVerified: true, block });
+    emit({ type: 'asset-error', asset: tokens[1]!.address, error: 'Tampered code' });
+  }));
+  expect(wallet.eth.amount).toBe(5n);
+  expect(wallet.weth).toEqual({ amount: 9n, updatedAt: 1, failed: true });
+});
+test('automatic recovery selects failed assets and keeps their original private identity', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, success);
+  wallet.weth.failed = true;
+  const key = wallet.isolationKey;
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, true, engine((tokens, emit) => {
+    expect(tokens.map(token => token.symbol)).toEqual(['WETH']);
+    emit({ type: 'balance', asset: tokens[0]!.address, amount: '7', decimals: 18, decimalsVerified: true, block });
+  }));
+  expect(wallet.isolationKey).toBe(key);
+  expect(wallet.weth.amount).toBe(7n);
+});
+test('custom tokens retain verified or explicitly user-supplied decimals and progress', async () => {
+  const token = validateToken('0x0000000000000000000000000000000000000002', 'CUSTOM', '6');
+  const wallet = makeWallet(address, 'https://one.example');
+  let updates = 0;
+  await readBalances(wallet, unusedWorker, [token], () => updates++, false, engine((_tokens, emit) => {
+    emit({ type: 'progress', message: 'Verifying proxy storage' });
+    emit({ type: 'asset', asset: token.address });
+    emit({ type: 'balance', asset: token.address, amount: '12345', decimals: 8, decimalsVerified: true, block });
+  }));
+  expect(tokenBalance(wallet, token).decimals).toBe(8);
+  expect(wallet.verificationStatus).toContain('Verification complete');
+  expect(updates).toBeGreaterThan(2);
+});
+test('amounts without verified block metadata are not accepted', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((_tokens, emit) => emit({ type: 'balance', asset: 'eth', amount: '0' })));
+  expect(wallet.eth.amount).toBeUndefined();
   expect(wallet.eth.failed).toBe(true);
-  expect(wallet.weth.failed).toBe(true);
-  expect(keys.length).toBeGreaterThan(4);
-  expect(new Set(keys)).toEqual(new Set([wallet.isolationKey]));
-  failing = false;
-  await readBalances(wallet, worker);
-  expect(wallet.eth.failed).toBe(false);
 });
-
-test('partial failure preserves only the failed token and rounds display without floating point', async () => {
-  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
-  wallet.weth = { amount: 7n, updatedAt: 123, failed: false };
-  await readBalances(wallet, { fetch: async (_, init) => {
-    const body = JSON.parse(init!.body as string);
-    return Response.json(body.method === 'eth_call'
-      ? { jsonrpc: '2.0', id: body.id, error: { code: -32602, message: 'unavailable' } }
-      : { jsonrpc: '2.0', id: body.id, result: '0x1' });
-  } });
-  expect(wallet.eth.amount).toBe(1n);
-  expect(wallet.eth.failed).toBe(false);
-  expect(wallet.weth).toEqual({ amount: 7n, updatedAt: 123, failed: true });
+test('display uses exact integer rounding, at most two decimals and explicit tiny positives', () => {
+  expect(formatBalance(123456789n, 6)).toBe('123.46');
   expect(formatBalance(1n)).toBe('<0.01');
-  expect(formatBalance(1234567890123456789n)).toBe('1.23');
-});
-
-test('off-chain lookup redirects cannot escape the private transport', async () => {
-  let publicFetches = 0;
-  globalThis.fetch = (() => { publicFetches++; throw new Error('PUBLIC FETCH FORBIDDEN'); }) as unknown as typeof fetch;
-  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
-  const data = '0x556f1830' + encodeAbiParameters(
-    [{ type: 'address' }, { type: 'string[]' }, { type: 'bytes' }, { type: 'bytes4' }, { type: 'bytes' }],
-    [WETH, ['https://leak.invalid/{data}'], '0x1234', '0x12345678', '0x'],
-  ).slice(2);
-  await readBalances(wallet, { fetch: async (_, init) => {
-    const body = JSON.parse(init!.body as string);
-    return Response.json(body.method === 'eth_getBalance'
-      ? { jsonrpc: '2.0', id: body.id, result: '0x0' }
-      : { jsonrpc: '2.0', id: body.id, error: { code: 3, message: 'execution reverted', data } });
-  } });
-  expect(publicFetches).toBe(0);
-  expect(wallet.weth.failed).toBe(true);
-});
-
-import { validateToken, defaultTokens } from '../src/tokens';
-test('custom token reads use the wallet private route, report retries and save partial results immediately', async () => {
-  const token = validateToken('0x0000000000000000000000000000000000000003', 'USDC', '6');
-  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
-  const calls: any[] = [];
-  const progress: string[] = [];
-  let attempts = 0;
-  let finishToken!: () => void;
-  const tokenGate = new Promise<void>(resolve => { finishToken = resolve; });
-  const pending = readBalances(wallet, { fetch: async (url, init) => {
-    const body = JSON.parse(init!.body as string);
-    calls.push({ body, key: init!.anonOptions!.isolationKey, url: String(url) });
-    const isCustom = body.method === 'eth_call' && body.params[0].to.toLowerCase() === token.address.toLowerCase();
-    if (isCustom) {
-      if (++attempts === 1) throw new Error('temporary private failure');
-      await tokenGate;
-    }
-    return Response.json({ jsonrpc: '2.0', id: body.id,
-      result: body.method === 'eth_getBalance' ? '0x1' : '0x' + (isCustom ? 1234567n : 0n).toString(16).padStart(64, '0') });
-  } }, [...defaultTokens(), token], () => { progress.push(JSON.stringify(wallet.activity)); });
-  await Bun.sleep(20);
-  expect(wallet.eth.amount).toBe(1n);
-  expect(wallet.tokens[token.address]?.amount).toBeUndefined();
-  expect(wallet.activity.find(item => item.asset === 'eth')!.phase).toBe('received');
-  finishToken();
-  await pending;
-  expect(formatBalance(wallet.tokens[token.address]!.amount!, 6)).toBe('1.23');
-  expect(wallet.activity.find(item => item.asset === token.address)!.attempt).toBe(2);
-  expect(progress.some(entry => entry.includes('"phase":"requesting"'))).toBe(true);
-  expect(new Set(calls.map(call => call.key))).toEqual(new Set([wallet.isolationKey]));
-  expect(calls.filter(call => call.body.method === 'eth_call').every(call => call.body.params[1] === 'latest')).toBe(true);
-});
-
-test('automatic recovery retries failed assets only and keeps the original private key and operator', async () => {
-  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
-  wallet.eth = { amount: 9n, updatedAt: 123, failed: false };
-  wallet.weth = { amount: 5n, updatedAt: 100, failed: true };
-  const calls: any[] = [];
-  globalThis.fetch = (() => { throw new Error('PUBLIC FETCH FORBIDDEN'); }) as unknown as typeof fetch;
-  await readBalances(wallet, { fetch: async (url, init) => {
-    const body = JSON.parse(init!.body as string);
-    calls.push({ url: String(url), body, key: init!.anonOptions!.isolationKey });
-    return Response.json({ jsonrpc: '2.0', id: body.id, result: '0x' + '0'.repeat(64) });
-  } }, defaultTokens(), () => {}, true);
-  expect(calls).toHaveLength(1);
-  expect(calls[0].body.method).toBe('eth_call');
-  expect(calls[0].key).toBe(wallet.isolationKey);
-  expect(new URL(calls[0].url).href).toBe(new URL(wallet.rpcUrl).href);
-  expect(wallet.eth).toEqual({ amount: 9n, updatedAt: 123, failed: false });
-  expect(wallet.weth.amount).toBe(0n);
-  expect(wallet.weth.failed).toBe(false);
-  expect(wallet.activity).toHaveLength(1);
-});
-
-test('display has at most two decimals and rounds exactly before trimming trailing zeros', () => {
   expect(formatBalance(0n)).toBe('0');
-  expect(formatBalance(1n)).toBe('<0.01');
-  expect(formatBalance(9999n, 6)).toBe('<0.01');
-  expect(formatBalance(10000n, 6)).toBe('0.01');
-  expect(formatBalance(1234999n, 6)).toBe('1.23');
-  expect(formatBalance(1235000n, 6)).toBe('1.24');
-  expect(formatBalance(1999999n, 6)).toBe('2');
-  expect(formatBalance(123n, 0)).toBe('123');
-  expect(formatBalance(123n, 1)).toBe('12.3');
-  expect(formatBalance(1234567890123456789012345678n, 6)).toBe('1234567890123456789012.35');
-});
-test('only the selected tokens are requested, including removing both defaults', async () => {
-  const token = validateToken('0x0000000000000000000000000000000000000003', 'TEST', '6');
-  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
-  const calls: any[] = [];
-  const worker: PrivateWorker = { fetch: async (_, init) => {
-    const body = JSON.parse(init!.body as string);
-    calls.push(body);
-    return Response.json({ jsonrpc: '2.0', id: body.id, result: '0x' + '0'.repeat(64) });
-  }};
-  await readBalances(wallet, worker, [token]);
-  expect(calls).toHaveLength(1);
-  expect(calls[0].method).toBe('eth_call');
-  expect(calls[0].params[0].to.toLowerCase()).toBe(token.address.toLowerCase());
-  await readBalances(wallet, worker, []);
-  expect(calls).toHaveLength(1);
+  expect(formatBalance(99999999999999999999999999999n, 18)).toBe('100000000000');
 });

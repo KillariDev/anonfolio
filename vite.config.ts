@@ -5,11 +5,13 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   // Resolve assets beneath both subdomain gateways and /ipfs/<CID>/ paths.
   base: './',
+  worker: { format: 'es' },
+  resolve: { alias: { events: 'events/', buffer: 'buffer/' } },
   plugins: [{
     name: 'offline-application-shell',
     enforce: 'post',
     generateBundle(_, bundle) {
-      const paths = [...Object.keys(bundle).filter(path => /\.(html|js|css|png|jpg|jpeg|svg|webp)$/.test(path)), './'];
+      const paths = [...Object.keys(bundle).filter(path => /\.(html|js|css|png|jpg|jpeg|svg|webp|wasm)$/.test(path)), './'];
       const version = createHash('sha256').update(JSON.stringify(paths)).digest('hex').slice(0, 16);
       this.emitFile({
         type: 'asset', fileName: 'sw.js',
