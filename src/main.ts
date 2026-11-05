@@ -81,7 +81,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 
 </div>
 <p id="offline-notice" role="status"></p><p id="storage-warning" role="status"></p>
-<div class="section-heading"><h2>Addresses <span id="count">0</span></h2><span class="local-note">Expand a row for request details</span></div>
+<div class="section-heading"><h2>Addresses <span id="count">0</span></h2></div>
 <p class="scroll-hint">Swipe the table to see more tokens and controls.</p>
 <section id="wallets" aria-label="Watched wallets"></section>
 </main><footer><span>anonfolio / balance reader</span><span>Ethereum mainnet · Verified finalized state</span></footer>`;
