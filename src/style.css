@@ -146,3 +146,23 @@ footer { border-top: 1px solid #273223; max-width: 1216px; margin: 20px auto 0; 
   .detail-inner { width: calc(100vw - 34px); position: sticky; left: 0; padding: 12px; }
   footer { margin: 18px 16px 0; font-size: 9px; gap: 16px; }
 }
+
+.token-icon { display: inline-flex; flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; overflow: hidden; background: #32422a; color: #c9dfb9; align-items: center; justify-content: center; font: 9px ui-monospace, monospace; letter-spacing: 0; }
+.token-icon img { width: 100%; height: 100%; object-fit: contain; }
+.column-token { display: inline-flex; gap: 7px; align-items: center; }
+.column-token .token-icon { width: 18px; height: 18px; flex-basis: 18px; }
+.total-label .token-icon { width: 24px; height: 24px; flex-basis: 24px; }
+.token-metadata { min-width: 0; flex: 1; }
+.token-actions { display: flex; gap: 7px; align-items: center; }
+.icon-upload { position: relative; overflow: hidden; cursor: pointer; margin: 0; font-size: 10px; color: #bbcfad; padding: 5px 8px; border: 1px solid #3d483c; border-radius: 6px; white-space: nowrap; }
+.icon-file { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; padding: 0; font-size: 0; }
+.icon-upload:focus-within { outline: 2px solid #b8ec8c; outline-offset: 2px; }
+select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; border: 1px solid #3b4835; border-radius: 6px; padding: 9px; font: inherit; font-size: 12px; }
+#token-icon { margin-bottom: 0; font-size: 11px; }
+#token-form > label { margin-top: 10px; }
+#token-list li { flex-wrap: wrap; }
+.balance { min-width: 130px; }
+@media(max-width:720px) { .token-actions { margin-left: auto; } }
+
+#token-list small[role='status']:empty { display: none; }
+#token-form button .spinner { margin-right: 6px; }

@@ -66,7 +66,7 @@ test('failed refresh preserves amounts and timestamp; retries keep the same priv
   expect(wallet.eth.failed).toBe(false);
 });
 
-test('partial failure preserves only the failed token and exact 18-decimal formatting', async () => {
+test('partial failure preserves only the failed token and rounds display without floating point', async () => {
   const wallet = makeWallet(addressA, 'https://operator-a.invalid');
   wallet.weth = { amount: 7n, updatedAt: 123, failed: false };
   await readBalances(wallet, { fetch: async (_, init) => {
@@ -78,8 +78,8 @@ test('partial failure preserves only the failed token and exact 18-decimal forma
   expect(wallet.eth.amount).toBe(1n);
   expect(wallet.eth.failed).toBe(false);
   expect(wallet.weth).toEqual({ amount: 7n, updatedAt: 123, failed: true });
-  expect(formatBalance(1n)).toBe('0.000000000000000001');
-  expect(formatBalance(1234567890123456789n)).toBe('1.234567890123456789');
+  expect(formatBalance(1n)).toBe('<0.01');
+  expect(formatBalance(1234567890123456789n)).toBe('1.23');
 });
 
 test('off-chain lookup redirects cannot escape the private transport', async () => {
@@ -100,7 +100,7 @@ test('off-chain lookup redirects cannot escape the private transport', async () 
   expect(wallet.weth.failed).toBe(true);
 });
 
-import { validateToken } from '../src/tokens';
+import { validateToken, defaultTokens } from '../src/tokens';
 test('custom token reads use the wallet private route, report retries and save partial results immediately', async () => {
   const token = validateToken('0x0000000000000000000000000000000000000003', 'USDC', '6');
   const wallet = makeWallet(addressA, 'https://operator-a.invalid');
@@ -119,14 +119,14 @@ test('custom token reads use the wallet private route, report retries and save p
     }
     return Response.json({ jsonrpc: '2.0', id: body.id,
       result: body.method === 'eth_getBalance' ? '0x1' : '0x' + (isCustom ? 1234567n : 0n).toString(16).padStart(64, '0') });
-  } }, [token], () => { progress.push(JSON.stringify(wallet.activity)); });
+  } }, [...defaultTokens(), token], () => { progress.push(JSON.stringify(wallet.activity)); });
   await Bun.sleep(20);
   expect(wallet.eth.amount).toBe(1n);
   expect(wallet.tokens[token.address]?.amount).toBeUndefined();
   expect(wallet.activity.find(item => item.asset === 'eth')!.phase).toBe('received');
   finishToken();
   await pending;
-  expect(formatBalance(wallet.tokens[token.address]!.amount!, 6)).toBe('1.234567');
+  expect(formatBalance(wallet.tokens[token.address]!.amount!, 6)).toBe('1.23');
   expect(wallet.activity.find(item => item.asset === token.address)!.attempt).toBe(2);
   expect(progress.some(entry => entry.includes('"phase":"requesting"'))).toBe(true);
   expect(new Set(calls.map(call => call.key))).toEqual(new Set([wallet.isolationKey]));
@@ -143,7 +143,7 @@ test('automatic recovery retries failed assets only and keeps the original priva
     const body = JSON.parse(init!.body as string);
     calls.push({ url: String(url), body, key: init!.anonOptions!.isolationKey });
     return Response.json({ jsonrpc: '2.0', id: body.id, result: '0x' + '0'.repeat(64) });
-  } }, [], () => {}, true);
+  } }, defaultTokens(), () => {}, true);
   expect(calls).toHaveLength(1);
   expect(calls[0].body.method).toBe('eth_call');
   expect(calls[0].key).toBe(wallet.isolationKey);
@@ -152,4 +152,33 @@ test('automatic recovery retries failed assets only and keeps the original priva
   expect(wallet.weth.amount).toBe(0n);
   expect(wallet.weth.failed).toBe(false);
   expect(wallet.activity).toHaveLength(1);
+});
+
+test('display has at most two decimals and rounds exactly before trimming trailing zeros', () => {
+  expect(formatBalance(0n)).toBe('0');
+  expect(formatBalance(1n)).toBe('<0.01');
+  expect(formatBalance(9999n, 6)).toBe('<0.01');
+  expect(formatBalance(10000n, 6)).toBe('0.01');
+  expect(formatBalance(1234999n, 6)).toBe('1.23');
+  expect(formatBalance(1235000n, 6)).toBe('1.24');
+  expect(formatBalance(1999999n, 6)).toBe('2');
+  expect(formatBalance(123n, 0)).toBe('123');
+  expect(formatBalance(123n, 1)).toBe('12.3');
+  expect(formatBalance(1234567890123456789012345678n, 6)).toBe('1234567890123456789012.35');
+});
+test('only the selected tokens are requested, including removing both defaults', async () => {
+  const token = validateToken('0x0000000000000000000000000000000000000003', 'TEST', '6');
+  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
+  const calls: any[] = [];
+  const worker: PrivateWorker = { fetch: async (_, init) => {
+    const body = JSON.parse(init!.body as string);
+    calls.push(body);
+    return Response.json({ jsonrpc: '2.0', id: body.id, result: '0x' + '0'.repeat(64) });
+  }};
+  await readBalances(wallet, worker, [token]);
+  expect(calls).toHaveLength(1);
+  expect(calls[0].method).toBe('eth_call');
+  expect(calls[0].params[0].to.toLowerCase()).toBe(token.address.toLowerCase());
+  await readBalances(wallet, worker, []);
+  expect(calls).toHaveLength(1);
 });

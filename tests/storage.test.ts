@@ -63,7 +63,7 @@ test('quota errors report that the watchlist was not saved', () => {
 
 import { loadPortfolio, PORTFOLIO_KEY, savePortfolio } from '../src/storage';
 import { makeWallet } from '../src/balances';
-import { validateToken } from '../src/tokens';
+import { validateToken, defaultTokens } from '../src/tokens';
 const operators = ['https://one.invalid', 'https://two.invalid'];
 
 test('portfolio migrates a legacy watchlist with fresh random keys', () => {
@@ -72,7 +72,7 @@ test('portfolio migrates a legacy watchlist with fresh random keys', () => {
   const second = loadPortfolio(operators);
   expect(first.wallets[0]!.address).toBe(getAddress(address));
   expect(first.wallets[0]!.isolationKey).not.toBe(second.wallets[0]!.isolationKey);
-  expect(first.tokens).toEqual([]);
+  expect(first.tokens).toEqual(defaultTokens());
 });
 
 test('portfolio round-trip saves bigint values and token settings, marking restored data as cached', () => {
@@ -82,12 +82,12 @@ test('portfolio round-trip saves bigint values and token settings, marking resto
   wallet.eth = { amount: 0n, updatedAt: timestamp, failed: false };
   wallet.weth = { amount: 12345678901234567890123456789n, updatedAt: timestamp, failed: true };
   wallet.tokens[token.address] = { amount: 1234567n, updatedAt: timestamp, failed: false };
-  expect(savePortfolio([wallet], [token])).toBe(true);
+  expect(savePortfolio([wallet], [...defaultTokens(), token])).toBe(true);
   const serialized = values.get(PORTFOLIO_KEY)!;
   expect(serialized).not.toContain(wallet.isolationKey);
   expect(serialized).not.toContain(wallet.rpcUrl);
   const restored = loadPortfolio(operators);
-  expect(restored.tokens).toEqual([token]);
+  expect(restored.tokens).toEqual([...defaultTokens(), token]);
   expect(restored.wallets[0]!.eth).toEqual({ amount: 0n, updatedAt: timestamp, failed: false, cached: true });
   expect(restored.wallets[0]!.weth.amount).toBe(wallet.weth.amount);
   expect(restored.wallets[0]!.weth.failed).toBe(true);
@@ -107,7 +107,7 @@ test('corrupt cache entries are ignored without hiding valid wallets and token s
   expect(restored.wallets).toHaveLength(1);
   expect(restored.wallets[0]!.eth.amount).toBeUndefined();
   expect(restored.wallets[0]!.weth.amount).toBeUndefined();
-  expect(restored.tokens).toEqual([]);
+  expect(restored.tokens).toEqual(defaultTokens());
 });
 
 test('removing all wallets does not resurrect the legacy watchlist', () => {
@@ -118,6 +118,35 @@ test('removing all wallets does not resurrect the legacy watchlist', () => {
 
 test('blocked portfolio storage keeps an in-memory session usable', () => {
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('blocked'); } });
-  expect(loadPortfolio(operators)).toEqual({ wallets: [], tokens: [] });
+  expect(loadPortfolio(operators)).toEqual({ wallets: [], tokens: defaultTokens() });
   expect(savePortfolio([], [])).toBe(false);
+});
+
+test('removing default tokens and an empty tracked-token list survive reload', () => {
+  const wallet = makeWallet(getAddress(address), operators[0]!);
+  savePortfolio([wallet], [defaultTokens()[1]!]);
+  expect(loadPortfolio(operators).tokens.map(token => token.symbol)).toEqual(['WETH']);
+  savePortfolio([wallet], []);
+  expect(loadPortfolio(operators).tokens).toEqual([]);
+});
+test('legacy v2 data migrates balances and adds default tokens once', () => {
+  const timestamp = Date.now() - 1000;
+  values.set(PORTFOLIO_KEY, JSON.stringify({
+    version: 2, tokens: [], wallets: [{ address, eth: { amount: '123', updatedAt: timestamp }, weth: { amount: '456', updatedAt: timestamp } }],
+  }));
+  const portfolio = loadPortfolio(operators);
+  expect(portfolio.tokens).toEqual(defaultTokens());
+  expect(portfolio.wallets[0]!.eth.amount).toBe(123n);
+  expect(portfolio.wallets[0]!.weth.amount).toBe(456n);
+  savePortfolio(portfolio.wallets, portfolio.tokens.slice(1));
+  expect(loadPortfolio(operators).tokens).toHaveLength(1);
+});
+test('uploaded icons survive storage and unsafe icon URLs do not discard the token', () => {
+  const token = validateToken('0x0000000000000000000000000000000000000001', 'TEST', '6', 'data:image/png;base64,YQ==');
+  savePortfolio([], [token]);
+  expect(loadPortfolio(operators).tokens[0]!.icon).toBe(token.icon);
+  const data = JSON.parse(values.get(PORTFOLIO_KEY)!);
+  data.tokens[0].icon = 'https://tracker.invalid/logo.png';
+  values.set(PORTFOLIO_KEY, JSON.stringify(data));
+  expect(loadPortfolio(operators).tokens).toEqual([{ address: token.address, symbol: 'TEST', decimals: 6 }]);
 });

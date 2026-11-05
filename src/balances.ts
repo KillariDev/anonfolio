@@ -2,7 +2,7 @@ import { createPublicClient, erc20Abi, formatUnits, http, type Address } from 'v
 import { mainnet } from 'viem/chains';
 import type { AnonRpcWorker } from '@anon-rpc/browser-harness';
 import { WETH } from './config';
-import { wethToken, type Token } from './tokens';
+import { defaultTokens, type Token } from './tokens';
 
 export type PrivateWorker = Pick<AnonRpcWorker, 'fetch'>;
 export type Balance = { amount?: bigint; updatedAt?: number; failed: boolean; cached?: boolean };
@@ -29,20 +29,22 @@ export function makeWallet(address: Address, rpcUrl: string): Wallet {
     eth: { failed: false }, weth: { failed: false }, tokens: {}, activity: [], loading: false };
 }
 export function tokenBalance(wallet: Wallet, token: Token): Balance {
+  if (token.address === 'eth') return wallet.eth;
   if (token.address === WETH) return wallet.weth;
   return wallet.tokens[token.address] ??= { failed: false };
 }
+export function setTokenBalance(wallet: Wallet, token: Token, balance: Balance) {
+  if (token.address === 'eth') wallet.eth = balance;
+  else if (token.address === WETH) wallet.weth = balance;
+  else wallet.tokens[token.address] = balance;
+}
 export function prepareActivity(wallet: Wallet, tokens: Token[], onlyFailed = false) {
-  wallet.activity = [
-    { asset: 'eth', symbol: 'ETH', description: 'eth_getBalance(address, latest)', phase: 'waiting', attempt: 0 },
-    ...[wethToken, ...tokens].map(token => ({
-      asset: token.address, symbol: token.symbol,
-      description: 'eth_call · balanceOf(address) on ' + token.address + ' · latest',
-      phase: 'waiting' as const, attempt: 0,
-    })),
-  ];
-  if (onlyFailed) wallet.activity = wallet.activity.filter(item => item.asset === 'eth'
-    ? wallet.eth.failed : item.asset === WETH ? wallet.weth.failed : wallet.tokens[item.asset]?.failed);
+  wallet.activity = tokens.filter(token => !onlyFailed || tokenBalance(wallet, token).failed).map(token => ({
+    asset: token.address, symbol: token.symbol,
+    description: token.address === 'eth' ? 'eth_getBalance(address, latest)'
+      : 'eth_call · balanceOf(address) on ' + token.address + ' · latest',
+    phase: 'waiting', attempt: 0,
+  }));
 }
 export function privateClient(wallet: Wallet, worker: PrivateWorker, onChange: () => void = () => {}) {
   // Every attempt, including viem retries, goes through this wallet's worker route.
@@ -66,23 +68,18 @@ export function privateClient(wallet: Wallet, worker: PrivateWorker, onChange: (
   });
 }
 export async function readBalances(
-  wallet: Wallet, worker: PrivateWorker, tokens: Token[] = [], onChange: () => void = () => {}, onlyFailed = false,
+  wallet: Wallet, worker: PrivateWorker, tokens: Token[] = defaultTokens(), onChange: () => void = () => {}, onlyFailed = false,
 ) {
   prepareActivity(wallet, tokens, onlyFailed);
   const client = privateClient(wallet, worker, onChange);
-  const jobs = [
-    { asset: 'eth', balance: () => wallet.eth, set: (value: Balance) => { wallet.eth = value; },
-      read: () => client.getBalance({ address: wallet.address, blockTag: 'latest' }) },
-    ...[wethToken, ...tokens].map(token => ({
-      asset: token.address, balance: () => tokenBalance(wallet, token),
-      set: (value: Balance) => {
-        if (token.address === WETH) wallet.weth = value;
-        else wallet.tokens[token.address] = value;
-      },
-      read: () => client.readContract({ address: token.address, abi: erc20Abi, functionName: 'balanceOf',
+  const jobs = tokens.map(token => ({
+    asset: token.address, balance: () => tokenBalance(wallet, token),
+    set: (value: Balance) => setTokenBalance(wallet, token, value),
+    read: () => token.address === 'eth'
+      ? client.getBalance({ address: wallet.address, blockTag: 'latest' })
+      : client.readContract({ address: token.address, abi: erc20Abi, functionName: 'balanceOf',
         args: [wallet.address], blockTag: 'latest' }),
-    })),
-  ];
+  }));
   await Promise.all(jobs.filter(job => !onlyFailed || job.balance().failed).map(async job => {
     const activity = wallet.activity.find(item => item.asset === job.asset);
     try {
@@ -96,4 +93,10 @@ export async function readBalances(
     onChange();
   }));
 }
-export const formatBalance = (amount: bigint, decimals = 18) => formatUnits(amount, decimals);
+export function formatBalance(amount: bigint, decimals = 18): string {
+  if (amount < 0n) return '-' + formatBalance(-amount, decimals);
+  if (decimals <= 2) return formatUnits(amount, decimals);
+  const divisor = 10n ** BigInt(decimals - 2);
+  if (amount > 0n && amount < divisor) return '<0.01';
+  return formatUnits((amount + divisor / 2n) / divisor, 2);
+}

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { parseWalletList, validateToken } from '../src/tokens';
+import { parseWalletList, validateToken, wethToken, defaultTokens, validateIcon } from '../src/tokens';
 import { WETH } from '../src/config';
 
 const address = '0x0000000000000000000000000000000000000001';
@@ -20,5 +20,17 @@ test('custom token metadata is validated locally with exact decimal precision', 
   expect(validateToken(address, 'TEST', '255').decimals).toBe(255);
   expect(() => validateToken('invalid', 'TEST', '18')).toThrow('contract address');
   expect(() => validateToken(address, '<script>', '18')).toThrow('symbol');
-  expect(() => validateToken(WETH, 'WETH', '18')).toThrow('already tracked');
+  expect(validateToken(WETH, 'WETH', '18')).toEqual(wethToken);
+});
+
+test('native ETH is an ordinary tracked token with intrinsic native decimals', () => {
+  expect(validateToken('eth', 'ETH', '18')).toEqual(defaultTokens()[0]!);
+  expect(() => validateToken('eth', 'ETH', '6')).toThrow('18 decimals');
+});
+test('icons accept bundled IDs and local raster data, never remote URLs or SVG', () => {
+  expect(validateIcon('builtin:eth')).toBe('builtin:eth');
+  expect(validateIcon('data:image/png;base64,YQ==')).toBe('data:image/png;base64,YQ==');
+  for (const value of ['https://tracker.invalid/logo.png', 'data:image/svg+xml;base64,YQ==', 'data:image/png;base64,' + 'a'.repeat(100000)]) {
+    expect(() => validateIcon(value)).toThrow('icon');
+  }
 });

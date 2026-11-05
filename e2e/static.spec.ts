@@ -29,7 +29,8 @@ test('static build reopens completely offline with saved wallets, token settings
   test.skip(!process.env.BASE_URL, 'Offline shell is emitted only by the production build.');
   await page.setViewportSize({ width: 390, height: 844 });
   const a = '0x0000000000000000000000000000000000000001';
-  const token = { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6 };
+  const icon = 'data:image/png;base64,' + await (await import('node:fs/promises')).readFile(new URL('../src/assets/tokens/eth.png', import.meta.url), 'base64');
+  const token = { icon, address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6 };
   const timestamp = Date.now() - 60_000;
   await page.route('https://**', route => route.abort('failed'));
   await page.goto('/');
@@ -58,7 +59,10 @@ test('static build reopens completely offline with saved wallets, token settings
   expect(cachedUrls.some(url => url.includes('ethereum-rpc') || url.includes('tor-js'))).toBe(false);
   await context.setOffline(true);
   await page.reload();
-  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.234567']);
+  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
+  await expect(page.locator('.total-label img')).toHaveCount(3);
+  await expect.poll(() => page.locator('.total-label img').evaluateAll(images =>
+    images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
   await expect(page.locator('#offline-notice')).toContainText('offline');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('.error')).toHaveText(['Stale · refresh failed', 'Stale · refresh failed', 'Stale · refresh failed']);

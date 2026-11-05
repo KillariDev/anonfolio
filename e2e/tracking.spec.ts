@@ -66,7 +66,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   await expect(page.locator('.activity').first()).toContainText('eth_getBalance(address, latest)');
   await expect(page.locator('.activity').first()).toContainText(usdc);
   await expect(page.locator('.route').first()).toContainText('ethereum-rpc.publicnode.com');
-  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.234567', '1', '0', '1.234567']);
+  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23', '1', '0', '1.23']);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
   const calls = await page.evaluate(() => (window as any).__calls);
@@ -86,21 +86,21 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.234567']);
+  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
   const originalTimes = await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')));
   const snapshot = await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!));
-  expect(snapshot.tokens[0].decimals).toBe(6);
-  expect(snapshot.wallets[0].eth.amount).toBe('1000000000000000000');
+  expect(snapshot.tokens.find((token: any) => token.address === usdc).decimals).toBe(6);
+  expect(snapshot.wallets[0].balances.eth.amount).toBe('1000000000000000000');
   expect(JSON.stringify(snapshot)).not.toContain('isolationKey');
   await page.evaluate(() => { (window as any).__fail = true; });
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.error')).toHaveCount(3);
-  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.234567']);
+  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
   expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))).toEqual(originalTimes);
   await page.unroute('**/src/connection.ts*');
   await mockConnection(page, false, true);
   await page.reload();
-  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.234567']);
+  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
   await expect(page.locator('.error')).toHaveCount(3);
   expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))).toEqual(originalTimes);
   await page.locator('.token-settings summary').click();
@@ -239,7 +239,7 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   await page.locator('#address').fill(addresses.join('\n'));
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.wallet')).toHaveCount(10);
-  await expect(page.locator('.total-amount')).toHaveText(['10', '0', '12.34567']);
+  await expect(page.locator('.total-amount')).toHaveText(['10', '0', '12.35']);
   await expect(page.locator('.total-status')).toHaveText(['10/10 addresses', '10/10 addresses', '10/10 addresses']);
   await expect(page.locator('.wallet-details:visible')).toHaveCount(0);
   await expect(page.locator('#address')).not.toBeVisible();
@@ -255,7 +255,7 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   await page.getByRole('button', { name: 'Details ' + a, exact: true }).click();
   await page.screenshot({ path: 'test-results/compact-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
-  await expect(page.locator('.total-amount')).toHaveText(['9', '0', '11.111103']);
+  await expect(page.locator('.total-amount')).toHaveText(['9', '0', '11.11']);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('#wallets')).toBeVisible();
@@ -285,4 +285,81 @@ test('overview flags partial and stale totals while preserving known values duri
   await expect(page.locator('.total-amount')).toHaveText(['2', '0']);
   await page.evaluate(() => { (window as any).__fail = false; });
   await expect(page.locator('.total-status')).toHaveText(['2/2 addresses', '2/2 addresses'], { timeout: 8000 });
+});
+
+test('default tokens have icons and can be removed and re-added like other tokens', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await expect(page.locator('.total-label .token-icon img')).toHaveCount(2);
+  await expect.poll(() => page.locator('.total-label img').evaluateAll(images =>
+    images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  await openAddressForm(page);
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await page.locator('.token-settings summary').click();
+  await page.getByRole('button', { name: 'Remove token ETH', exact: true }).click();
+  await expect(page.locator('.total-label')).toHaveText(['WETH']);
+  await page.reload();
+  await expect(page.locator('.amount')).toHaveText(['0']);
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(calls.every((call: any) => call.body.method === 'eth_call')).toBe(true);
+  await page.locator('.token-settings summary').click();
+  await page.getByRole('button', { name: 'Remove token WETH', exact: true }).click();
+  await expect(page.locator('.amount')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.total')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__calls.length)).toBe(0);
+  await page.locator('.token-settings summary').click();
+  for (const preset of ['eth', 'weth']) {
+    await page.locator('#token-preset').selectOption(preset);
+    await page.getByRole('button', { name: 'Add token', exact: true }).click();
+  }
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.total-label')).toHaveText(['ETH', 'WETH']);
+  await page.reload();
+  await expect(page.locator('.total-label')).toHaveText(['ETH', 'WETH']);
+});
+
+test('uploaded token icons are saved locally, can be changed on defaults, and make no remote image requests', async ({ page }) => {
+  const remoteImages: string[] = [];
+  page.on('request', request => {
+    if (request.resourceType() === 'image' && /^https?:/.test(request.url())
+      && !request.url().startsWith('http://127.0.0.1:5173') && !request.url().startsWith('http://localhost:5173')) remoteImages.push(request.url());
+  });
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('.token-settings summary').click();
+  await page.getByLabel('Token contract address', { exact: true }).fill(usdc);
+  await page.getByLabel('Symbol', { exact: true }).fill('USDC');
+  await page.getByLabel('Decimals', { exact: true }).fill('6');
+  const icon = { name: 'icon.png', mimeType: 'image/png',
+    buffer: Buffer.from(await (await import('node:fs/promises')).readFile(new URL('../src/assets/tokens/eth.png', import.meta.url))) };
+  await page.locator('#token-icon').setInputFiles(icon);
+  await page.getByRole('button', { name: 'Add token', exact: true }).click();
+  const custom = page.locator('.total').filter({ has: page.locator('.total-label', { hasText: 'USDC' }) });
+  await expect(custom.locator('img')).toHaveAttribute('src', /^data:image\/png;base64,/);
+  const snapshot = await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!));
+  expect(snapshot.version).toBe(3);
+  expect(snapshot.tokens[2].icon).toMatch(/^data:image\/png;base64,/);
+  await page.getByLabel('Change icon ETH', { exact: true }).setInputFiles(icon);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).tokens[0].icon)).toMatch(/^data:image\/png;base64,/);
+  await page.reload();
+  await expect(page.locator('.total-label img')).toHaveCount(3);
+  await expect.poll(() => page.locator('.total-label img').evaluateAll(images =>
+    images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  expect(remoteImages).toEqual([]);
+});
+
+test('invalid icon files leave the tracked list unchanged', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('.token-settings summary').click();
+  await page.getByLabel('Token contract address', { exact: true }).fill(usdc);
+  await page.getByLabel('Symbol', { exact: true }).fill('USDC');
+  await page.getByLabel('Decimals', { exact: true }).fill('6');
+  await page.locator('#token-icon').setInputFiles({ name: 'icon.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') });
+  await page.getByRole('button', { name: 'Add token', exact: true }).click();
+  await expect(page.locator('#token-error')).toContainText('PNG, JPEG or WebP');
+  await expect(page.locator('#token-list li')).toHaveCount(2);
 });
