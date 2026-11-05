@@ -99,3 +99,36 @@ test('off-chain lookup redirects cannot escape the private transport', async () 
   expect(publicFetches).toBe(0);
   expect(wallet.weth.failed).toBe(true);
 });
+
+import { validateToken } from '../src/tokens';
+test('custom token reads use the wallet private route, report retries and save partial results immediately', async () => {
+  const token = validateToken('0x0000000000000000000000000000000000000003', 'USDC', '6');
+  const wallet = makeWallet(addressA, 'https://operator-a.invalid');
+  const calls: any[] = [];
+  const progress: string[] = [];
+  let attempts = 0;
+  let finishToken!: () => void;
+  const tokenGate = new Promise<void>(resolve => { finishToken = resolve; });
+  const pending = readBalances(wallet, { fetch: async (url, init) => {
+    const body = JSON.parse(init!.body as string);
+    calls.push({ body, key: init!.anonOptions!.isolationKey, url: String(url) });
+    const isCustom = body.method === 'eth_call' && body.params[0].to.toLowerCase() === token.address.toLowerCase();
+    if (isCustom) {
+      if (++attempts === 1) throw new Error('temporary private failure');
+      await tokenGate;
+    }
+    return Response.json({ jsonrpc: '2.0', id: body.id,
+      result: body.method === 'eth_getBalance' ? '0x1' : '0x' + (isCustom ? 1234567n : 0n).toString(16).padStart(64, '0') });
+  } }, [token], () => { progress.push(JSON.stringify(wallet.activity)); });
+  await Bun.sleep(20);
+  expect(wallet.eth.amount).toBe(1n);
+  expect(wallet.tokens[token.address]?.amount).toBeUndefined();
+  expect(wallet.activity.find(item => item.asset === 'eth')!.phase).toBe('received');
+  finishToken();
+  await pending;
+  expect(formatBalance(wallet.tokens[token.address]!.amount!, 6)).toBe('1.234567');
+  expect(wallet.activity.find(item => item.asset === token.address)!.attempt).toBe(2);
+  expect(progress.some(entry => entry.includes('"phase":"requesting"'))).toBe(true);
+  expect(new Set(calls.map(call => call.key))).toEqual(new Set([wallet.isolationKey]));
+  expect(calls.filter(call => call.body.method === 'eth_call').every(call => call.body.params[1] === 'latest')).toBe(true);
+});
