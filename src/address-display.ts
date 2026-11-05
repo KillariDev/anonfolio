@@ -24,7 +24,7 @@ export function blockieData(address: string) {
 }
 export function addressDisplay(wallet: TrackedAddress, compact = false) {
   const root = document.createElement('span');
-  root.className = 'address-display' + (compact ? '' : ' full-address');
+  root.className = 'address-display' + (compact ? ' compact-address' : ' full-address');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 8 8');
   svg.setAttribute('width', '28'); svg.setAttribute('height', '28');
@@ -46,16 +46,10 @@ export function addressDisplay(wallet: TrackedAddress, compact = false) {
     text.append(name);
   }
   const address = document.createElement('span');
-  address.className = 'wallet-address' + (compact ? ' sr-only' : '');
+  address.className = 'wallet-address' + (compact ? ' address-value' : '');
   address.textContent = wallet.address;
+  address.title = wallet.address;
   text.append(address);
-  if (compact) {
-    const short = document.createElement('span');
-    short.className = 'address-short'; short.setAttribute('aria-hidden', 'true');
-    short.textContent = wallet.address.slice(0, 8) + '…' + wallet.address.slice(-6);
-    short.title = wallet.address;
-    text.append(short);
-  }
   root.append(svg, text);
   return root;
 }

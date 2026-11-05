@@ -1,3 +1,4 @@
+import appIcon from './assets/anonfolio.svg?no-inline';
 import { addressDisplay } from './address-display';
 import { parseTrackedAddresses } from './addresses';
 import { config, defaultConfig } from './config';
@@ -12,21 +13,8 @@ import { readIcon, tokenIcon } from './icons';
 import './style.css';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<header><a class="brand" href="./" aria-label="Anonfolio home"><span class="brand-mark">a</span>anonfolio<span class="brand-dot">.</span></a><span class="network"><i></i>Ethereum mainnet</span></header>
-<main>
-<div class="page-heading"><h1>Portfolio</h1><span class="local-note">Ethereum balances · saved on this browser</span></div>
-<section class="overview" aria-label="Portfolio token totals">
-<div class="overview-heading"><h2>Token totals</h2><span id="total-count"></span></div>
-<div id="totals" class="totals" aria-live="polite"></div></section>
-<div class="controls">
-<details id="address-panel" class="address-settings"><summary>Add addresses</summary>
-<form id="wallet-form" novalidate>
-<label for="address-name">Address name (optional, for one address)</label><input id="address-name" maxlength="80" autocomplete="off" placeholder="e.g. Savings" aria-describedby="input-error">
-<label for="address">Ethereum wallet addresses</label>
-<div class="input-row"><textarea id="address" name="address" rows="2" placeholder="0x… Paste one address or a list" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="wallet-hint input-error" required></textarea><button class="primary" type="submit">add address to track <span aria-hidden="true">↗</span></button></div>
-<p class="form-hint" id="wallet-hint">One address per line, or separate addresses with commas. To name a list, use Name | 0x… on each line. Names are saved only in this browser.</p>
-<p id="input-error" class="input-error" role="alert"></p><p id="wallet-notice" class="form-hint" role="status"></p></form></details>
-<details id="network-settings"><summary>Settings</summary>
+<header><a class="brand" href="./" aria-label="Anonfolio home"><img class="brand-mark" src="${appIcon}" width="28" height="28" alt="">anonfolio<span class="brand-dot">.</span></a><div class="header-actions"><span class="network"><i></i>Ethereum mainnet</span><details id="network-settings"><summary class="settings-toggle" role="button" aria-label="Settings" title="Settings" aria-controls="settings-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.5"/></svg></summary>
+<section id="settings-panel" class="settings-panel" aria-label="Application settings"><div class="settings-heading"><h2>Settings</h2><button id="close-settings" type="button" aria-label="Close settings">×</button></div>
 <details class="token-settings"><summary>Tracked tokens <span id="token-count"></span></summary>
 <p class="form-hint">Choose the tokens to track across every address. Token changes save automatically.</p>
 <ul id="token-list" aria-label="Tracked tokens"></ul>
@@ -49,7 +37,21 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <p id="bootstrap-hint" class="form-hint">Mainnet HTTPS RPC used publicly to find the worker contract. Watched addresses are never sent here for discovery.</p>
 <p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and restarts private reads; saved balances remain visible.</p>
 <div class="settings-actions"><button class="primary" type="submit">Save settings and reconnect</button><button id="reset-settings" type="button">Restore defaults</button></div>
-<p id="settings-error" class="input-error" role="alert"></p></form></details>
+<p id="settings-error" class="input-error" role="alert"></p></form></section></details></div></header>
+<main>
+<div class="page-heading"><h1>Portfolio</h1><span class="local-note">Ethereum balances · saved on this browser</span></div>
+<section class="overview" aria-label="Portfolio token totals">
+<div class="overview-heading"><h2>Token totals</h2><span id="total-count"></span></div>
+<div id="totals" class="totals" aria-live="polite"></div></section>
+<div class="controls">
+<details id="address-panel" class="address-settings"><summary>Add addresses</summary>
+<form id="wallet-form" novalidate>
+<label for="address-name">Address name (optional, for one address)</label><input id="address-name" maxlength="80" autocomplete="off" placeholder="e.g. Savings" aria-describedby="input-error">
+<label for="address">Ethereum wallet addresses</label>
+<div class="input-row"><textarea id="address" name="address" rows="2" placeholder="0x… Paste one address or a list" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="wallet-hint input-error" required></textarea><button class="primary" type="submit">add address to track <span aria-hidden="true">↗</span></button></div>
+<p class="form-hint" id="wallet-hint">One address per line, or separate addresses with commas. To name a list, use Name | 0x… on each line. Names are saved only in this browser.</p>
+<p id="input-error" class="input-error" role="alert"></p><p id="wallet-notice" class="form-hint" role="status"></p></form></details>
+
 </div>
 <details id="connection" aria-label="Private connection details"></details>
 <p id="offline-notice" role="status"></p><p id="storage-warning" role="status"></p>
@@ -65,6 +67,23 @@ const walletList = document.querySelector<HTMLElement>('#wallets')!;
 walletList.tabIndex = 0;
 const addressPanel = document.querySelector<HTMLDetailsElement>('#address-panel')!;
 addressPanel.open = wallets.length === 0;
+const settingsPanel = document.querySelector<HTMLDetailsElement>('#network-settings')!;
+const settingsToggle = settingsPanel.querySelector<HTMLElement>('summary')!;
+function closeSettings(restoreFocus = false) {
+  settingsPanel.open = false;
+  if (restoreFocus) settingsToggle.focus();
+}
+document.querySelector('#close-settings')!.addEventListener('click', () => closeSettings(true));
+settingsPanel.addEventListener('toggle', () => settingsToggle.setAttribute('aria-expanded', String(settingsPanel.open)));
+document.addEventListener('pointerdown', event => {
+  if (settingsPanel.open && !settingsPanel.contains(event.target as Node)) closeSettings();
+});
+document.addEventListener('focusin', event => {
+  if (settingsPanel.open && !settingsPanel.contains(event.target as Node)) closeSettings();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && settingsPanel.open) { event.preventDefault(); closeSettings(true); }
+});
 const expandedAddresses = new Set<string>();
 const input = document.querySelector<HTMLTextAreaElement>('#address')!;
 const error = document.querySelector<HTMLElement>('#input-error')!;
