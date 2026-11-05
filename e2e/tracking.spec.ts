@@ -66,7 +66,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   await expect(page.locator('.activity-item.requesting')).toHaveCount(6);
   await expect(page.locator('.activity').first()).toContainText('eth_getProof(address)');
   await expect(page.locator('.activity').first()).toContainText(usdc);
-  await expect(page.locator('.route').first()).toContainText('ethereum-rpc.publicnode.com');
+  await expect(page.locator('.activity').first()).toContainText('eth.drpc.org');
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23', '1', '0', '1.23']);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
@@ -606,4 +606,39 @@ test('address removal requires confirmation and cancellation preserves saved bal
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets)).toEqual([]);
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(0);
+});
+
+
+test('TWAP holding estimates, partial totals and custom quote settings persist', async ({ page }) => {
+  await mockVerification(page, true);
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', '≈ 0 USDC']);
+  await expect(page.locator('.price-estimate').first()).toBeVisible();
+  await expect(page.locator('#estimated-total')).toContainText('≈ 2000 USDC');
+  await expect(page.locator('#estimated-total')).not.toContainText('Partial');
+  await addToken(page);
+  await page.getByRole('button', { name: 'Close settings', exact: true }).click();
+  await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', '≈ 0 USDC', 'Unpriced']);
+  await expect(page.locator('#estimated-total')).toContainText('Partial · 2/3 holdings priced');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('Quote token', { exact: true }).selectOption('custom');
+  await page.getByLabel('Quote contract address').fill('invalid');
+  await page.getByLabel('Quote symbol').fill('CUSTOM');
+  await page.getByLabel('Quote fallback decimals').fill('18');
+  await page.getByRole('button', { name: 'Save pricing and refresh' }).click();
+  await expect(page.locator('#pricing-error')).toContainText('valid mainnet');
+  await page.getByLabel('Quote contract address').fill(b);
+  await page.getByLabel('Minimum quote-side liquidity').fill('100');
+  await page.getByRole('button', { name: 'Save pricing and refresh' }).click();
+  await expect(page.locator('#estimated-total')).toContainText('— CUSTOM · Partial');
+  await expect(page.locator('.price-estimate')).toHaveText(['Unpriced', 'Unpriced', 'Unpriced']);
+  await page.reload();
+  await expect(page.locator('#estimated-total')).toContainText('CUSTOM · Partial');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('Quote token', { exact: true })).toHaveValue('custom');
+  await expect(page.getByLabel('Quote contract address')).toHaveValue(b);
+  await expect(page.getByLabel('Minimum quote-side liquidity')).toHaveValue('100');
 });

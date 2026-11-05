@@ -22,7 +22,7 @@ export async function openTokenSettings(page: Page) {
 
 // Deterministic UI tests replace the verifier boundary, not the production worker.
 // Real Helios/proof security is exercised by verification.test.ts and opt-in live tests.
-export async function mockVerification(page: Page) {
+export async function mockVerification(page: Page, priced = false) {
   await page.route('**/src/verification/client.ts*', route => route.fulfill({ contentType: 'text/javascript', body: `
     export async function verifyWallet(wallet, worker, tokens, emit) {
       const block = { hash: '0x'+'11'.repeat(32), stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000 };
@@ -33,7 +33,13 @@ export async function mockVerification(page: Page) {
           try {
             const response=await worker.fetch(wallet.rpcUrl,{method:'POST',body:JSON.stringify(body),anonOptions:{isolationKey:wallet.isolationKey}});
             const data=await response.json();
-            emit({type:'balance',asset:token.address,amount:BigInt(data.result).toString(),block,decimals:token.decimals,decimalsVerified:true}); return;
+            emit({type:'balance',asset:token.address,amount:BigInt(data.result).toString(),block,decimals:token.decimals,decimalsVerified:true});
+            if (${priced}) {
+              const pricing=JSON.parse(localStorage.getItem('anonfolio.pricing.v1')||'null') || {quote:{address:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',symbol:'USDC',decimals:6},minLiquidity:'10000'};
+              if(pricing.quote.symbol==='USDC' && (token.address==='eth'||token.symbol==='WETH')) emit({type:'price',asset:token.address,block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:pricing.quote.address,symbol:'USDC',decimals:6,numerator:'2000000000',denominator:'1000000000000000000',window:1800,blockHash:block.hash,minLiquidity:pricing.minLiquidity}});
+              else emit({type:'price-error',asset:token.address,error:'No direct pool qualifies'});
+            }
+            return;
           } catch(error) {
             if(attempt===1){emit({type:'asset-error',asset:token.address,error:String(error)});return;}
             await new Promise(resolve=>setTimeout(resolve,1000));

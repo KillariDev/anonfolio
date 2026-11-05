@@ -1,3 +1,4 @@
+import { WINDOW, type Estimate } from './pricing';
 import { validateAddressName } from './addresses';
 import { WETH } from './config';
 import { getAddress, isAddress, type Address } from 'viem';
@@ -31,7 +32,16 @@ function restoreBalance(value: unknown): Balance {
     && typeof value.verifiedBlock.number === 'string' && /^0x[0-9a-f]+$/i.test(value.verifiedBlock.number)
     && typeof value.verifiedBlock.timestamp === 'number' && value.verifiedBlock.timestamp > 0 && value.verifiedBlock.timestamp <= Date.now() + 60_000
     ? value.verifiedBlock as import('./verification/trust').VerifiedBlock : undefined;
-  return { amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true,
+  let estimate: Estimate | undefined;
+  const price = value.estimate;
+  if (block && record(price) && typeof price.pool === 'string' && isAddress(price.pool)
+    && typeof price.quote === 'string' && isAddress(price.quote) && typeof price.symbol === 'string' && /^[a-zA-Z0-9._-]{1,16}$/.test(price.symbol)
+    && typeof price.decimals === 'number' && Number.isInteger(price.decimals) && price.decimals >= 0 && price.decimals <= 255
+    && typeof price.numerator === 'string' && /^[1-9][0-9]{0,200}$/.test(price.numerator)
+    && typeof price.denominator === 'string' && /^[1-9][0-9]{0,200}$/.test(price.denominator)
+    && typeof price.minLiquidity === 'string' && /^\d{1,24}(\.\d{1,18})?$/.test(price.minLiquidity)
+    && price.blockHash === block.hash && price.window === WINDOW) estimate = price as Estimate;
+  return { estimate, amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true,
     ...(block ? { verifiedBlock: block } : {}),
     ...(typeof value.decimals === 'number' && Number.isInteger(value.decimals) && value.decimals >= 0 && value.decimals <= 255
       ? { decimals: value.decimals, decimalsVerified: value.decimalsVerified === true } : {}),
@@ -84,7 +94,7 @@ export function loadPortfolio(rpcUrls: string[]): { wallets: Wallet[]; tokens: T
 }
 function savedBalance(balance: Balance) {
   return balance.amount === undefined ? undefined
-    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, decimalsVerified: balance.decimalsVerified };
+    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, decimalsVerified: balance.decimalsVerified, estimate: balance.estimate };
 }
 export function savePortfolio(wallets: Wallet[], tokens: Token[]): boolean {
   try {

@@ -98,6 +98,11 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
     if (req.method() === 'POST' && (body.includes('eth_getBalance') || body.includes('eth_getProof') || body.includes('eth_getCode') || body.includes('70a08231'))) publicBalanceCalls.push(req.url());
   });
   await page.goto(process.env.IPFS_GATEWAY_URL || '/');
+  if (process.env.LIVE_BALANCE_RPC) {
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByLabel('Balance RPC endpoints', { exact: true }).fill(process.env.LIVE_BALANCE_RPC);
+    await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Save settings and reconnect' }).click()]);
+  }
   await openTokenSettings(page);
   await page.getByLabel('Token contract address', { exact: true }).fill('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
   await page.getByLabel('Symbol', { exact: true }).fill('USDC');
@@ -110,6 +115,14 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   await expect(page.locator('.amount').nth(1)).not.toHaveText('—', { timeout: 180_000 });
   await expect(page.locator('.amount').nth(2)).not.toHaveText('—', { timeout: 180_000 });
   expect(publicBalanceCalls).toEqual([]);
+  const refresh = page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true });
+  await expect(refresh).toBeEnabled({ timeout: 180_000 });
+  // Exercise manual recovery from an unavailable oracle without permitting a fallback.
+  if ((await page.locator('.price-estimate').first().textContent()) === 'Unpriced') {
+    await refresh.click();
+    await expect(refresh).toBeEnabled({ timeout: 180_000 });
+  }
+  await expect(page.locator('.price-estimate').first()).toContainText('USDC', { timeout: 5000 });
   const proven = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances) as any[]);
   expect(proven).toHaveLength(3);
   await test.info().attach('verified-balances', { body: JSON.stringify(proven, null, 2), contentType: 'application/json' });
@@ -118,6 +131,11 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
     await expect(page.locator('.wallet').first().locator('.balance').nth(index).locator('.decimals-source')).toHaveText('User-supplied decimals');
   }
   expect(new Set(proven.map(balance => balance.verifiedBlock.hash)).size).toBe(1);
+  expect(proven[0].estimate.pool).toBe('0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640');
+  expect(proven[0].estimate.blockHash).toBe(proven[0].verifiedBlock.hash);
+  expect(proven[0].estimate.window).toBe(1800);
+  expect(proven[1].estimate.numerator).toBe(proven[0].estimate.numerator);
+  expect(proven[1].estimate.denominator).toBe(proven[0].estimate.denominator);
   await page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true })).toBeEnabled({ timeout: 180_000 });
   await expect(page.locator('.error')).toHaveCount(0);

@@ -10,7 +10,7 @@ const list = (value: string | undefined, fallback: string) =>
 export const defaultConfig = {
   bootstrapRpc: import.meta.env.VITE_BOOTSTRAP_RPC || 'https://ethereum-rpc.publicnode.com',
   gateways: list(import.meta.env.VITE_ANON_GATEWAYS, '152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ'),
-  rpcUrls: list(import.meta.env.VITE_RPC_URLS, 'https://ethereum-rpc.publicnode.com,https://eth.drpc.org,https://rpc.ankr.com/eth'),
+  rpcUrls: list(import.meta.env.VITE_RPC_URLS, 'https://eth.drpc.org,https://ethereum-rpc.publicnode.com,https://rpc.ankr.com/eth'),
 };
 for (const url of [defaultConfig.bootstrapRpc, ...defaultConfig.rpcUrls]) {
   if (new URL(url).protocol !== 'https:') throw new Error('RPC endpoints must use HTTPS.');

@@ -1,8 +1,9 @@
 import type { PrivateWorker, Wallet } from '../balances';
+import { loadPricing, type Estimate, type PricingSettings } from '../pricing';
 import type { Token } from '../tokens';
 import type { VerifiedBlock } from './trust';
 import { privateExecutionRpc } from './transport';
-export type VerifiedAmount = { asset: string; amount: string; decimals: number; decimalsVerified: boolean; block: VerifiedBlock };
+export type VerifiedAmount = { asset: string; amount: string; decimals: number; decimalsVerified: boolean; block: VerifiedBlock; estimate?: Estimate };
 export type VerificationEvent = { type: string; message?: string; asset?: string; error?: string } & Partial<VerifiedAmount>;
 let shared: Worker | undefined;
 type Session = { wallet: Wallet; privateWorker: PrivateWorker; event: (event: VerificationEvent) => void; resolve: () => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> };
@@ -34,13 +35,13 @@ function getWorker() {
   };
   return shared;
 }
-export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker, tokens: Token[], event: (event: VerificationEvent) => void) {
+export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker, tokens: Token[], event: (event: VerificationEvent) => void, pricing: PricingSettings = loadPricing()) {
   const id = crypto.randomUUID();
   event({ type: 'progress', message: 'Queued for the shared Helios verifier; each wallet keeps its own Anon-RPC route.' });
   const worker = getWorker();
   return new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => close(new Error('Verification timed out; cached values remain stale.')), 300_000);
     sessions.set(id, { wallet, privateWorker, event, resolve, reject, timer });
-    worker.postMessage({ type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, tokens });
+    worker.postMessage({ type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, tokens, pricing });
   });
 }

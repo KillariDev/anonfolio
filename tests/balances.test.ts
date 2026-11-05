@@ -84,3 +84,23 @@ test('display uses exact integer rounding, at most two decimals and explicit tin
   expect(formatBalance(0n)).toBe('0');
   expect(formatBalance(99999999999999999999999999999n, 18)).toBe('100000000000');
 });
+
+test('oracle failure keeps proven balances available and marks only the estimate unavailable', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((tokens, emit) => {
+    for (const token of tokens) {
+      emit({ type: 'balance', asset: token.address, amount: '7', decimals: 18, decimalsVerified: true, block });
+      emit({ type: 'price-error', asset: token.address, error: 'No direct pool qualifies' });
+    }
+  }));
+  expect(wallet.eth.amount).toBe(7n); expect(wallet.eth.failed).toBe(false);
+  expect(wallet.eth.estimate).toBeUndefined(); expect(wallet.eth.priceError).toContain('No direct pool');
+});
+test('a quote event for another finalized block cannot attach to a proven balance', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((_tokens, emit) => {
+    emit({ type: 'balance', asset: 'eth', amount: '7', decimals: 18, decimalsVerified: true, block });
+    emit({ type: 'price', asset: 'eth', block: { ...block, hash: '0x'+'33'.repeat(32) }, estimate: {} as any });
+  }));
+  expect(wallet.eth.estimate).toBeUndefined();
+});

@@ -3,12 +3,14 @@ import initWasm, { EthereumClient } from '../../vendor/helios/index.js';
 import { setHeliosFetch } from '../../vendor/helios/fetch.js';
 import { CHECKPOINT, CONSENSUS_RPC, HELIOS_WASM_SHA256, checkCheckpointAge, verifiedBlock, type VerifiedBlock } from './trust';
 import { assertPinnedBlock, verifyAccountResponse, verifyCode } from './proofs';
+import { TwapOracle } from '../pricing';
 import type { RpcRequest } from './transport';
 
 const EXECUTION_URL = 'https://helios-execution.invalid/';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 let current: { id: string; rpcHost: string; requests: number; block?: VerifiedBlock } | undefined;
 let client: EthereumClient | undefined;
+const oracle = new TwapOracle();
 let sequence = 0;
 let executionFailure = '';
 let queue = Promise.resolve();
@@ -98,6 +100,7 @@ async function refresh(message: any) {
     current.block = block;
     send('block', { block });
     step('Pinned verified finalized block ' + BigInt(block.number) + ' (' + block.hash + ').');
+    const pricedTokens = [];
     for (const token of message.tokens) {
       executionFailure = '';
       send('asset', { asset: token.address });
@@ -122,7 +125,18 @@ async function refresh(message: any) {
           } catch { step(token.symbol + ': decimals() unavailable; displayed decimals remain explicitly user-supplied.'); }
         }
         send('balance', { asset: token.address, amount: amount.toString(), decimals, decimalsVerified, block });
+        pricedTokens.push(token);
       } catch (error) { send('asset-error', { asset: token.address, error: executionFailure || String(error) }); }
+    }
+    // Oracle outages must not delay proving the remaining wallet balances.
+    for (const token of pricedTokens) {
+      try {
+        const estimate = await oracle.estimate(token, message.pricing, block, async (to, input) => {
+          executionFailure = '';
+          return await helios.call({ to, input, gas: '0x989680' }, { blockHash: block.hash }, undefined) as `0x${string}`;
+        }, step);
+        send('price', { asset: token.address, estimate, block });
+      } catch (error) { send('price-error', { asset: token.address, error: executionFailure || String(error) }); }
     }
     send('done');
   } catch (error) { send('fatal', { error: executionFailure || String(error) }); }

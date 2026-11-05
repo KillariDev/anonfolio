@@ -52,3 +52,10 @@ update it through a reviewed release, comparing independent operators again.
 Updating Helios requires reviewing the corresponding proof, EVM, transport,
 background-task and consensus changes, regenerating/verifying the upstream
 WASM artifact, updating pins, and rerunning adversarial and real Tor tests.
+
+Oracle estimates use the same local `EthereumClient.call` path for canonical v3
+factory/pool methods and quote-token decimals. They run after wallet balance reads
+and use the refresh's pinned finalized block hash. Oracle proof/code/block requests
+share the immutable wallet session and private bridge; no new transport method or
+WASM modification is introduced. The bounded pool/window/block cache contains only
+verified public oracle data, never wallet balances or addresses.

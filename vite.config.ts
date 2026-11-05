@@ -5,6 +5,10 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   // Resolve assets beneath both subdomain gateways and /ipfs/<CID>/ paths.
   base: './',
+  // The trie dependency inspects process?.env.DEBUG inside browser workers.
+  // Match the production browser environment during Vite development too.
+  define: { 'process.env': {} },
+  optimizeDeps: { include: ['@ethereumjs/trie'], esbuildOptions: { define: { 'process.env': '{}' } } },
   worker: { format: 'es' },
   resolve: { alias: { events: 'events/', buffer: 'buffer/' } },
   plugins: [{

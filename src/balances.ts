@@ -2,11 +2,12 @@ import { formatUnits, type Address } from 'viem';
 import { verifyWallet } from './verification/client';
 import type { VerifiedBlock } from './verification/trust';
 import type { AnonRpcWorker } from '@anon-rpc/browser-harness';
+import type { Estimate } from './pricing';
 import { WETH } from './config';
 import { defaultTokens, type Token } from './tokens';
 
 export type PrivateWorker = Pick<AnonRpcWorker, 'fetch'>;
-export type Balance = { amount?: bigint; updatedAt?: number; failed: boolean; cached?: boolean; verifiedBlock?: VerifiedBlock; decimals?: number; decimalsVerified?: boolean };
+export type Balance = { estimate?: Estimate; priceError?: string; amount?: bigint; updatedAt?: number; failed: boolean; cached?: boolean; verifiedBlock?: VerifiedBlock; decimals?: number; decimalsVerified?: boolean };
 export type RequestActivity = {
   asset: string;
   symbol: string;
@@ -68,6 +69,11 @@ export async function readBalances(
         if (activity) activity.phase = 'received';
         pending.delete(token.address);
       }
+      if (event.type === 'price' && token && event.estimate && event.block?.hash === tokenBalance(wallet, token).verifiedBlock?.hash) {
+        tokenBalance(wallet, token).estimate = event.estimate;
+        tokenBalance(wallet, token).priceError = undefined;
+      }
+      if (event.type === 'price-error' && token) tokenBalance(wallet, token).priceError = event.error;
       if (event.type === 'asset-error' && token) {
         tokenBalance(wallet, token).failed = true;
         if (activity) activity.phase = 'failed';

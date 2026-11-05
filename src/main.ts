@@ -8,7 +8,8 @@ import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance,
 import { loadPortfolio, savePortfolio } from './storage';
 import { validateToken, defaultTokens, type Token } from './tokens';
 import { RetryQueue } from './retries';
-import { portfolioTotals } from './totals';
+import { loadPricing, savePricing, validatePricing, defaultPricing, usableEstimate, valueFraction, displayValue } from './pricing';
+import { estimatedTotal, portfolioTotals } from './totals';
 import { readIcon, tokenIcon } from './icons';
 import './style.css';
 
@@ -27,6 +28,13 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <label for="token-icon">Icon (optional)</label><input id="token-icon" type="file" accept="image/png,image/jpeg,image/webp"><p class="form-hint">Upload a PNG, JPEG or WebP up to 1 MB. Icons are stored in this browser.</p>
 <p class="form-hint">Use the token's actual symbol and decimals (for example, USDC uses 6). You supply these display settings; balanceOf and decimals are executed locally against proven code and storage, with no approvals or transactions.</p>
 <button type="submit">Add token</button><p id="token-error" class="input-error" role="alert"></p></form></details>
+<form id="pricing-form" novalidate>
+<h2>Price estimates</h2>
+<label for="pricing-preset">Quote token</label><select id="pricing-preset"><option value="usdc">USDC (Ethereum mainnet)</option><option value="custom">Custom ERC-20</option></select>
+<div id="pricing-custom"><label for="pricing-address">Quote contract address</label><input id="pricing-address" spellcheck="false" autocomplete="off"><label for="pricing-symbol">Quote symbol</label><input id="pricing-symbol" maxlength="16" autocomplete="off"><label for="pricing-decimals">Quote fallback decimals</label><input id="pricing-decimals" type="number" min="0" max="255"></div>
+<label for="pricing-liquidity">Minimum quote-side liquidity</label><input id="pricing-liquidity" inputmode="decimal" autocomplete="off">
+<p class="form-hint">30-minute Uniswap v3 TWAP from one direct token/quote pool. No multihop. Both current and harmonic virtual quote reserves must meet this amount (default 10,000 USDC). Quote decimals are verified on-chain. No qualifying pool means no estimate.</p>
+<button type="submit">Save pricing and refresh</button><p id="pricing-error" class="input-error" role="alert"></p></form>
 <form id="settings-form" novalidate>
 <h2>Network connection</h2>
 <label for="settings-gateways">Tor gateways</label><textarea id="settings-gateways" rows="2" spellcheck="false" autocomplete="off" aria-describedby="gateway-hint settings-error"></textarea>
@@ -42,6 +50,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="page-heading"><h1>Portfolio</h1><span class="local-note">Ethereum balances · saved on this browser</span></div>
 <section class="overview" aria-label="Portfolio token totals">
 <div class="overview-heading"><h2>Token totals</h2><span id="total-count"></span></div>
+<p id="estimated-total" aria-live="polite"></p>
 <div id="totals" class="totals" aria-live="polite"></div></section>
 <div class="controls">
 <details id="address-panel" class="address-settings"><summary>Add addresses</summary>
@@ -63,6 +72,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 let state: ConnectionState = 'starting';
 let connectionMessage = 'Preparing public worker discovery. Wallet balance requests wait for the private worker.';
 const { wallets, tokens } = loadPortfolio(config.rpcUrls);
+let pricing = loadPricing();
 const walletList = document.querySelector<HTMLElement>('#wallets')!;
 walletList.tabIndex = 0;
 const addressPanel = document.querySelector<HTMLDetailsElement>('#address-panel')!;
@@ -139,7 +149,7 @@ function renderConnection() {
   const detail = document.createElement('p');
   detail.className = 'connection-detail';
   detail.textContent = state === 'starting' ? connectionMessage
-    : state === 'ready' ? 'Balance requests go to the RPC operator listed on each wallet. Worker readiness does not guarantee that every Tor route or operator is reachable.'
+    : state === 'ready' ? 'Balance requests use the configured RPC operators. Worker readiness does not guarantee that every Tor route or operator is reachable.'
     : 'Saved balances remain visible. ' + retryMessage('connection');
   const gateway = document.createElement('p');
   gateway.className = 'connection-detail';
@@ -171,6 +181,12 @@ function balanceNode(symbol: string, decimals: number, balance: Balance, pending
     : balance.cached ? (balance.verifiedBlock ? '' : 'Unverified saved value · reverify required') : balance.updatedAt ? (balance.verifiedBlock ? 'Verified finalized' + (balance.amount === 0n ? ' · proven zero' : '') : 'Unverified · reverify required') : 'Awaiting first read';
   if (balance.amount !== undefined && !balance.verifiedBlock) status.textContent = 'Unverified saved value · ' + (balance.failed ? 'verification failed' : 'reverify required');
   box.append(label, amount, status);
+  const estimate = usableEstimate(balance, pricing);
+  const price = document.createElement('small'); price.className = 'price-estimate';
+  price.textContent = estimate ? '≈ ' + formatBalance(displayValue(valueFraction(balance.amount!, estimate)), estimate.decimals + 18) + ' ' + pricing.quote.symbol + (balance.cached || balance.failed ? ' · stale' : '') : 'Unpriced';
+  price.title = estimate ? '30-minute direct-pool TWAP · ' + estimate.pool + ' · finalized block ' + estimate.blockHash : balance.priceError || 'Waiting for a qualifying direct pool at the balance’s verified block.';
+  const values = document.createElement('div'); values.className = 'balance-values';
+  values.append(amount, price); box.insertBefore(values, status);
   if (balance.verifiedBlock) box.title = 'Finalized block ' + BigInt(balance.verifiedBlock.number) + ' · ' + balance.verifiedBlock.hash + ' · ' + new Date(balance.verifiedBlock.timestamp).toLocaleString();
   if (!native) {
     box.title += balance.decimalsVerified ? ' · decimals verified by local EVM' : ' · decimals are user-supplied';
@@ -248,6 +264,12 @@ function renderTokens() {
   }
 }
 function renderTotals() {
+  const estimate = estimatedTotal(wallets, tokens, pricing);
+  const summary = document.querySelector('#estimated-total')!;
+  summary.textContent = 'Estimated total: ' + (estimate.known && !estimate.decimalsMismatch ? '≈ ' + formatBalance(displayValue(estimate.value), estimate.decimals + 18) : '—') + ' ' + pricing.quote.symbol
+    + (estimate.known < estimate.count || estimate.decimalsMismatch ? ' · Partial' : '')
+    + ' · ' + estimate.known + '/' + estimate.count + ' holdings priced · 30-minute TWAP'
+    + (estimate.mixedBlocks ? ' · mixed finalized blocks' : '') + (estimate.stale ? ' · stale' : '');
   const totals = document.querySelector('#totals')!;
   totals.replaceChildren();
   document.querySelector('#total-count')!.textContent = wallets.length + ' tracked address' + (wallets.length === 1 ? '' : 'es');
@@ -619,3 +641,27 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     document.querySelector('#offline-notice')!.textContent = 'Offline page caching is unavailable. Balances are still saved locally, but reopening the page may need a connection.';
   });
 }
+
+const pricingPreset = document.querySelector<HTMLSelectElement>('#pricing-preset')!;
+const quoteAddress = document.querySelector<HTMLInputElement>('#pricing-address')!;
+const quoteSymbol = document.querySelector<HTMLInputElement>('#pricing-symbol')!;
+const quoteDecimals = document.querySelector<HTMLInputElement>('#pricing-decimals')!;
+const quoteLiquidity = document.querySelector<HTMLInputElement>('#pricing-liquidity')!;
+pricingPreset.value = pricing.quote.address === defaultPricing().quote.address ? 'usdc' : 'custom';
+quoteAddress.value = pricing.quote.address; quoteSymbol.value = pricing.quote.symbol;
+quoteDecimals.value = String(pricing.quote.decimals); quoteLiquidity.value = pricing.minLiquidity;
+function showPricingCustom() { document.querySelector<HTMLElement>('#pricing-custom')!.hidden = pricingPreset.value !== 'custom'; }
+pricingPreset.onchange = showPricingCustom; showPricingCustom();
+document.querySelector('#pricing-form')!.addEventListener('submit', event => {
+  event.preventDefault();
+  const error = document.querySelector('#pricing-error')!;
+  try {
+    const next = validatePricing({ quote: pricingPreset.value === 'usdc' ? defaultPricing().quote : { address: quoteAddress.value, symbol: quoteSymbol.value, decimals: Number(quoteDecimals.value) }, minLiquidity: quoteLiquidity.value });
+    if (!savePricing(next)) throw new Error('Browser storage unavailable; pricing settings were not changed.');
+    pricing = next;
+    // Old quote settings must never be mixed with freshly requested valuations.
+    wallets.forEach(wallet => tokens.forEach(token => { delete tokenBalance(wallet, token).estimate; delete tokenBalance(wallet, token).priceError; }));
+    error.textContent = ''; persist(); render(); closeSettings();
+    wallets.forEach(wallet => { void refreshWallet(wallet); });
+  } catch (cause) { error.textContent = (cause as Error).message; }
+});

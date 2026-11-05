@@ -8,6 +8,10 @@ export async function privateExecutionRpc(worker: PrivateWorker, wallet: Pick<Wa
     signal: AbortSignal.timeout(90_000), anonOptions: { isolationKey: wallet.isolationKey } });
   if (!response.ok) throw new Error('Private RPC returned HTTP ' + response.status);
   const data = await response.json();
-  if (!data || data.id !== request.id || data.jsonrpc !== '2.0' || !('result' in data) || data.error) throw new Error('Private RPC response is unavailable or invalid.');
+  if (data?.error && data.id === request.id && data.jsonrpc === '2.0') {
+    const reason = typeof data.error.message === 'string' ? data.error.message.slice(0, 300) : 'request rejected';
+    throw new Error('Private ' + request.method + ' rejected (' + String(data.error.code) + '): ' + reason);
+  }
+  if (!data || data.id !== request.id || data.jsonrpc !== '2.0' || !('result' in data)) throw new Error('Private RPC response is unavailable or invalid.');
   return data;
 }
