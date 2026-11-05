@@ -42,10 +42,11 @@ test('partial success stores independently while failed assets retain old amount
   wallet.weth = { amount: 9n, updatedAt: 1, failed: false };
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((tokens, emit) => {
     emit({ type: 'balance', asset: 'eth', amount: '5', decimals: 18, block });
-    emit({ type: 'asset-error', asset: tokens[1]!.address, error: 'Tampered code' });
+    emit({ type: 'progress', message: 'Pricing ETH in the other lane' });
+    emit({ type: 'asset-error', asset: tokens[1]!.address, error: 'Tampered code', message: 'WETH balance verification' });
   }));
   expect(wallet.eth.amount).toBe(5n);
-  expect(wallet.weth).toEqual({ amount: 9n, updatedAt: 1, failed: true, failure: expect.objectContaining({ message: 'Tampered code' }) });
+  expect(wallet.weth).toEqual({ amount: 9n, updatedAt: 1, failed: true, failure: expect.objectContaining({ message: 'Tampered code', stage: 'WETH balance verification' }) });
 });
 test('automatic recovery selects failed assets and keeps their original private identity', async () => {
   const wallet = makeWallet(address, 'https://one.example');
@@ -137,4 +138,28 @@ test('stage changes and concurrent request phases update independently and clear
   }));
   expect(wallet.networkRequests).toEqual([]);
   expect(wallet.eth.failed).toBe(true);
+});
+
+for (const outcome of ['same block','different block','failed balance'] as const) test('early oracle result waits for its balance proof: '+outcome, async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  const estimate = { blockHash:block.hash } as any;
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((_tokens,emit) => {
+    emit({type:'price-start',asset:'eth',stage:'balances-pricing'});
+    expect(wallet.verificationStage).toBe('balances-pricing');
+    emit({type:'price',asset:'eth',block,estimate});
+    expect(wallet.eth.estimate).toBeUndefined();
+    expect(wallet.eth.amount).toBeUndefined();
+    if (outcome === 'failed balance') emit({type:'asset-error',asset:'eth',error:'Invalid account proof'});
+    else emit({type:'balance',asset:'eth',amount:'3',block:outcome === 'same block' ? block : {...block,hash:'0x'+'33'.repeat(32)}});
+  }));
+  expect(wallet.eth.estimate).toEqual(outcome === 'same block' ? estimate : undefined);
+});
+
+test('an early oracle failure survives balance success without marking that balance failed', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((_tokens,emit) => {
+    emit({type:'price-error',asset:'eth',error:'No direct pool qualifies'});
+    emit({type:'balance',asset:'eth',amount:'0',block});
+  }));
+  expect(wallet.eth).toMatchObject({amount:0n,failed:false,priceError:'No direct pool qualifies'});
 });

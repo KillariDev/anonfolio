@@ -1,7 +1,7 @@
-export type VerificationStage = 'connection' | 'queued' | 'verifier' | 'consensus' | 'balances' | 'pricing';
+export type VerificationStage = 'connection' | 'queued' | 'verifier' | 'consensus' | 'balances' | 'balances-pricing' | 'pricing';
 export const stageLabels: Record<VerificationStage, string> = {
   connection: 'Starting private connection', queued: 'Queued for the verifier', verifier: 'Preparing verifier',
-  consensus: 'Syncing finalized Ethereum state', balances: 'Verifying balances', pricing: 'Reading price estimates',
+  consensus: 'Syncing finalized Ethereum state', balances: 'Verifying balances', 'balances-pricing': 'Verifying balances and prices', pricing: 'Reading price estimates',
 };
 export type NetworkProgress = { requestId: number; method: string; host: string; state: 'waiting' | 'reading' | 'received'; startedAt: number; deadline: number; asset?: string };
 export function progressTime(startedAt: number, now = Date.now(), deadline?: number) {

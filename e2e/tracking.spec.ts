@@ -969,3 +969,37 @@ test('verification progress distinguishes consensus, actual private requests and
   await expect(panel).toHaveCount(0);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
 });
+
+test('parallel prices remain hidden until the matching finalized balance is proven', async ({page}) => {
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await openWalletDetails(page,a);
+  await page.evaluate(() => {
+    const worker=(window as any).__verifiers[0];
+    const emit=(event:object)=>worker.onmessage({data:{...event,run:worker.request.id}});
+    const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
+    (window as any).__parallelBlock=block;
+    emit({type:'progress',stage:'balances-pricing',message:'Proving balances and reading verified price oracles in parallel.'});
+    emit({type:'asset',asset:'eth',stage:'balances-pricing'});
+    emit({type:'price-start',asset:'eth',stage:'balances-pricing'});
+    emit({type:'price',asset:'eth',block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',symbol:'USDC',decimals:6,numerator:'2000000000',denominator:'1000000000000000000',window:1800,blockHash:block.hash,minLiquidity:'10000'}});
+  });
+  await expect(page.locator('.verification-stages [aria-current="step"]')).toHaveText(['Balances','Prices']);
+  await expect(page.locator('.progress-heading')).toContainText('Verifying balances and prices');
+  await expect(page.locator('.amount').first()).toHaveText('—');
+  await expect(page.locator('.price-estimate').first()).toHaveText('Unpriced');
+  await page.evaluate(() => {
+    const worker=(window as any).__verifiers[0];
+    worker.onmessage({data:{type:'balance',run:worker.request.id,asset:'eth',amount:'1000000000000000000',block:(window as any).__parallelBlock}});
+  });
+  await expect(page.locator('.amount').first()).toHaveText('1');
+  await expect(page.locator('.price-estimate').first()).toHaveText('≈ 2000 USDC');
+  await page.evaluate(() => {
+    const worker=(window as any).__verifiers[0];
+    worker.onmessage({data:{type:'fatal',run:worker.request.id,error:'Remaining private request failed'}});
+  });
+  await expect(page.locator('.wallet .spinner')).toHaveCount(0);
+  await expect(page.locator('.amount').first()).toHaveText('1');
+});

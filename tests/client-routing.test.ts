@@ -112,3 +112,43 @@ test('queued wallets have no active timer; failure starts the next job and late 
     Object.defineProperty(globalThis,'Worker',{configurable:true,value:OriginalWorker});
   }
 });
+
+test('overlapping balance and oracle requests stay on the wallet route and cancel together', async () => {
+  const OriginalWorker = globalThis.Worker;
+  let fake: any;
+  class BridgeWorker {
+    onmessage: any; onerror: any; sent: any[]=[]; terminated=false;
+    constructor() { fake=this; }
+    postMessage(data: any) { this.sent.push(data); }
+    terminate() { this.terminated=true; }
+  }
+  Object.defineProperty(globalThis,'Worker',{configurable:true,value:BridgeWorker});
+  const calls: any[] = [], events: any[] = [];
+  const privateWorker = { fetch: async (_url:any,init:any) => {
+    calls.push(init);
+    return await new Promise<Response>((_resolve,reject)=>init.signal.addEventListener('abort',()=>reject(init.signal.reason),{once:true}));
+  }};
+  const wallet=makeWallet('0x0000000000000000000000000000000000000001','https://execution.example/');
+  let result: Promise<any> | undefined;
+  try {
+    result=verifyWallet(wallet,privateWorker,[ethToken],event=>events.push(event)).catch(error=>error);
+    const run=fake.sent[0].id;
+    await fake.onmessage({data:{type:'progress',run,stage:'balances-pricing'}});
+    await fake.onmessage({data:{type:'price-start',run,asset:'eth',stage:'balances-pricing'}});
+    const balance=fake.onmessage({data:{type:'rpc',run,id:1,body:{jsonrpc:'2.0',id:1,method:'eth_getProof',params:[wallet.address,[],{blockHash:'0x'+'11'.repeat(32)}]}}});
+    const price=fake.onmessage({data:{type:'rpc',run,id:2,body:{jsonrpc:'2.0',id:2,method:'eth_getProof',params:['0x1F98431c8aD98523631AE4a59f267346ea31F984',[],{blockHash:'0x'+'11'.repeat(32)}]}}});
+    await Promise.resolve();
+    expect(calls).toHaveLength(2);
+    expect(calls.every(init=>init.anonOptions.isolationKey===wallet.isolationKey)).toBe(true);
+    expect(events.filter(event=>event.type==='network').map(event=>event.request.requestId)).toEqual([1,2]);
+    await fake.onmessage({data:{type:'fatal',run,error:'Invalid storage proof'}});
+    await Promise.all([balance,price]);
+    expect((await result).message).toContain('Invalid storage proof');
+    expect(calls.every(init=>init.signal.aborted)).toBe(true);
+    expect(events.filter(event=>event.type==='price-error')).toMatchObject([{asset:'eth',error:'Invalid storage proof'}]);
+    expect(fake.terminated).toBe(true);
+  } finally {
+    fake?.onerror?.({message:'Cleanup'}); await result;
+    Object.defineProperty(globalThis,'Worker',{configurable:true,value:OriginalWorker});
+  }
+});

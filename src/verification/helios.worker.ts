@@ -7,11 +7,12 @@ import { assertPinnedBlock, verifyAccountResponse, verifyCode } from './proofs';
 import { TwapOracle } from '../pricing';
 import { assertConsensusUrl, type RpcRequest } from './transport';
 import { downloadVerifier } from './download';
+import { parallelReads } from './parallel';
 
 let activeCheckpoint: Checkpoint = DEFAULT_CHECKPOINT;
 const EXECUTION_URL = 'https://helios-execution.invalid/';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
-let current: { id: string; rpcHost: string; requests: number; asset?: string; block?: VerifiedBlock } | undefined;
+let current: { id: string; rpcHost: string; requests: number; block?: VerifiedBlock } | undefined;
 let client: EthereumClient | undefined;
 const oracle = new TwapOracle();
 let sequence = 0;
@@ -32,7 +33,7 @@ async function rpc(body: RpcRequest) {
   const run = current.id;
   const id = ++sequence;
   const response = new Promise<any>((resolve, reject) => replies.set(id, { resolve, reject }));
-  send('rpc', { id, body, asset: current.asset });
+  send('rpc', { id, body });
   const result = await response;
   if (current?.id !== run) throw new Error('Obsolete wallet execution response.');
   return result;
@@ -88,7 +89,9 @@ async function internalFetch(request: Request): Promise<Response> {
 }
 setHeliosFetch(request => internalFetch(request).catch(error => {
   executionFailure = String(error);
-  step('Verification transport rejected a request: ' + executionFailure);
+  // A rejected witness invalidates this refresh, including parallel oracle work.
+  // Stop immediately rather than attributing a shared transport error to another lane.
+  send('fatal', { error: executionFailure });
   throw error;
 }));
 async function synced(checkpoint: Checkpoint) {
@@ -121,11 +124,9 @@ async function refresh(message: any) {
     current.block = block;
     send('block', { block });
     step('Verified finalized block ' + BigInt(block.number) + ' selected for every balance in this refresh.', 'balances');
-    const pricedTokens = [];
-    for (const token of message.tokens) {
-      current.asset = token.address;
-      executionFailure = '';
-      send('asset', { asset: token.address });
+    let stage: VerificationStage = 'balances-pricing';
+    await parallelReads(message.tokens, async token => {
+      send('asset', { asset: token.address, stage });
       try {
         let amount: bigint;
         const decimals = token.decimals;
@@ -141,21 +142,19 @@ async function refresh(message: any) {
 
         }
         send('balance', { asset: token.address, amount: amount.toString(), decimals, block });
-        pricedTokens.push(token);
-      } catch (error) { send('asset-error', { asset: token.address, error: executionFailure || String(error) }); }
-    }
-    // Oracle outages must not delay proving the remaining wallet balances.
-    for (const token of pricedTokens) {
-      current.asset = token.address;
-      send('price-start', { asset: token.address });
+      } catch (error) { send('asset-error', { asset: token.address, error: String(error), message: token.symbol + ' balance verification at finalized block ' + BigInt(block.number) }); }
+    }, async token => {
+      send('price-start', { asset: token.address, stage });
       try {
         const estimate = await oracle.estimate(token, message.pricing, block, async (to, input) => {
-          executionFailure = '';
           return await helios.call({ to, input, gas: '0x989680' }, { blockHash: block.hash }, undefined) as `0x${string}`;
-        }, step);
+        }, message => step(message));
         send('price', { asset: token.address, estimate, block });
-      } catch (error) { send('price-error', { asset: token.address, error: executionFailure || String(error) }); }
-    }
+      } catch (error) { send('price-error', { asset: token.address, error: String(error) }); }
+    }, nextStage => {
+      stage = nextStage;
+      step(nextStage === 'balances-pricing' ? 'Proving balances and reading verified price oracles in parallel at the selected finalized block.' : nextStage === 'pricing' ? 'Balance proofs finished; waiting for verified price estimates.' : 'Price queries finished; waiting for balance proofs.', nextStage);
+    });
     send('done');
   } catch (error) { send('fatal', { error: executionFailure || String(error) }); }
   finally { current = undefined; codeHashes.clear(); }

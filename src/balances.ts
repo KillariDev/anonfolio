@@ -1,7 +1,7 @@
 import type { NetworkProgress, VerificationStage } from './verification/progress';
 import { formatUnits, type Address } from 'viem';
 import { errorMessage, readFailure, type ReadFailure } from './errors';
-import { verifyWallet } from './verification/client';
+import { verifyWallet, type VerificationEvent } from './verification/client';
 import type { VerifiedBlock } from './verification/trust';
 import type { AnonRpcWorker } from '@anon-rpc/browser-harness';
 import type { Estimate } from './pricing';
@@ -67,10 +67,11 @@ export async function readBalances(
   wallet.queuedForVerifier = false;
   const pending = new Set(selected.map(token => token.address as string));
   const reported = new Set<string>();
+  const earlyPrices = new Map<string, VerificationEvent>();
   let fatal: ReadFailure | undefined;
   try {
     await verifier(wallet, worker, selected, event => {
-      const stage = event.type === 'queued' ? 'queued' : event.type === 'started' ? 'verifier' : event.type === 'asset' ? 'balances' : event.type === 'price-start' ? 'pricing' : event.stage;
+      const stage = event.stage || (event.type === 'queued' ? 'queued' : event.type === 'started' ? 'verifier' : event.type === 'asset' ? 'balances' : event.type === 'price-start' ? 'pricing' : undefined);
       if (stage && stage !== wallet.verificationStage) { wallet.verificationStage = stage; wallet.stageStartedAt = Date.now(); }
       if (event.type === 'network' && event.request) {
         wallet.networkRequests = (wallet.networkRequests || []).filter(request => request.requestId !== event.request!.requestId);
@@ -89,15 +90,20 @@ export async function readBalances(
           verifiedBlock: event.block, decimals: token.decimals });
         if (activity) activity.phase = 'received';
         pending.delete(token.address);
+        const early = earlyPrices.get(token.address);
+        if (early?.type === 'price' && early.block?.hash === event.block.hash) tokenBalance(wallet, token).estimate = early.estimate;
+        if (early?.type === 'price-error') tokenBalance(wallet, token).priceError = errorMessage(early.error);
+        earlyPrices.delete(token.address);
       }
-      if (event.type === 'price' && token && event.estimate && event.block?.hash === tokenBalance(wallet, token).verifiedBlock?.hash) {
+      if ((event.type === 'price' || event.type === 'price-error') && token && pending.has(token.address)) earlyPrices.set(token.address, event);
+      if (event.type === 'price' && token && !pending.has(token.address) && event.estimate && event.block?.hash === tokenBalance(wallet, token).verifiedBlock?.hash) {
         tokenBalance(wallet, token).estimate = event.estimate;
         tokenBalance(wallet, token).priceError = undefined;
       }
-      if (event.type === 'price-error' && token) tokenBalance(wallet, token).priceError = errorMessage(event.error);
+      if (event.type === 'price-error' && token && !pending.has(token.address)) tokenBalance(wallet, token).priceError = errorMessage(event.error);
       if (event.type === 'asset-error' && token) {
         tokenBalance(wallet, token).failed = true;
-        tokenBalance(wallet, token).failure = readFailure(event.error, wallet.verificationStatus);
+        tokenBalance(wallet, token).failure = readFailure(event.error, event.message || wallet.verificationStatus);
         reported.add(token.address);
         if (activity) activity.phase = 'failed';
         wallet.verificationStatus = tokenBalance(wallet, token).failure!.message;

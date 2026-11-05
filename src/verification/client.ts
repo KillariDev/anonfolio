@@ -12,7 +12,7 @@ let shared: Worker | undefined;
 let verifierAbort: AbortController | undefined;
 let consensusRoute: { worker: PrivateWorker; key: string } | undefined;
 type Session = { wallet: Wallet; privateWorker: PrivateWorker; event: (event: VerificationEvent) => void; resolve: () => void; reject: (error: Error) => void;
-  remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAsset?: string; controller: AbortController; timer?: ReturnType<typeof setTimeout>; request: object };
+  remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAssets: Set<string>; controller: AbortController; timer?: ReturnType<typeof setTimeout>; request: object };
 const sessions = new Map<string, Session>();
 let active: string | undefined;
 function resetWorker(error: Error) {
@@ -23,7 +23,7 @@ function finish(id: string, error?: Error, reset = false) {
   const session = sessions.get(id);
   if (!session) return;
   clearTimeout(session.timer); sessions.delete(id);
-  if (error && session.pricingAsset) session.event({ type: 'price-error', asset: session.pricingAsset, error: error.message });
+  if (error) for (const asset of session.pricingAssets) session.event({ type: 'price-error', asset, error: error.message });
   session.controller.abort(error || new Error('Verification finished.'));
   if (active === id) active = undefined;
   if (reset) resetWorker(error || new Error('Verifier reset.'));
@@ -98,10 +98,10 @@ function getWorker() {
       finish(message.run, message.type === 'fatal' ? new Error(message.error) : undefined, message.type === 'fatal');
     } else {
       if (message.stage) session.stage = message.stage;
-      if (message.type === 'asset') session.stage = 'balances';
-      if (message.type === 'price-start') session.stage = 'pricing';
-      if (message.type === 'price-start') session.pricingAsset = message.asset;
-      else if (message.type === 'price' || message.type === 'price-error') session.pricingAsset = undefined;
+      if (!message.stage && message.type === 'asset') session.stage = 'balances';
+      if (!message.stage && message.type === 'price-start') session.stage = 'pricing';
+      if (message.type === 'price-start') session.pricingAssets.add(message.asset);
+      else if (message.type === 'price' || message.type === 'price-error') session.pricingAssets.delete(message.asset);
       session.event(message);
       if (message.type === 'balance' || message.type === 'asset-error') {
         session.remaining.delete(message.asset);
@@ -116,7 +116,7 @@ export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker,
   const id = crypto.randomUUID();
   event({ type: 'queued', message: 'Queued for the shared Helios verifier; waiting for the active address to finish.' });
   return new Promise<void>((resolve, reject) => {
-    sessions.set(id, { wallet, privateWorker, event, resolve, reject, remaining: new Set(tokens.map(token => token.address)), succeeded: 0, controller: new AbortController(),
+    sessions.set(id, { wallet, privateWorker, event, resolve, reject, remaining: new Set(tokens.map(token => token.address)), succeeded: 0, pricingAssets: new Set(), controller: new AbortController(),
       request: { type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, checkpoint: config.checkpoint || DEFAULT_CHECKPOINT, tokens, pricing } });
     pump();
   });

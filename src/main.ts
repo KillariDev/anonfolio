@@ -385,12 +385,12 @@ function verificationPanel(wallet: Wallet) {
   panel.setAttribute('aria-label', 'Verification progress');
   const stage = wallet.verificationStage || 'connection';
   const phases: VerificationStage[] = ['connection', 'verifier', 'consensus', 'balances', 'pricing'];
-  const index = stage === 'queued' ? 1 : phases.indexOf(stage);
+  const index = stage === 'queued' ? 1 : stage === 'balances-pricing' ? 3 : phases.indexOf(stage);
   const steps = document.createElement('ol'); steps.className = 'verification-stages';
   ['Connection', 'Verifier', 'Consensus', 'Balances', 'Prices'].forEach((label, step) => {
     const item = document.createElement('li'); item.textContent = label;
-    item.className = step < index ? 'completed' : step === index ? 'current' : '';
-    if (step === index) item.setAttribute('aria-current', 'step');
+    item.className = step < index ? 'completed' : (step === index || stage === 'balances-pricing' && step === 4) ? 'current' : '';
+    if (step === index || stage === 'balances-pricing' && step === 4) item.setAttribute('aria-current', 'step');
     steps.append(item);
   });
   const heading = document.createElement('div'); heading.className = 'progress-heading';
