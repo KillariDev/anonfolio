@@ -1,3 +1,4 @@
+import { readFailure } from './errors';
 import { WINDOW, type Estimate } from './pricing';
 import { validateAddressName } from './addresses';
 import { WETH } from './config';
@@ -22,11 +23,16 @@ export function saveAddresses(addresses: Address[]): boolean {
   catch { return false; }
 }
 function restoreBalance(value: unknown): Balance {
-  if (!record(value) || typeof value.amount !== 'string' || !/^\d{1,78}$/.test(value.amount)
+  if (!record(value)) return { failed: false };
+  const failure = value.failed === true && record(value.failure) && typeof value.failure.message === 'string'
+    && typeof value.failure.at === 'number' && Number.isSafeInteger(value.failure.at) && value.failure.at > 0 && value.failure.at <= Date.now() + 60_000
+    ? { ...readFailure(value.failure.message, typeof value.failure.stage === 'string' ? value.failure.stage : undefined), at: value.failure.at } : undefined;
+  const unavailable: Balance = failure ? { failed: true, failure, cached: true } : { failed: false };
+  if (typeof value.amount !== 'string' || !/^\d{1,78}$/.test(value.amount)
     || typeof value.updatedAt !== 'number' || !Number.isSafeInteger(value.updatedAt)
-    || value.updatedAt <= 0 || value.updatedAt > Date.now() + 60_000) return { failed: false };
+    || value.updatedAt <= 0 || value.updatedAt > Date.now() + 60_000) return unavailable;
   const amount = BigInt(value.amount);
-  if (amount >= 2n ** 256n) return { failed: false };
+  if (amount >= 2n ** 256n) return unavailable;
   const block = record(value.verifiedBlock) && typeof value.verifiedBlock.hash === 'string' && /^0x[0-9a-f]{64}$/i.test(value.verifiedBlock.hash)
     && typeof value.verifiedBlock.stateRoot === 'string' && /^0x[0-9a-f]{64}$/i.test(value.verifiedBlock.stateRoot)
     && typeof value.verifiedBlock.number === 'string' && /^0x[0-9a-f]+$/i.test(value.verifiedBlock.number)
@@ -41,7 +47,7 @@ function restoreBalance(value: unknown): Balance {
     && typeof price.denominator === 'string' && /^[1-9][0-9]{0,200}$/.test(price.denominator)
     && typeof price.minLiquidity === 'string' && /^\d{1,24}(\.\d{1,18})?$/.test(price.minLiquidity)
     && price.blockHash === block.hash && price.window === WINDOW) estimate = price as Estimate;
-  return { estimate, amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true,
+  return { ...(failure ? { failure } : {}), estimate, amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true,
     ...(block ? { verifiedBlock: block } : {}),
     ...(typeof value.decimals === 'number' && Number.isInteger(value.decimals) && value.decimals >= 0 && value.decimals <= 255
       ? { decimals: value.decimals, decimalsVerified: value.decimalsVerified === true } : {}),
@@ -93,8 +99,8 @@ export function loadPortfolio(rpcUrls: string[]): { wallets: Wallet[]; tokens: T
   return { wallets, tokens };
 }
 function savedBalance(balance: Balance) {
-  return balance.amount === undefined ? undefined
-    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, decimalsVerified: balance.decimalsVerified, estimate: balance.estimate };
+  return balance.amount === undefined ? (balance.failure ? { failed: true, failure: balance.failure } : undefined)
+    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, failure: balance.failure, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, decimalsVerified: balance.decimalsVerified, estimate: balance.estimate };
 }
 export function savePortfolio(wallets: Wallet[], tokens: Token[]): boolean {
   try {

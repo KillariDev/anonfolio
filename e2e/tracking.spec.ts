@@ -642,3 +642,68 @@ test('TWAP holding estimates, partial totals and custom quote settings persist',
   await expect(page.getByLabel('Quote contract address')).toHaveValue(b);
   await expect(page.getByLabel('Minimum quote-side liquidity')).toHaveValue('100');
 });
+
+test('saved balance errors expose per-asset causes and recovery actions, then clear on success', async ({ page }) => {
+  await mockConnection(page);
+  await page.addInitScript(({ address, weth }) => {
+    localStorage.setItem('anonfolio.portfolio.v2', JSON.stringify({ version: 3,
+      tokens: [{ address: 'eth', symbol: 'ETH', decimals: 18 }, { address: weth, symbol: 'WETH', decimals: 18 }],
+      wallets: [{ address, balances: { eth: { amount: '1000000000000000000', updatedAt: Date.now() - 60000 }, [weth]: { amount: '0', updatedAt: Date.now() - 60000 } } }] }));
+  }, { address: a, weth: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' });
+  await page.route('**/src/verification/client.ts*', route => route.fulfill({ contentType: 'text/javascript', body: `
+    export async function verifyWallet(wallet, worker, tokens, emit) {
+      const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
+      for(const token of tokens) {
+        emit({type:'asset',asset:token.address});
+        emit({type:'progress',message:'Fetching '+token.symbol+' proof at finalized block'});
+        if(window.__recovered) emit({type:'balance',asset:token.address,amount:token.address==='eth'?'1000000000000000000':'0',decimals:18,decimalsVerified:true,block});
+        else emit({type:'asset-error',asset:token.address,error:token.address==='eth'?'Error: Private eth_getProof rejected (-32602): distance to target block exceeds maximum proof window. https://user:password@rpc.example/key-secret?token=query-secret':'Bytecode hash does not match the verified account.'});
+      }
+      emit({type:'progress',message:'Later progress must not erase earlier failures'});
+    }
+  ` }));
+  await page.goto('/');
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.balance small.error')).toHaveText(['Unverified saved value · verification failed', 'Unverified saved value · verification failed']);
+  await expect(page.locator('.failure-link').first()).toHaveText('RPC proof history unavailable · Details');
+  const ethFailure = page.getByRole('region', { name: 'ETH balance failure', exact: true });
+  await expect(ethFailure).toBeHidden();
+  await page.getByRole('button', { name: 'Explain ETH failure for ' + a, exact: true }).click();
+  await expect(ethFailure).toBeVisible();
+  await expect(ethFailure).toContainText('distance to target block exceeds maximum proof window');
+  await expect(ethFailure).toContainText('supports account and storage proofs at finalized block hashes');
+  await expect(ethFailure).toContainText('While: Fetching ETH proof at finalized block');
+  await expect(page.getByRole('region', { name: 'WETH balance failure', exact: true })).toContainText('Bytecode hash does not match');
+  const saved = await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2')!);
+  expect(saved).toContain('maximum proof window'); expect(saved).not.toMatch(/password|key-secret|query-secret/);
+  await expect(page.locator('body')).not.toContainText('password');
+  await ethFailure.getByRole('button', { name: 'Open network settings' }).click();
+  await expect(page.getByLabel('Balance RPC endpoints', { exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Close settings', exact: true }).click();
+  await page.evaluate(() => { (window as any).__recovered = true; });
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await expect(page.locator('.failure-link')).toHaveCount(0);
+  await expect(page.locator('.read-failure')).toHaveCount(0);
+  await expect(page.locator('.balance small.error')).toHaveCount(0);
+});
+
+test('an expired checkpoint explains the required application update instead of suggesting an RPC change', async ({ page }) => {
+  await mockConnection(page);
+  await page.route('**/src/verification/client.ts*', route => route.fulfill({ contentType: 'text/javascript', body: `
+    export async function verifyWallet(wallet, worker, tokens, emit) {
+      emit({type:'progress',message:'Checking the pinned consensus checkpoint'});
+      throw new Error('Pinned consensus checkpoint is outside its 14-day trust window. A reviewed checkpoint update is required.');
+    }
+  ` }));
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.failure-link').first()).toHaveText('Consensus checkpoint needs updating · Details');
+  await page.getByRole('button', { name: 'Explain ETH failure for ' + a, exact: true }).click();
+  const report = page.getByRole('region', { name: 'ETH balance failure', exact: true });
+  await expect(report).toContainText('outside its 14-day trust window');
+  await expect(report).toContainText('updated application release with a reviewed mainnet checkpoint');
+  await expect(report).toContainText('Changing RPC or gateway settings cannot renew the checkpoint');
+  await expect(report.getByRole('button', { name: 'Open network settings' })).toHaveCount(0);
+  await expect(page.locator('.amount')).toHaveText(['—', '—']);
+});

@@ -3,6 +3,7 @@ import { addressDisplay } from './address-display';
 import { parseTrackedAddresses } from './addresses';
 import { config, defaultConfig } from './config';
 import { saveSettings, validateSettings, type NetworkSettings } from './settings';
+import { errorMessage, explainFailure, readFailure, type ReadFailure } from './errors';
 import { Connection, type ConnectionState } from './connection';
 import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance, setTokenBalance, type Balance, type Wallet } from './balances';
 import { loadPortfolio, savePortfolio } from './storage';
@@ -156,6 +157,7 @@ function renderConnection() {
   gateway.textContent = 'Configured Tor gateway(s): ' + config.gateways.map(entry => entry.slice(0, entry.lastIndexOf(':'))).join(', ')
     + '. The worker manages gateway connections and circuits; their live progress is not exposed by the harness.';
   text.append(detail, gateway);
+  if (state === 'failed' && connection.lastError) text.append(failureReport('Private connection', readFailure(connection.lastError, 'Starting the private worker')));
   node.append(text);
   if (state === 'failed') {
     const button = document.createElement('button');
@@ -164,7 +166,38 @@ function renderConnection() {
     heading.append(button);
   }
 }
-function balanceNode(symbol: string, decimals: number, balance: Balance, pending: boolean, native = false) {
+function failureReport(label: string, failure: ReadFailure, rpcHost?: string) {
+  const report = document.createElement('section'); report.className = 'read-failure';
+  report.setAttribute('aria-label', label + ' failure');
+  const { summary, action } = explainFailure(failure);
+  const heading = document.createElement('strong'); heading.textContent = label + ' · ' + summary;
+  const message = document.createElement('p'); message.className = 'failure-message'; message.textContent = failure.message;
+  const help = document.createElement('p'); help.className = 'failure-action'; help.textContent = action;
+  report.append(heading, message, help);
+  if (failure.stage) {
+    const stage = document.createElement('p'); stage.className = 'failure-stage'; stage.textContent = 'While: ' + failure.stage;
+    report.append(stage);
+  }
+  if (rpcHost) {
+    const endpoint = document.createElement('p'); endpoint.textContent = 'RPC endpoint: ' + rpcHost; report.append(endpoint);
+  }
+  if (failure.at) {
+    const time = document.createElement('time'); time.dateTime = new Date(failure.at).toISOString();
+    time.textContent = 'Last failed attempt: ' + new Date(failure.at).toLocaleString(); report.append(time);
+  }
+  if (action.includes('Settings')) {
+    const settings = document.createElement('button'); settings.type = 'button'; settings.textContent = 'Open network settings';
+    const pricing = action.includes('Price estimates');
+    settings.textContent = pricing ? 'Open pricing settings' : 'Open network settings';
+    settings.onclick = () => { settingsPanel.open = true; document.querySelector<HTMLElement>(pricing ? '#pricing-preset' : '#settings-rpcs')!.focus(); };
+    report.append(settings);
+  }
+  return report;
+}
+function balanceFailure(balance: Balance): ReadFailure | undefined {
+  return balance.failed ? balance.failure || { message: 'No error details were saved for the previous failure. Refresh this address to capture a new error.', at: 0 } : undefined;
+}
+function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: Balance, pending: boolean, native = false) {
   const box = document.createElement('td');
   box.className = 'balance';
   const label = document.createElement('div');
@@ -181,6 +214,15 @@ function balanceNode(symbol: string, decimals: number, balance: Balance, pending
     : balance.cached ? (balance.verifiedBlock ? '' : 'Unverified saved value · reverify required') : balance.updatedAt ? (balance.verifiedBlock ? 'Verified finalized' + (balance.amount === 0n ? ' · proven zero' : '') : 'Unverified · reverify required') : 'Awaiting first read';
   if (balance.amount !== undefined && !balance.verifiedBlock) status.textContent = 'Unverified saved value · ' + (balance.failed ? 'verification failed' : 'reverify required');
   box.append(label, amount, status);
+  const failure = balanceFailure(balance);
+  if (failure) {
+    const explain = document.createElement('button'); explain.type = 'button'; explain.className = 'failure-link';
+    explain.textContent = explainFailure(failure).summary + ' · Details';
+    explain.title = failure.message;
+    explain.setAttribute('aria-label', 'Explain ' + symbol + ' failure for ' + wallet.address);
+    explain.onclick = () => { expandedAddresses.add(wallet.address); render(); document.getElementById('details-' + wallet.address)?.scrollIntoView({ block: 'nearest' }); };
+    box.append(explain);
+  }
   const estimate = usableEstimate(balance, pricing);
   const price = document.createElement('small'); price.className = 'price-estimate';
   price.textContent = estimate ? '≈ ' + formatBalance(displayValue(valueFraction(balance.amount!, estimate)), estimate.decimals + 18) + ' ' + pricing.quote.symbol + (balance.cached || balance.failed ? ' · stale' : '') : 'Unpriced';
@@ -320,6 +362,12 @@ function walletDetails(wallet: Wallet) {
   verification.setAttribute('role', 'status');
   verification.textContent = wallet.verificationStatus || 'Waiting to verify balances.';
   content.append(fullAddress, timestamps, verification);
+  for (const token of tokens) {
+    const balance = tokenBalance(wallet, token);
+    const failure = balanceFailure(balance);
+    if (failure) content.append(failureReport(token.symbol + ' balance', failure, new URL(wallet.rpcUrl).hostname));
+    if (balance.priceError) content.append(failureReport(token.symbol + ' price', { message: errorMessage(balance.priceError), stage: 'Pricing oracle', at: 0 }, new URL(wallet.rpcUrl).hostname));
+  }
   if (wallet.activity.length) {
     const activity = document.createElement('div');
     activity.className = 'activity';
@@ -418,7 +466,7 @@ function render() {
     }
     row.append(identity);
     const pending = (asset: string) => wallet.loading && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
-    row.append(...assets.map(token => balanceNode(token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address === 'eth')));
+    row.append(...assets.map(token => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address === 'eth')));
     const status = document.createElement('td');
     status.className = 'row-status';
     status.setAttribute('aria-live', 'polite');
@@ -498,11 +546,12 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
     if (!navigator.onLine) throw new Error('Offline');
     const worker = await connection.get();
     if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { pruneTokenBalances(wallet); persist(); render(); }, onlyFailed);
-  } catch {
-    wallet.verificationStatus = navigator.onLine ? 'Private connection unavailable; no unverified fallback.' : 'Offline; saved values require reverification.';
+  } catch (cause) {
+    const failure = readFailure(navigator.onLine ? cause : 'Browser is offline.', 'Starting the private connection');
+    wallet.verificationStatus = failure.message;
     wallet.activity.forEach(item => {
       const token = selectedTokens.find(token => token.address === item.asset);
-      if (token) tokenBalance(wallet, token).failed = true;
+      if (token) { tokenBalance(wallet, token).failed = true; tokenBalance(wallet, token).failure = failure; }
       item.phase = 'failed';
     });
   } finally {

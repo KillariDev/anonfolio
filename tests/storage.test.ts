@@ -174,3 +174,15 @@ test('verified provenance and on-chain decimals survive storage but remain stale
   expect(savePortfolio([wallet], defaultTokens())).toBe(true);
   expect(loadPortfolio(operators).wallets[0]!.weth).toMatchObject({ amount: 0n, cached: true, verifiedBlock: block, decimals: 18, decimalsVerified: true });
 });
+
+test('last failure survives reload for saved and unavailable balances without losing provenance', () => {
+  const wallet = makeWallet(getAddress(address), operators[0]!);
+  const failure = { message: 'Private eth_getProof rejected (-32602): distance to target block exceeds maximum proof window', stage: 'Fetching proof', at: Date.now() };
+  wallet.eth = { amount: 7n, updatedAt: Date.now(), failed: true, failure };
+  wallet.weth = { failed: true, failure };
+  expect(savePortfolio([wallet], defaultTokens())).toBe(true);
+  const restored = loadPortfolio(operators).wallets[0]!;
+  expect(restored.eth).toMatchObject({ amount: 7n, failed: true, failure, cached: true });
+  expect(restored.weth).toMatchObject({ failed: true, failure, cached: true });
+  expect(restored.weth.amount).toBeUndefined();
+});

@@ -44,6 +44,7 @@ Public discovery and consensus requests do not contain watched wallet addresses.
 | [`src/verification/proofs.ts`](../src/verification/proofs.ts), [`src/verification/trust.ts`](../src/verification/trust.ts) | Proof/code checks, block binding, checkpoint policy, and WASM pin. |
 | [`src/pricing.ts`](../src/pricing.ts) | Direct-pool discovery, qualification, TWAP calculations, quote caches, and pricing settings. |
 | [`src/totals.ts`](../src/totals.ts) | Token totals and rational estimated portfolio totals. |
+| [`src/errors.ts`](../src/errors.ts) | Bounded/redacted failure messages and cause-specific recovery guidance. |
 | [`src/storage.ts`](../src/storage.ts), [`src/retries.ts`](../src/retries.ts) | Persistent snapshots, migrations, and retry scheduling. |
 | [`vendor/helios`](../vendor/helios/README.md) | Reviewed Helios WASM, adapted JavaScript HTTP bridge, license, and review evidence. |
 | [`vite.config.ts`](../vite.config.ts), [`scripts`](../scripts) | Build configuration, offline shell generation, static serving, and IPFS publishing/checks. |
@@ -132,6 +133,8 @@ The verifier also executes `decimals()` at the same block. A valid result replac
 ### Result and error messages
 
 `verification/client.ts` assigns session IDs and relays progress, asset starts, balances, prices, and failures. `balances.ts` applies these events to wallet state. A successful balance stores its raw bigint amount, retrieval time, verified block metadata, and decimals provenance.
+
+Each failed asset retains its own error message, failed step, and attempt timestamp, so later progress or another asset's error cannot replace its cause. A short explanation next to the balance opens Details with the full error, endpoint hostname, and recovery guidance. These failure records survive reloads, including failed first reads with no amount, and clear when that asset is successfully verified. Errors that echo endpoint URLs have credentials, paths, and query strings redacted before display/storage. If an older snapshot has no recorded reason, the UI says so and asks for a refresh to capture one.
 
 The UI distinguishes a proven zero, an unavailable first read, an unverified legacy value, and a stale value retained after failure. Failed verification never creates a new trusted amount. Fatal worker failures terminate the shared worker and reject outstanding sessions. A session timeout also resets the verifier; the five-minute session budget includes time spent queued.
 

@@ -22,7 +22,7 @@ test('failed verification retains previous amounts and provenance as stale', asy
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, success);
   const before = { ...wallet.eth };
   await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, async () => { throw new Error('Proof invalid'); });
-  expect(wallet.eth).toEqual({ ...before, failed: true });
+  expect(wallet.eth).toEqual({ ...before, failed: true, failure: expect.objectContaining({ message: 'Proof invalid' }) });
   expect(wallet.verificationStatus).toContain('Proof invalid');
 });
 test('legacy and cached balances are reverified rather than treated as proven zero', async () => {
@@ -45,7 +45,7 @@ test('partial success stores independently while failed assets retain old amount
     emit({ type: 'asset-error', asset: tokens[1]!.address, error: 'Tampered code' });
   }));
   expect(wallet.eth.amount).toBe(5n);
-  expect(wallet.weth).toEqual({ amount: 9n, updatedAt: 1, failed: true });
+  expect(wallet.weth).toEqual({ amount: 9n, updatedAt: 1, failed: true, failure: expect.objectContaining({ message: 'Tampered code' }) });
 });
 test('automatic recovery selects failed assets and keeps their original private identity', async () => {
   const wallet = makeWallet(address, 'https://one.example');
@@ -103,4 +103,18 @@ test('a quote event for another finalized block cannot attach to a proven balanc
     emit({ type: 'price', asset: 'eth', block: { ...block, hash: '0x'+'33'.repeat(32) }, estimate: {} as any });
   }));
   expect(wallet.eth.estimate).toBeUndefined();
+});
+
+test('per-asset errors survive later progress and fatal errors; successful retry clears them', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, async (_wallet, _worker, tokens, emit) => {
+    emit({ type: 'progress', message: 'ETH proof request' });
+    emit({ type: 'asset-error', asset: 'eth', error: 'Missing requested storage slot proof.' });
+    emit({ type: 'progress', message: 'WETH proof request' });
+    throw new Error('Private RPC returned HTTP 429');
+  });
+  expect(wallet.eth.failure).toMatchObject({ message: 'Missing requested storage slot proof.', stage: 'ETH proof request' });
+  expect(wallet.weth.failure).toMatchObject({ message: 'Private RPC returned HTTP 429', stage: 'WETH proof request' });
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, success);
+  expect(wallet.eth.failure).toBeUndefined(); expect(wallet.weth.failure).toBeUndefined();
 });

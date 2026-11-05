@@ -40,7 +40,9 @@ async function internalFetch(request: Request): Promise<Response> {
     if (url.origin !== CONSENSUS_RPC || request.method !== 'GET'
       || !/^\/eth\/v[12]\/(beacon\/(light_client\/|blocks\/|genesis)|config\/spec)/.test(url.pathname)) throw new Error('Helios attempted a network escape.');
     step('Consensus: GET ' + url.hostname + url.pathname + ' (no wallet addresses). Verifying sync committee signatures and finalized headers.');
-    return fetch(request);
+    const response = await fetch(request);
+    if (!response.ok) throw new Error('Consensus GET ' + url.hostname + url.pathname + ' returned HTTP ' + response.status);
+    return response;
   }
   const body = await request.json() as RpcRequest;
   if (Array.isArray(body)) throw new Error('Execution batches are forbidden.');
@@ -80,7 +82,9 @@ async function synced() {
   if (!client) {
     checkCheckpointAge();
     step('Loading pinned Helios 0.12.0 WASM verifier.');
-    const bytes = await (await fetch(new URL('../../vendor/helios/index_bg.wasm', import.meta.url))).arrayBuffer();
+    const download = await fetch(new URL('../../vendor/helios/index_bg.wasm', import.meta.url));
+    if (!download.ok) throw new Error('Helios WASM download failed (HTTP ' + download.status + ').');
+    const bytes = await download.arrayBuffer();
     const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(v => v.toString(16).padStart(2, '0')).join('');
     if (hash !== HELIOS_WASM_SHA256) throw new Error('Helios WASM digest mismatch.');
     await initWasm({ module_or_path: bytes });
@@ -94,6 +98,7 @@ async function synced() {
 async function refresh(message: any) {
   current = { id: message.id, rpcHost: message.rpcHost, requests: 0 };
   codeHashes.clear();
+  executionFailure = '';
   try {
     const helios = await synced();
     const block = verifiedBlock(await helios.get_block_by_number('finalized', false));

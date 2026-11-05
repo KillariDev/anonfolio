@@ -219,3 +219,12 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 #estimated-total { margin: 8px 0 14px; color: #b8ec8c; font-size: 13px; }
 .balance .price-estimate { display: block; color: #b0c3a4; font-size: 10px; margin: 0; }
 .balance-values { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; }
+
+.failure-link { display: block; max-width: 240px; margin-top: 3px; padding: 0; border: 0; background: transparent; color: #e6bd91; font-size: 10px; text-decoration: underline; text-align: left; }
+.read-failure { margin: 10px 0; padding: 10px 12px; border-left: 3px solid #d8a575; background: #281e15; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.read-failure strong { color: #f0c49f; }
+.read-failure p { margin: 5px 0; }
+.read-failure .failure-message { font-family: ui-monospace, monospace; white-space: pre-wrap; color: #ead3bb; }
+.read-failure .failure-action { color: #dfdfc8; }
+.read-failure .failure-stage, .read-failure time { color: #ada894; font-size: 10px; }
+.read-failure button { display: block; margin-top: 8px; }

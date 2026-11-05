@@ -1,4 +1,5 @@
 import { formatUnits, type Address } from 'viem';
+import { errorMessage, readFailure, type ReadFailure } from './errors';
 import { verifyWallet } from './verification/client';
 import type { VerifiedBlock } from './verification/trust';
 import type { AnonRpcWorker } from '@anon-rpc/browser-harness';
@@ -7,7 +8,7 @@ import { WETH } from './config';
 import { defaultTokens, type Token } from './tokens';
 
 export type PrivateWorker = Pick<AnonRpcWorker, 'fetch'>;
-export type Balance = { estimate?: Estimate; priceError?: string; amount?: bigint; updatedAt?: number; failed: boolean; cached?: boolean; verifiedBlock?: VerifiedBlock; decimals?: number; decimalsVerified?: boolean };
+export type Balance = { failure?: ReadFailure; estimate?: Estimate; priceError?: string; amount?: bigint; updatedAt?: number; failed: boolean; cached?: boolean; verifiedBlock?: VerifiedBlock; decimals?: number; decimalsVerified?: boolean };
 export type RequestActivity = {
   asset: string;
   symbol: string;
@@ -56,10 +57,13 @@ export async function readBalances(
 ) {
   const selected = tokens.filter(token => !onlyFailed || tokenBalance(wallet, token).failed || !tokenBalance(wallet, token).verifiedBlock);
   prepareActivity(wallet, selected);
+  wallet.verificationStatus = 'Starting balance verification.';
   const pending = new Set(selected.map(token => token.address as string));
+  const reported = new Set<string>();
+  let fatal: ReadFailure | undefined;
   try {
     await verifier(wallet, worker, selected, event => {
-      if (event.type === 'progress') wallet.verificationStatus = event.message;
+      if (event.type === 'progress') wallet.verificationStatus = event.message ? errorMessage(event.message) : undefined;
       const activity = wallet.activity.find(item => item.asset === event.asset);
       const token = selected.find(token => token.address === event.asset);
       if (event.type === 'asset' && activity) { activity.phase = 'requesting'; activity.attempt++; }
@@ -73,17 +77,20 @@ export async function readBalances(
         tokenBalance(wallet, token).estimate = event.estimate;
         tokenBalance(wallet, token).priceError = undefined;
       }
-      if (event.type === 'price-error' && token) tokenBalance(wallet, token).priceError = event.error;
+      if (event.type === 'price-error' && token) tokenBalance(wallet, token).priceError = errorMessage(event.error);
       if (event.type === 'asset-error' && token) {
         tokenBalance(wallet, token).failed = true;
+        tokenBalance(wallet, token).failure = readFailure(event.error, wallet.verificationStatus);
+        reported.add(token.address);
         if (activity) activity.phase = 'failed';
-        wallet.verificationStatus = event.error;
+        wallet.verificationStatus = tokenBalance(wallet, token).failure!.message;
       }
       onChange();
     });
-  } catch (error) { wallet.verificationStatus = String(error); }
+  } catch (error) { fatal = readFailure(error, wallet.verificationStatus); wallet.verificationStatus = fatal.message; }
   for (const token of selected) if (pending.has(token.address)) {
     tokenBalance(wallet, token).failed = true;
+    if (!reported.has(token.address)) tokenBalance(wallet, token).failure = fatal || readFailure('Verifier finished without returning a verified balance.', wallet.verificationStatus);
     const activity = wallet.activity.find(item => item.asset === token.address);
     if (activity) activity.phase = 'failed';
   }

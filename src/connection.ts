@@ -1,3 +1,4 @@
+import { errorMessage } from './errors';
 import { AnonRpcWorker } from '@anon-rpc/browser-harness';
 import { createPublicClient, decodeAbiParameters, http, toFunctionSelector, type Hex } from 'viem';
 import { mainnet } from 'viem/chains';
@@ -5,6 +6,7 @@ import { config, TOR_SPECIFIER, assertTorWorkerHash } from './config';
 
 export type ConnectionState = 'starting' | 'ready' | 'failed';
 export class Connection {
+  lastError?: string;
   private worker?: AnonRpcWorker;
   private pending?: Promise<AnonRpcWorker>;
   constructor(
@@ -13,6 +15,7 @@ export class Connection {
   ) {}
   get(): Promise<AnonRpcWorker> {
     if (this.pending) return this.pending;
+    this.lastError = undefined;
     this.onState('starting');
     this.onProgress('Discovering the tor-js worker through ' + new URL(config.bootstrapRpc).hostname + '. This public lookup contains only the worker contract address.');
     // This public client is ONLY handed to the specifier resolver, never a balance reader.
@@ -42,6 +45,7 @@ export class Connection {
           return result;
         } catch (error) {
           discoveryFailed = true;
+          this.lastError = errorMessage(error);
           throw error;
         } finally {
           if (--pendingLookups === 0 && !discoveryFailed) this.onProgress('Worker contract lookup finished.' + resolverSummary + ' The harness is loading and hash-verifying the bundle, then starting its sandbox. Waiting for worker readiness.');
@@ -51,8 +55,9 @@ export class Connection {
     // Drain logs without sending them to console or an analytics service.
     void (async () => {
       try { for (;;) await worker.acceptLog(); }
-      catch {
+      catch (error) {
         if (this.worker === worker) {
+          this.lastError ||= 'Private worker stopped: ' + errorMessage(error);
           this.worker = undefined;
           this.pending = undefined;
           this.onState('failed');
@@ -65,16 +70,18 @@ export class Connection {
         await Promise.race([worker.ready, new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error('Private connection timed out')), 120_000);
         })]);
+        this.lastError = undefined;
         this.onState('ready');
         return worker;
-      } catch {
+      } catch (error) {
+        this.lastError ||= errorMessage(error);
         worker.close();
         if (this.worker === worker) {
           this.worker = undefined;
           this.pending = undefined;
           this.onState('failed');
         }
-        throw new Error('Private connection unavailable');
+        throw new Error('Private connection unavailable: ' + this.lastError);
       } finally { clearTimeout(timer); }
     })();
     return this.pending;
