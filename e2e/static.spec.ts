@@ -1,3 +1,4 @@
+import { openAddressForm } from './helpers';
 import { expect, test } from '@playwright/test';
 
 test('static build loads and handles unavailable bootstrap without public balance requests', async ({ page }) => {
@@ -10,10 +11,12 @@ test('static build loads and handles unavailable bootstrap without public balanc
   // A deterministic production smoke check: the public bootstrap is unavailable.
   await page.route('https://**', route => route.abort('failed'));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'A little less public.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Portfolio', exact: true })).toBeVisible();
+  await openAddressForm(page);
   await page.locator('#address').fill('invalid');
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.getByRole('alert')).toContainText('valid Ethereum address');
+  await openAddressForm(page);
   await page.locator('#address').fill('0x0000000000000000000000000000000000000001');
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.getByRole('button', { name: 'Retry connection' })).toBeVisible({ timeout: 10_000 });
@@ -24,6 +27,7 @@ test('static build loads and handles unavailable bootstrap without public balanc
 
 test('static build reopens completely offline with saved wallets, token settings and balances', async ({ page, context }) => {
   test.skip(!process.env.BASE_URL, 'Offline shell is emitted only by the production build.');
+  await page.setViewportSize({ width: 390, height: 844 });
   const a = '0x0000000000000000000000000000000000000001';
   const token = { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6 };
   const timestamp = Date.now() - 60_000;
@@ -56,6 +60,7 @@ test('static build reopens completely offline with saved wallets, token settings
   await page.reload();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.234567']);
   await expect(page.locator('#offline-notice')).toContainText('offline');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('.error')).toHaveText(['Stale · refresh failed', 'Stale · refresh failed', 'Stale · refresh failed']);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Refresh ' + a, exact: true })).toBeEnabled();

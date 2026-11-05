@@ -24,6 +24,14 @@ The committed lockfile uses format version 1 so Bun 1.3.14 can read it. Bun 1.4.
 
 If you saw “Unknown lockfile version”, pull the latest branch and run `bun install --frozen-lockfile`. If an earlier install rewrote your local lockfile, restore `bun.lock` from the updated branch first.
 
+## Portfolio layout and totals
+
+The overview sums each token across all tracked addresses using exact bigint arithmetic and that token's configured decimals. ETH, WETH and each custom contract have separate totals; tokens with the same symbol remain separate. Removing an address or token updates the totals immediately. Totals do not trigger extra RPC requests.
+
+A total uses only available balance values. Unknown amounts are not counted as zero: the coverage label shows how many addresses are included and marks incomplete totals as **Partial**. Retained cached or failed values are included with a stale count; a spinner and updating label indicate pending reads. These are sums of independently fetched values, not an atomic snapshot of a single block.
+
+The watchlist uses compact table rows with refresh next to each shortened address. Choose **Details** to see the full address, RPC operator, read timestamps and request progress. Expanded rows stay open while results arrive. Adding addresses, token settings and connection diagnostics are collapsible; the address form closes after adding entries. Narrow screens scroll the table horizontally while the address column stays visible. Long watchlists scroll within the table with fixed column headers.
+
 ## Tracking wallets and tokens
 
 Paste one Ethereum address or a list separated by newlines, commas, spaces or semicolons, then choose **add address to track**. Validation happens locally before adding any address. Invalid entries reject the whole list; existing wallets and duplicates are skipped. Every wallet has its own Refresh/Retry and Remove buttons.
@@ -36,7 +44,7 @@ Token configuration requires no network request. All token balance reads use `ba
 
 Spinners indicate worker startup, wallet refresh and individual pending reads. The connection panel shows public worker discovery, its RPC hostname, advertised resolver hosts, and waiting for the hash-verified sandboxed worker. Configured gateway endpoints are shown as configuration: the harness does not expose live gateway or circuit-building progress.
 
-Each wallet shows its RPC operator and per-asset request details: the RPC method, wallet address, token contract when applicable, latest block tag, submission to the private worker, retry attempts and the final result. “Submitted” means handed to the worker; it does not claim that a gateway or destination has already been reached.
+Each wallet's expandable Details panel shows its RPC operator and per-asset request details: the RPC method, wallet address, token contract when applicable, latest block tag, submission to the private worker, retry attempts and the final result. “Submitted” means handed to the worker; it does not claim that a gateway or destination has already been reached.
 
 Successful amounts and timestamps are saved immediately and independently; a slow or failed token does not delay storing other successful reads. Amounts use bigint and the configured token decimals without floating-point rounding. A successful zero is `0`; an unread amount is `—`.
 

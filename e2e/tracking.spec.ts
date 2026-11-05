@@ -1,3 +1,4 @@
+import { openAddressForm } from './helpers';
 import { expect, test, type Page } from '@playwright/test';
 
 const a = '0x0000000000000000000000000000000000000001';
@@ -52,6 +53,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   await expect(page.locator('#connection .spinner')).toBeVisible();
   await expect(page.locator('#connection')).toContainText('bootstrap.example');
   await addToken(page);
+  await openAddressForm(page);
   await page.locator('#address').fill(a + ',\n' + b + '\n' + a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.wallet')).toHaveCount(2);
@@ -81,6 +83,7 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
   await mockConnection(page);
   await page.goto('/');
   await addToken(page);
+  await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.234567']);
@@ -110,6 +113,7 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
 test('invalid bulk input is atomic and invalid or duplicate tokens do not change settings', async ({ page }) => {
   await mockConnection(page);
   await page.goto('/');
+  await openAddressForm(page);
   await page.locator('#address').fill(a + '\ninvalid');
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('#input-error')).toContainText('valid Ethereum address');
@@ -134,6 +138,7 @@ test('storage write failure is visible while reads and changes still work', asyn
   });
   await mockConnection(page);
   await page.goto('/');
+  await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
@@ -146,6 +151,7 @@ test('failed retrieval retries automatically without a button click and stops af
   await expect(page.getByRole('button', { name: 'add address to track' })).toBeVisible();
   await expect(page.getByText('YOUR WALLETS. YOUR BUSINESS.', { exact: true })).toHaveCount(0);
   await expect(page.locator('.privacy-note')).toHaveCount(0);
+  await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
@@ -168,6 +174,7 @@ test('failed retrieval retries automatically without a button click and stops af
 test('offline reads resume automatically on reconnect and removed addresses never retry', async ({ page, context }) => {
   await mockConnection(page);
   await page.goto('/');
+  await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
@@ -211,6 +218,7 @@ test('worker discovery failures reconnect automatically and resume pending reads
     `,
   }));
   await page.goto('/');
+  await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.error')).toHaveCount(2);
@@ -219,4 +227,62 @@ test('worker discovery failures reconnect automatically and resume pending reads
   await expect(page.locator('#connection')).toContainText('Private worker ready', { timeout: 8000 });
   await expect(page.locator('.amount')).toHaveText(['0', '0'], { timeout: 8000 });
   await expect(page.locator('.error')).toHaveCount(0);
+});
+
+test('ten addresses fit compact rows with live totals and expandable details', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockConnection(page);
+  await page.goto('/');
+  await addToken(page);
+  const addresses = Array.from({ length: 10 }, (_, i) => '0x' + (i + 1).toString(16).padStart(40, '0'));
+  await openAddressForm(page);
+  await page.locator('#address').fill(addresses.join('\n'));
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.wallet')).toHaveCount(10);
+  await expect(page.locator('.total-amount')).toHaveText(['10', '0', '12.34567']);
+  await expect(page.locator('.total-status')).toHaveText(['10/10 addresses', '10/10 addresses', '10/10 addresses']);
+  await expect(page.locator('.wallet-details:visible')).toHaveCount(0);
+  await expect(page.locator('#address')).not.toBeVisible();
+  const table = await page.locator('.wallet-table').boundingBox();
+  expect(table!.height).toBeLessThan(600);
+  expect(table!.y + table!.height).toBeLessThan(1000);
+  await page.getByRole('button', { name: 'Details ' + a, exact: true }).click();
+  await expect(page.locator('.wallet').first().locator('.full-address')).toBeVisible();
+  await expect(page.locator('.wallet').first().locator('.activity')).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Refresh ' + a, exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Details ' + a, exact: true })).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: 'Details ' + a, exact: true }).click();
+  await page.screenshot({ path: 'test-results/compact-desktop.png', fullPage: true });
+  await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
+  await expect(page.locator('.total-amount')).toHaveText(['9', '0', '11.111103']);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.locator('#wallets')).toBeVisible();
+  await page.locator('#wallets').evaluate(node => { node.scrollLeft = 300; });
+  await page.getByRole('button', { name: 'Refresh ' + b, exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Refresh ' + b, exact: true })).toBeEnabled();
+  expect(await page.locator('#wallets').evaluate(node => node.scrollLeft)).toBeGreaterThan(200);
+  const left = await page.locator('.address-short').first().boundingBox();
+  expect(left!.x).toBeLessThan(35);
+  await page.locator('#wallets').evaluate(node => { node.scrollLeft = 0; });
+  await page.screenshot({ path: 'test-results/compact-mobile.png', fullPage: true });
+});
+
+test('overview flags partial and stale totals while preserving known values during failure', async ({ page }) => {
+  await mockConnection(page, true);
+  await page.goto('/');
+  await openAddressForm(page);
+  await page.locator('#address').fill(a + '\n' + b);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.total-amount')).toHaveText(['—', '—']);
+  await expect(page.locator('.total-status').first()).toContainText('Partial · 0/2 addresses');
+  await page.evaluate(() => { (window as any).__releaseConnection(); });
+  await expect(page.locator('.total-amount')).toHaveText(['2', '0']);
+  await page.evaluate(() => { (window as any).__fail = true; });
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await expect(page.locator('.total-status')).toHaveText(['2/2 addresses · 1 stale', '2/2 addresses · 1 stale']);
+  await expect(page.locator('.total-amount')).toHaveText(['2', '0']);
+  await page.evaluate(() => { (window as any).__fail = false; });
+  await expect(page.locator('.total-status')).toHaveText(['2/2 addresses', '2/2 addresses'], { timeout: 8000 });
 });

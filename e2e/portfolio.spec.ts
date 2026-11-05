@@ -1,3 +1,4 @@
+import { openAddressForm } from './helpers';
 import { expect, test } from '@playwright/test';
 
 const a = '0x0000000000000000000000000000000000000001';
@@ -31,11 +32,13 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
     }
   ` }));
   await page.goto('/');
+  await openAddressForm(page);
   await page.locator('#address').fill('not-an-address');
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.getByRole('alert')).toContainText('valid Ethereum address');
   await expect(page.locator('.wallet')).toHaveCount(0);
   for (const address of [a, b]) {
+    await openAddressForm(page);
     await page.locator('#address').fill(address);
     await page.getByRole('button', { name: 'add address to track' }).click();
   }
@@ -64,6 +67,7 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(2);
   await expect(page.locator('.amount')).toHaveText(['0', '0', '0', '0']);
+  await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.getByRole('alert')).toContainText('already on your watchlist');
@@ -96,6 +100,7 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   await page.getByLabel('Symbol', { exact: true }).fill('USDC');
   await page.getByLabel('Decimals', { exact: true }).fill('6');
   await page.getByRole('button', { name: 'Add token', exact: true }).click();
+  await openAddressForm(page);
   await page.locator('#address').fill('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.amount').first()).not.toHaveText('—', { timeout: 210_000 });
@@ -105,6 +110,7 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   await page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045', exact: true })).toBeEnabled({ timeout: 180_000 });
   await expect(page.locator('.error')).toHaveCount(0);
+  await openAddressForm(page);
   await page.locator('#address').fill('0x57f138c846dd879810213d0d23c583a9961b7ba2');
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.wallet').nth(1).locator('.amount')).toHaveText(['0', '0', '0'], { timeout: 180_000 });
@@ -143,6 +149,7 @@ test('failed private startup shows retry and never displays a false zero', async
     `,
   }));
   await page.goto('/');
+  await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.error')).toHaveText(['Lookup failed · retry available', 'Lookup failed · retry available']);
