@@ -1,9 +1,11 @@
+import { addressDisplay } from './address-display';
+import { parseTrackedAddresses } from './addresses';
 import { config, defaultConfig } from './config';
 import { saveSettings, validateSettings, type NetworkSettings } from './settings';
 import { Connection, type ConnectionState } from './connection';
 import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance, setTokenBalance, type Balance, type Wallet } from './balances';
 import { loadPortfolio, savePortfolio } from './storage';
-import { parseWalletList, validateToken, defaultTokens, type Token } from './tokens';
+import { validateToken, defaultTokens, type Token } from './tokens';
 import { RetryQueue } from './retries';
 import { portfolioTotals } from './totals';
 import { readIcon, tokenIcon } from './icons';
@@ -19,9 +21,10 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="controls">
 <details id="address-panel" class="address-settings"><summary>Add addresses</summary>
 <form id="wallet-form" novalidate>
+<label for="address-name">Address name (optional, for one address)</label><input id="address-name" maxlength="80" autocomplete="off" placeholder="e.g. Savings" aria-describedby="input-error">
 <label for="address">Ethereum wallet addresses</label>
 <div class="input-row"><textarea id="address" name="address" rows="2" placeholder="0x… Paste one address or a list" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="wallet-hint input-error" required></textarea><button class="primary" type="submit">add address to track <span aria-hidden="true">↗</span></button></div>
-<p class="form-hint" id="wallet-hint">One address per line, or separate addresses with commas. Each wallet has its own refresh.</p>
+<p class="form-hint" id="wallet-hint">One address per line, or separate addresses with commas. To name a list, use Name | 0x… on each line. Names are saved only in this browser.</p>
 <p id="input-error" class="input-error" role="alert"></p><p id="wallet-notice" class="form-hint" role="status"></p></form></details>
 <details id="network-settings"><summary>Settings</summary>
 <details class="token-settings"><summary>Tracked tokens <span id="token-count"></span></summary>
@@ -254,9 +257,7 @@ function renderTotals() {
 function walletDetails(wallet: Wallet) {
   const content = document.createElement('div');
   content.className = 'detail-inner';
-  const fullAddress = document.createElement('div');
-  fullAddress.className = 'full-address';
-  fullAddress.textContent = wallet.address;
+  const fullAddress = addressDisplay(wallet);
   const route = document.createElement('div');
   route.className = 'route';
   route.textContent = 'Private RPC operator: ' + new URL(wallet.rpcUrl).hostname + ' · wallet-specific Tor isolation';
@@ -285,7 +286,8 @@ function walletDetails(wallet: Wallet) {
         : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' submitted on the same private route; waiting for response' : 'Submitted to private worker; waiting for response')
         : item.phase === 'received' ? 'Balance received' : 'Read failed; previous amount kept if available');
       const payload = document.createElement('small');
-      payload.textContent = item.description + ' · wallet ' + wallet.address + ' → ' + new URL(wallet.rpcUrl).hostname;
+      payload.append(document.createTextNode(item.description + ' · wallet '), addressDisplay(wallet, true),
+        document.createTextNode(' → ' + new URL(wallet.rpcUrl).hostname));
       detail.append(title, payload);
       line.append(detail);
       activity.append(line);
@@ -342,25 +344,18 @@ function render() {
     const identity = document.createElement('th');
     identity.scope = 'row';
     identity.className = 'wallet-head';
-    const address = document.createElement('span');
-    address.className = 'wallet-address sr-only';
-    address.textContent = wallet.address;
-    const short = document.createElement('span');
-    short.className = 'address-short';
-    short.setAttribute('aria-hidden', 'true');
-    short.textContent = wallet.address.slice(0, 8) + '…' + wallet.address.slice(-6);
-    short.title = wallet.address;
+    const address = addressDisplay(wallet, true);
     const refresh = document.createElement('button');
     refresh.className = 'refresh-icon';
     refresh.textContent = wallet.loading ? '' : '↻';
     if (wallet.loading) refresh.append(spinner());
     refresh.disabled = wallet.loading || !tokens.length;
     refresh.title = wallet.loading ? 'Reading balances' : !tokens.length ? 'Add a token to retrieve balances' : 'Refresh this address';
-    refresh.setAttribute('aria-label', (wallet.loading ? 'Reading ' : 'Refresh ') + wallet.address);
+    refresh.setAttribute('aria-label', (wallet.loading ? 'Reading ' : 'Refresh ') + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
     refresh.onclick = () => { void refreshWallet(wallet); };
     const addressLine = document.createElement('div');
     addressLine.className = 'address-line';
-    addressLine.append(address, short, refresh);
+    addressLine.append(address, refresh);
     identity.append(addressLine);
     row.append(identity);
     const pending = (asset: string) => wallet.loading && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
@@ -383,7 +378,7 @@ function render() {
     const expanded = expandedAddresses.has(wallet.address);
     const toggle = document.createElement('button');
     toggle.textContent = expanded ? 'Close' : 'Details';
-    toggle.setAttribute('aria-label', 'Details ' + wallet.address);
+    toggle.setAttribute('aria-label', 'Details ' + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
     toggle.setAttribute('aria-expanded', String(expanded));
     toggle.setAttribute('aria-controls', 'details-' + wallet.address);
     toggle.onclick = () => {
@@ -395,7 +390,7 @@ function render() {
     remove.className = 'remove';
     remove.textContent = '×';
     remove.title = 'Remove address';
-    remove.setAttribute('aria-label', 'Remove ' + wallet.address);
+    remove.setAttribute('aria-label', 'Remove ' + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
     remove.onclick = () => {
       retries.cancel(wallet);
       expandedAddresses.delete(wallet.address);
@@ -468,26 +463,28 @@ async function start(automatic = false) {
 document.querySelector('#wallet-form')!.addEventListener('submit', event => {
   event.preventDefault();
   let addresses;
-  try { addresses = parseWalletList(input.value); }
+  try { addresses = parseTrackedAddresses(input.value, document.querySelector<HTMLInputElement>('#address-name')!.value); }
   catch (cause) {
     error.textContent = (cause as Error).message;
     input.setAttribute('aria-invalid', 'true');
     return;
   }
-  const additions = addresses.filter(address => !wallets.some(wallet => wallet.address === address));
+  const additions = addresses.filter(entry => !wallets.some(wallet => wallet.address === entry.address));
   if (!additions.length) { error.textContent = 'This wallet is already on your watchlist.'; return; }
   input.removeAttribute('aria-invalid');
   error.textContent = '';
   const added: Wallet[] = [];
-  for (const address of additions) {
+  for (const entry of additions) {
     const used = new Set(wallets.map(wallet => wallet.rpcUrl));
     const rpc = config.rpcUrls.find(url => !used.has(url)) || config.rpcUrls[wallets.length % config.rpcUrls.length]!;
-    const wallet = makeWallet(address, rpc);
+    const wallet = makeWallet(entry.address, rpc);
+    wallet.name = entry.name;
     wallets.push(wallet); added.push(wallet);
   }
   persist();
   document.querySelector('#wallet-notice')!.textContent = 'Added ' + added.length + ' wallet' + (added.length === 1 ? '' : 's') + '. Existing entries were skipped.';
   input.value = '';
+  document.querySelector<HTMLInputElement>('#address-name')!.value = '';
   addressPanel.open = false;
   document.querySelector<HTMLDetailsElement>('.token-settings')!.open = false;
   document.querySelector<HTMLDetailsElement>('#network-settings')!.open = false;

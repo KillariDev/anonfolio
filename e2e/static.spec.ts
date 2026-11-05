@@ -43,7 +43,7 @@ test('static build reopens completely offline with saved wallets, token settings
   await page.evaluate(({ address, token, timestamp }) => {
     localStorage.setItem('anonfolio.portfolio.v2', JSON.stringify({
       version: 2, tokens: [token],
-      wallets: [{ address, eth: { amount: '1000000000000000000', updatedAt: timestamp },
+      wallets: [{ address, name: 'Offline savings', eth: { amount: '1000000000000000000', updatedAt: timestamp },
         weth: { amount: '0', updatedAt: timestamp },
         tokens: { [token.address]: { amount: '1234567', updatedAt: timestamp } } }],
     }));
@@ -60,6 +60,8 @@ test('static build reopens completely offline with saved wallets, token settings
   await context.setOffline(true);
   await page.reload();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
+  await expect(page.locator('.wallet-head .address-name')).toHaveText('Offline savings');
+  await expect(page.locator('.wallet-head svg rect')).toHaveCount(64);
   await expect(page.locator('.total-label img')).toHaveCount(3);
   await expect.poll(() => page.locator('.total-label img').evaluateAll(images =>
     images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
@@ -67,11 +69,11 @@ test('static build reopens completely offline with saved wallets, token settings
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('.error')).toHaveText(['Stale · refresh failed', 'Stale · refresh failed', 'Stale · refresh failed']);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Refresh ' + a, exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Refresh ' + a + ' · Offline savings', exact: true })).toBeEnabled();
   expect(await page.locator('.balance time').first().getAttribute('datetime')).toBe(new Date(timestamp).toISOString());
   await openTokenSettings(page);
   await expect(page.getByRole('button', { name: 'Remove token USDC' })).toBeVisible();
-  await page.getByRole('button', { name: 'Remove ' + a, exact: true }).click();
+  await page.getByRole('button', { name: 'Remove ' + a + ' · Offline savings', exact: true }).click();
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(0);
   await context.setOffline(false);

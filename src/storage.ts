@@ -1,3 +1,4 @@
+import { validateAddressName } from './addresses';
 import { WETH } from './config';
 import { getAddress, isAddress, type Address } from 'viem';
 import { makeWallet, setTokenBalance, tokenBalance, type Balance, type Wallet } from './balances';
@@ -54,6 +55,8 @@ export function loadPortfolio(rpcUrls: string[]): { wallets: Wallet[]; tokens: T
       const address = getAddress(entry.address);
       if (wallets.some(wallet => wallet.address === address)) continue;
       const wallet = makeWallet(address, rpcUrls[wallets.length % rpcUrls.length]!);
+      try { wallet.name = typeof entry.name === 'string' ? validateAddressName(entry.name) : undefined; }
+      catch { /* A bad name must not discard a valid address or its balances. */ }
       for (const token of tokens) {
         const value = data.version === 3
           ? record(entry.balances) ? entry.balances[token.address] : undefined
@@ -79,7 +82,7 @@ export function savePortfolio(wallets: Wallet[], tokens: Token[]): boolean {
     localStorage.setItem(PORTFOLIO_KEY, JSON.stringify({
       version: 3, tokens,
       wallets: wallets.map(wallet => ({
-        address: wallet.address,
+        address: wallet.address, name: wallet.name,
         balances: Object.fromEntries(tokens.map(token => [token.address, savedBalance(tokenBalance(wallet, token))])),
       })),
     }));

@@ -263,7 +263,7 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   await page.getByRole('button', { name: 'Refresh ' + b, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh ' + b, exact: true })).toBeEnabled();
   expect(await page.locator('#wallets').evaluate(node => node.scrollLeft)).toBeGreaterThan(200);
-  const left = await page.locator('.address-short').first().boundingBox();
+  const left = await page.locator('.wallet-head .address-display').first().boundingBox();
   expect(left!.x).toBeLessThan(35);
   await page.locator('#wallets').evaluate(node => { node.scrollLeft = 0; });
   await page.screenshot({ path: 'test-results/compact-mobile.png', fullPage: true });
@@ -470,4 +470,59 @@ test('saved gateways and discovery RPC reach the actual connection class; balanc
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/network-settings-mobile.png', fullPage: true });
+});
+
+test('named addresses use reusable blockies in rows and details, persist, and keep names out of RPC requests', async ({ page }) => {
+  await mockConnection(page);
+  const externalImages: string[] = [];
+  page.on('request', request => { if (request.resourceType() === 'image' && request.url().startsWith('https:')) externalImages.push(request.url()); });
+  await page.goto('/');
+  await page.getByLabel('Address name', { exact: false }).fill(' Savings ');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  const row = page.locator('.wallet-head .address-display');
+  await expect(row.locator('.address-name')).toHaveText('Savings');
+  await expect(row.locator('.wallet-address')).toHaveText(a);
+  const blockie = await row.locator('svg').innerHTML();
+  await expect(row.locator('svg rect')).toHaveCount(64);
+  await page.getByRole('button', { name: 'Details ' + a + ' · Savings', exact: true }).click();
+  const detail = page.locator('.full-address');
+  await expect(detail.locator('.address-name')).toHaveText('Savings');
+  await expect(detail.locator('.wallet-address')).toHaveText(a);
+  expect(await detail.locator('svg').innerHTML()).toBe(blockie);
+  await expect(page.locator('.activity-item .address-name')).toHaveText(['Savings', 'Savings']);
+  expect(await page.evaluate(() => JSON.stringify((window as any).__calls))).not.toContain('Savings');
+  await page.reload();
+  await expect(page.locator('.wallet-head .address-name')).toHaveText('Savings');
+  expect(await page.locator('.wallet-head svg').innerHTML()).toBe(blockie);
+  await openAddressForm(page);
+  await page.locator('#address').fill('Trading | ' + b + '\nUnnamed | 0x0000000000000000000000000000000000000003');
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.wallet-head .address-name')).toHaveText(['Savings', 'Trading', 'Unnamed']);
+  expect(await page.locator('.wallet-head svg').nth(1).innerHTML()).not.toBe(blockie);
+  expect(externalImages).toEqual([]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/named-addresses-mobile.png', fullPage: true });
+});
+
+test('names render as text and invalid named lists leave the watchlist unchanged', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('#address').fill('Good | ' + a + '\nBad | invalid');
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('#input-error')).not.toBeEmpty();
+  await expect(page.locator('.wallet')).toHaveCount(0);
+  await page.getByLabel('Address name', { exact: false }).fill('Ambiguous');
+  await page.locator('#address').fill(a + '\n' + b);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('#input-error')).toContainText('one address');
+  await expect(page.locator('.wallet')).toHaveCount(0);
+  const name = '<img src=x onerror=alert(1)>';
+  await page.getByLabel('Address name', { exact: false }).fill(name);
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.wallet-head .address-name')).toHaveText(name);
+  await expect(page.locator('.address-display img')).toHaveCount(0);
 });

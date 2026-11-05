@@ -150,3 +150,19 @@ test('uploaded icons survive storage and unsafe icon URLs do not discard the tok
   values.set(PORTFOLIO_KEY, JSON.stringify(data));
   expect(loadPortfolio(operators).tokens).toEqual([{ address: token.address, symbol: 'TEST', decimals: 6 }]);
 });
+
+test('address names persist alongside balances and malformed names do not discard cached wallets', () => {
+  const wallet = makeWallet(getAddress(address), operators[0]!);
+  wallet.name = 'Savings';
+  wallet.eth = { amount: 42n, updatedAt: Date.now(), failed: false };
+  expect(savePortfolio([wallet], defaultTokens())).toBe(true);
+  expect(loadPortfolio(operators).wallets[0]!.name).toBe('Savings');
+  const snapshot = JSON.parse(values.get(PORTFOLIO_KEY)!);
+  for (const name of [null, 123, 'x'.repeat(81), 'bad\nname']) {
+    snapshot.wallets[0].name = name;
+    values.set(PORTFOLIO_KEY, JSON.stringify(snapshot));
+    const restored = loadPortfolio(operators).wallets[0]!;
+    expect(restored.name).toBeUndefined();
+    expect(restored.eth.amount).toBe(42n);
+  }
+});

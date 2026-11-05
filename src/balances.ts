@@ -15,6 +15,7 @@ export type RequestActivity = {
 };
 export type Wallet = {
   address: Address;
+  name?: string;
   isolationKey: string;
   rpcUrl: string;
   eth: Balance;
