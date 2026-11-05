@@ -900,7 +900,7 @@ test('queued addresses do not spin and a failed active read stops before retry b
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
   const first=page.locator('.wallet').nth(0), second=page.locator('.wallet').nth(1);
   await expect(first.locator('.refresh-icon .spinner')).toHaveCount(1);
-  await expect(second.locator('.row-status')).toHaveText('Queued');
+  await expect(second.locator('.refresh-icon')).toHaveAttribute('title', 'Queued for verification');
   await expect(second.locator('.spinner')).toHaveCount(0);
   await page.evaluate(() => {
     const worker=(window as any).__verifiers[0];
@@ -908,7 +908,7 @@ test('queued addresses do not spin and a failed active read stops before retry b
   });
   await expect(first).toHaveAttribute('data-loading','false');
   await expect(first.locator('.spinner')).toHaveCount(0);
-  await expect(first.locator('.row-status')).toContainText('Retry');
+  await expect(first.locator('.activity')).toContainText('Automatic retry');
   await expect(first.locator('.refresh-icon')).toBeEnabled();
   await expect(second.locator('.refresh-icon .spinner')).toHaveCount(1);
   expect(await page.evaluate(()=>(window as any).__verifiers[0].terminated)).toBe(true);
@@ -929,7 +929,7 @@ test('an unresponsive verifier times out, terminates and clears every wallet spi
   await page.clock.fastForward(300_001);
   await expect(page.locator('.wallet')).toHaveAttribute('data-loading','false');
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
-  await expect(page.locator('.row-status')).toContainText('Retry');
+  await expect(page.locator('.activity')).toContainText('Automatic retry');
   await expect(page.locator('.refresh-icon')).toBeEnabled();
   await expect(page.locator('.failure-link').first()).toContainText('Verification timed out');
   expect(await page.evaluate(()=>(window as any).__verifiers[0].terminated)).toBe(true);
@@ -1084,7 +1084,8 @@ test('compact status icons explain verification, proven zero, missing prices and
   await expect(proven).toHaveAttribute('title','Verified finalized');
   await expect(weth.getByRole('img',{name:'Verified finalized · proven zero',exact:true})).toHaveAttribute('title','Verified finalized · proven zero');
   await expect(custom.locator('.price-estimate').getByRole('img')).toHaveAttribute('title',/Unpriced: No direct pool qualifies/);
-  await expect(page.locator('.row-status').getByRole('img')).toHaveAttribute('title',/^Current\./);
+  await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toHaveCount(0);
+  await expect(page.locator('.row-status')).toHaveCount(0);
   for(const node of await page.locator('.status-icon').all()) {
     await expect(node).toHaveAttribute('title',/.+/);
     await expect(node).toHaveAttribute('aria-label',/.+/);
@@ -1352,6 +1353,9 @@ for (const width of [1280, 390]) test(`balance updates keep mounted rows, icons 
   await page.goto('/');
   await page.locator('#address').fill(a + '\n' + b);
   await page.getByRole('button', { name: 'add address to track', exact: true }).click();
+  await expect(page.locator('.wallet-table > thead > tr > th')).toHaveCount(4);
+  await expect(page.locator('.balances').first().locator(':scope > th, :scope > td')).toHaveCount(4);
+  await expect(page.locator('.wallet-details > td').first()).toHaveAttribute('colspan', '4');
   await openWalletDetails(page, a);
   await page.locator('.retrieval-log > summary').first().click();
   await expect(page.locator('.log-stream li').first()).toHaveAttribute('data-log-id', /\d+/);

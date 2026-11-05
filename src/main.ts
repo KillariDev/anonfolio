@@ -539,7 +539,7 @@ function render() {
   table.className = 'wallet-table';
   table.style.setProperty('--token-count', String(assets.length));
   const colgroup = document.createElement('colgroup');
-  for (const kind of ['address', ...assets.map(() => 'token'), 'status', 'actions']) {
+  for (const kind of ['address', ...assets.map(() => 'token'), 'actions']) {
     const col = document.createElement('col'); col.className = 'wallet-column-' + kind; colgroup.append(col);
   }
   table.append(colgroup);
@@ -548,7 +548,7 @@ function render() {
   caption.textContent = 'Token balances by tracked address. Expand a row for timestamps and private request progress.';
   const head = document.createElement('thead');
   const columns = document.createElement('tr');
-  for (const entry of ['Address / refresh', ...assets, 'Status', 'Actions']) {
+  for (const entry of ['Address / refresh', ...assets, 'Actions']) {
     const column = document.createElement('th');
     column.scope = 'col';
     if (entry === 'Actions') { column.setAttribute('aria-label', 'Address details'); }
@@ -601,24 +601,6 @@ function render() {
     row.append(identity);
     const pending = (asset: string) => wallet.loading && !wallet.queuedForVerifier && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
     row.append(...assets.map(token => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address)));
-    const status = document.createElement('td');
-    status.className = 'row-status';
-    status.setAttribute('aria-live', 'polite');
-    const values = assets.map(token => tokenBalance(wallet, token));
-    const failed = values.some(balance => balance.failed);
-    const cached = values.some(balance => balance.cached);
-    const known = values.filter(balance => balance.amount !== undefined).length;
-    const retry = retries.info(wallet);
-    status.textContent = !tokens.length ? 'No tokens' : wallet.queuedForVerifier ? 'Queued' : wallet.loading ? 'Reading ' + wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length + '/' + wallet.activity.length
-      : retry ? (retry.dueAt ? 'Retry ' + new Date(retry.dueAt).toLocaleTimeString() : 'Retry paused')
-      : failed ? 'Read failed' : known < values.length ? 'Partial' : cached ? 'Saved' : 'Current';
-    status.title = wallet.verificationStatus || retryMessage(wallet) || (failed ? 'Some reads failed; previous amounts are retained' : 'Expand Details for read timestamps');
-    status.classList.toggle('warning', failed || cached || known < values.length);
-    if (!wallet.loading && !retry) {
-      const label = status.textContent!;
-      const kind: StatusIcon = !tokens.length ? 'waiting' : failed ? 'unavailable' : known < values.length ? 'partial' : cached ? 'saved' : 'current';
-      status.replaceChildren(statusIcon(kind, label, label + '. ' + status.title));
-    }
     const actions = document.createElement('td');
     actions.className = 'actions';
     const expanded = expandedAddresses.has(wallet.address);
@@ -650,13 +632,13 @@ function render() {
       persist(); render();
     };
     actions.append(toggle);
-    row.append(status, actions);
+    row.append(actions);
     const details = document.createElement('tr');
     details.id = 'details-' + wallet.address;
     details.className = 'wallet-details';
     details.hidden = !expanded;
     const detailCell = document.createElement('td');
-    detailCell.colSpan = assets.length + 3;
+    detailCell.colSpan = assets.length + 2;
     const content = walletDetails(wallet, logs.get(wallet.address)?.open);
     const detailActions = document.createElement('div');
     detailActions.className = 'detail-actions';

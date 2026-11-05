@@ -84,9 +84,8 @@ input::placeholder, textarea::placeholder { color: #687462; }
 #token-error { color: #eeb69b; }
 .scroll-hint { display: none; }
 #wallets { position: relative; overflow: auto; max-height: 70vh; border: 1px solid #35422f; border-radius: 9px; }
-.wallet-table { --address-width: clamp(200px, 34vw, 430px); table-layout: fixed; min-width: calc(var(--address-width) + var(--token-count) * 170px + 198px); width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
+.wallet-table { --address-width: clamp(200px, 34vw, 430px); table-layout: fixed; min-width: calc(var(--address-width) + var(--token-count) * 170px + 58px); width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
 .wallet-column-address { width: var(--address-width); }
-.wallet-column-status { width: 140px; }
 .wallet-column-actions { width: 58px; }
 .wallet-table > thead > tr > th { position: sticky; top: 0; z-index: 2; font-size: 10px; font-weight: 500; color: #829876; padding: 10px 14px; background: #151d14; border-bottom: 1px solid #35422f; white-space: nowrap; }
 .wallet-table > thead > tr > th:first-child, .wallet-head { position: sticky; left: 0; z-index: 1; }
@@ -107,8 +106,6 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .balance .error { display: block; color: #e5b393; }
 .balance .cached { display: block; color: #c8c093; }
 .balance .cached:empty { display: none; }
-.row-status { font-size: 10px; color: #96b283; white-space: nowrap; min-width: 105px; }
-.row-status.warning { color: #d1b997; }
 .actions { white-space: nowrap; width: 1%; }
 .actions .details-toggle { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #a8bd9b; }
 .actions .details-toggle:hover { background: #2b3926; color: #d1e4c5; }
