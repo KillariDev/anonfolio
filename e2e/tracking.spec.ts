@@ -1388,3 +1388,30 @@ for (const width of [1280, 390]) test(`balance updates keep mounted rows, icons 
     expect(await page.evaluate(() => Math.abs(document.querySelector('.verification-panel')!.getBoundingClientRect().height - (window as any).__panelHeight))).toBeLessThanOrEqual(1);
   }
 });
+
+for (const width of [1280, 390]) test(`balance values and verification icons share one line at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track', exact: true }).click();
+  await expect(page.locator('.wallet .refresh-icon .spinner')).toHaveCount(1);
+  await page.evaluate(() => {
+    const worker = (window as any).__verifiers[0], run = worker.request.id;
+    const block = { hash: '0x' + '11'.repeat(32), stateRoot: '0x' + '22'.repeat(32), number: '0x100', timestamp: Date.now() - 60_000 };
+    worker.onmessage({data:{type:'balance', run, asset:'eth', amount:'130000000000000000', block}});
+    worker.onmessage({data:{type:'price', run, asset:'eth', block, estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',symbol:'USDC',decimals:6,numerator:'2170690000',denominator:'1000000000000000000',window:1800,blockHash:block.hash,minLiquidity:'10000'}}});
+  });
+  const balance = page.locator('.balance').first();
+  await expect(balance.locator('.amount')).toHaveText('0.13');
+  await expect(balance.locator('.price-estimate')).toHaveText('≈ 282.19 USDC');
+  await expect(balance.locator('.balance-values > .balance-status')).toHaveCount(1);
+  await expect(balance.locator('.status-verified')).toHaveAttribute('title', 'Verified finalized');
+  const geometry = await balance.evaluate(node => {
+    const parts = ['.amount', '.price-estimate', '.balance-status'].map(selector => node.querySelector(selector)!.getBoundingClientRect());
+    return { centers: parts.map(rect => rect.top + rect.height / 2), overlap: parts.some((rect, i) => i > 0 && rect.left < parts[i - 1].right), right: parts[2].right, cellRight: node.getBoundingClientRect().right };
+  });
+  expect(Math.max(...geometry.centers) - Math.min(...geometry.centers)).toBeLessThanOrEqual(1);
+  expect(geometry.overlap).toBe(false);
+  expect(geometry.right).toBeLessThanOrEqual(geometry.cellRight);
+});

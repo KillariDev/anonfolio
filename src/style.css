@@ -270,7 +270,7 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
   .token-value { font-size: 10px; }
 }
 .balance .price-estimate { display: block; color: #b0c3a4; font-size: 10px; margin: 0; }
-.balance-values { display: flex; align-items: baseline; flex-wrap: nowrap; gap: 3px 10px; }
+.balance-values { display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; }
 
 .failure-link { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; margin-top: 3px; padding: 0; border: 0; background: transparent; color: #e6bd91; font-size: 10px; text-decoration: underline; text-align: left; }
 .read-failure { margin: 12px 0; padding: 16px; border: 1px solid #514333; border-radius: 10px; background: #211e17; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
@@ -302,7 +302,7 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .progress-request span { display: block; font-size: 10px; color: #97ab89; margin-bottom: 5px; }
 .verification-panel .verification-progress, .progress-hint { margin: 8px 0 0; color: #92a786; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
 
-.balance-status { display: flex; align-items: baseline; gap: 5px; height: 14px; margin-top: 3px; max-width: 240px; }
+.balance-status { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; height: 14px; margin: 0; }
 .balance-status .error, .balance-status .cached { min-width: 0; overflow: hidden; text-overflow: ellipsis; margin: 0; }
 .balance-status .failure-link { min-width: 0; margin: 0; line-height: 12px; }
 

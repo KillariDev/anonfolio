@@ -245,7 +245,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   status.replaceChildren(statusIcon(statusKind, statusText, balance.cached && balance.verifiedBlock && !balance.failed ? 'Saved verified balance; refresh to check for updates.' : statusText));
   const statusLine = document.createElement('div'); statusLine.className = 'balance-status';
   statusLine.append(status);
-  box.append(label, amount, statusLine);
+  box.append(label);
   const failure = balanceFailure(balance);
   if (failure) {
     const explain = document.createElement('button'); explain.type = 'button'; explain.className = 'failure-link';
@@ -268,7 +268,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
     price.append(statusIcon('stale', ' · stale', 'Saved price estimate; it may be out of date.'));
   }
   const values = document.createElement('div'); values.className = 'balance-values';
-  values.append(amount, price); box.insertBefore(values, statusLine);
+  values.append(amount, price, statusLine); box.append(values);
   if (balance.verifiedBlock) box.title = 'Finalized block ' + BigInt(balance.verifiedBlock.number) + ' · ' + balance.verifiedBlock.hash + ' · ' + new Date(balance.verifiedBlock.timestamp).toLocaleString();
   if (balance.updatedAt) {
     const time = document.createElement('time');
