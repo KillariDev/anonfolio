@@ -163,3 +163,19 @@ test('an early oracle failure survives balance success without marking that bala
   }));
   expect(wallet.eth).toMatchObject({amount:0n,failed:false,priceError:'No direct pool qualifies'});
 });
+
+test('retrieval log retains earlier progress, failures and subsequent successful attempts',async()=>{
+  const wallet=makeWallet(address,'https://one.example');
+  await readBalances(wallet,unusedWorker,defaultTokens(),()=>{},false,engine((_tokens,emit)=>{
+    emit({type:'progress',message:'Verifying checkpoint signatures'});
+    emit({type:'progress',message:'Fetching private account proof'});
+    throw new Error('Route timed out');
+  }));
+  const earlier=wallet.retrievalLog!.map(entry=>entry.message);
+  expect(earlier.join(' ')).toContain('Verifying checkpoint signatures');
+  expect(earlier.join(' ')).toContain('Route timed out');
+  await readBalances(wallet,unusedWorker,defaultTokens(),()=>{},false,success);
+  expect(wallet.retrievalLog!.slice(0,earlier.length).map(entry=>entry.message)).toEqual(earlier);
+  expect(wallet.retrievalLog!.at(-1)!.level).toBe('success');
+  expect(wallet.retrievalLog!.filter(entry=>entry.level==='error').length).toBeGreaterThan(0);
+});

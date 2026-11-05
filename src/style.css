@@ -306,3 +306,15 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .balance-status > small { display: inline-flex; height: 14px; margin: 0; }
 .balance-status .failure-link { overflow: visible; }
 .balance .price-estimate { display: inline-flex; align-items: center; gap: 5px; }
+
+.retrieval-log { border: 1px solid #35452d; border-radius: 7px; margin: 2px 0 12px; background: #10190e; }
+.retrieval-log > summary { font-size: 11px; padding: 9px 11px; }
+.log-count { margin-left: 8px; color: #819975; font: 10px ui-monospace, monospace; }
+.log-hint { margin: 9px 11px; font-size: 9px; color: #8ca47f; }
+.log-stream { height: 260px; overflow: auto; overscroll-behavior: contain; overflow-anchor: none; margin: 0; padding: 0 11px 8px; list-style: none; scrollbar-gutter: stable; }
+.log-stream:focus-visible { outline: 2px solid #b8ec8c; outline-offset: -2px; }
+.log-stream li { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 8px; padding: 6px 0; border-bottom: 1px solid #243220; color: #a1b494; font: 10px/1.65 ui-monospace, monospace; overflow-wrap: anywhere; }
+.log-stream time { color: #718d64; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.log-stream li[data-level="success"] { color: #b5d79f; }
+.log-stream li[data-level="error"] { color: #edb99d; }
+@media (max-width: 720px) { .log-stream li { grid-template-columns: 1fr; gap: 2px; } }

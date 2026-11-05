@@ -1226,3 +1226,59 @@ test('read history keeps legacy saved values separate from tokens with no succes
   await expect(pending.getByRole('img',{name:/no successful read is available/})).toBeVisible();
   await expect(legacy.locator('tbody time')).toHaveAttribute('datetime',new Date(timestamp).toISOString());
 });
+
+test('expandable timestamped retrieval stream keeps history, follows new entries and preserves scrollback',async({page})=>{
+  await page.clock.install();
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a+'\n'+b);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await openWalletDetails(page,a);
+  const log=page.locator('.wallet').first().locator('.retrieval-log'), stream=log.locator('.log-stream');
+  async function emit(event:object) {
+    await page.evaluate(event=>{const worker=(window as any).__verifiers[0];worker.onmessage({data:{...event,run:worker.request.id}});},event);
+  }
+  await emit({type:'progress',stage:'consensus',message:'Checkpoint signatures accepted'});
+  await expect(stream).not.toBeVisible();
+  await log.locator('summary').click();
+  await expect(stream).toContainText('Checkpoint signatures accepted');
+  await page.clock.fastForward(25);
+  const startedAt=await page.evaluate(()=>Date.now());
+  const request={requestId:9,method:'eth_getProof',host:'rpc.example',startedAt,deadline:startedAt+90_000};
+  for(const state of ['waiting','reading','received']) await emit({type:'network',request:{...request,state}});
+  await expect(stream).toContainText('Response headers received');
+  await expect(stream).toContainText('Response body received');
+  await page.evaluate(()=>{
+    const worker=(window as any).__verifiers[0];
+    for(let i=0;i<65;i++) worker.onmessage({data:{type:'progress',run:worker.request.id,message:'Proof step '+i+': verifying account and requested storage witnesses.'}});
+  });
+  expect(await stream.evaluate(node=>node.scrollHeight-node.clientHeight-node.scrollTop)).toBeLessThanOrEqual(1);
+  await stream.evaluate(node=>{node.focus({preventScroll:true});node.scrollTop=0;});
+  await emit({type:'progress',message:'A newer message while reading earlier entries'});
+  await expect(stream).toBeFocused();
+  expect(await stream.evaluate(node=>node.scrollTop)).toBe(0);
+  await log.locator('summary').click();
+  await emit({type:'progress',message:'Message received while the stream is collapsed'});
+  await log.locator('summary').click();
+  await expect(stream).toContainText('Proof step 0');
+  await expect(stream).toContainText('Message received while the stream is collapsed');
+  const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
+  await emit({type:'balance',asset:'eth',amount:'0',block});
+  await emit({type:'fatal',error:'Private route timed out'});
+  await expect(log).toHaveJSProperty('open',true);
+  await expect(stream).toContainText('Balance proved');
+  await expect(stream).toContainText('Private route timed out');
+  await expect(stream).toContainText('Automatic retry');
+  const timestamps=await stream.locator('time').evaluateAll(nodes=>nodes.map(node=>({text:node.textContent,at:Date.parse(node.getAttribute('datetime')!)})));
+  expect(timestamps).toHaveLength(await stream.locator('li').count());
+  expect(timestamps.every((entry,index)=>/^\d{2}:\d{2}:\d{2}\.\d{3}$/.test(entry.text!)&&Number.isFinite(entry.at)&&(!index||entry.at>=timestamps[index-1]!.at))).toBe(true);
+  expect(new Set(timestamps.map(entry=>entry.at)).size).toBeGreaterThan(1);
+  await openWalletDetails(page,b);
+  const secondLog=page.locator('.wallet').nth(1).locator('.retrieval-log');
+  await secondLog.locator('summary').click();
+  await expect(secondLog).not.toContainText('Checkpoint signatures accepted');
+  await page.screenshot({path:'/tmp/anonfolio-retrieval-log-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'/tmp/anonfolio-retrieval-log-mobile.png',fullPage:true});
+});

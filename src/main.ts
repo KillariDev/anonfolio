@@ -1,3 +1,5 @@
+import { appendRetrievalLog } from './retrieval-log';
+import { logStream } from './log-stream';
 import { readHistory } from './read-history';
 import { stageLabels, progressTime, waitingReason, type VerificationStage } from './verification/progress';
 import chevronDown from './assets/chevron-down.svg?raw';
@@ -111,19 +113,30 @@ document.addEventListener('keydown', event => {
 const expandedAddresses = new Set<string>();
 const input = document.querySelector<HTMLTextAreaElement>('#address')!;
 const error = document.querySelector<HTMLElement>('#input-error')!;
+const loggedRetries = new Map<Wallet,string>();
 const retries = new RetryQueue<Wallet | 'connection'>(
   key => key === 'connection' ? start(true) : refreshWallet(key, true),
   () => navigator.onLine,
-  () => { renderConnection(); render(); },
+  () => {
+    for (const wallet of wallets) {
+      const connectionRetry=state==='failed'?retryMessage('connection'):'';
+      const message=[retryMessage(wallet),connectionRetry?'Private connection: '+connectionRetry:''].filter(Boolean).join(' ');
+      if(message && loggedRetries.get(wallet)!==message) appendRetrievalLog(wallet,message);
+      loggedRetries.set(wallet,message);
+    }
+    for(const wallet of loggedRetries.keys()) if(!wallets.includes(wallet)) loggedRetries.delete(wallet);
+    renderConnection(); render();
+  },
 );
 const connection = new Connection(
   next => {
     state = next;
+    for(const wallet of wallets) if(wallet.loading) appendRetrievalLog(wallet,'Private connection: '+next,next==='failed'?'error':'info');
     if (next === 'failed') retries.schedule('connection');
     else if (next === 'ready') retries.cancel('connection');
     renderConnection();
   },
-  message => { connectionMessage = message; renderConnection(); },
+  message => { connectionMessage = message; for(const wallet of wallets) if(wallet.loading) appendRetrievalLog(wallet,message); renderConnection(); if(wallets.some(wallet=>wallet.loading)) render(); },
 );
 function persist() {
   document.querySelector('#storage-warning')!.textContent = savePortfolio(wallets, tokens)
@@ -460,13 +473,13 @@ function verificationPanel(wallet: Wallet) {
   }
   return panel;
 }
-function walletDetails(wallet: Wallet) {
+function walletDetails(wallet: Wallet, logOpen=false) {
   const content = document.createElement('div');
   content.className = 'detail-scroll';
   content.dataset.address = wallet.address;
   content.tabIndex = 0;
   content.setAttribute('aria-label', 'Read progress and results for ' + wallet.address);
-  content.append(readHistory(wallet, tokens));
+  content.append(logStream(wallet, logOpen), readHistory(wallet, tokens));
   if (wallet.loading) content.append(verificationPanel(wallet));
   for (const token of tokens) {
     const balance = tokenBalance(wallet, token);
@@ -506,6 +519,10 @@ function walletDetails(wallet: Wallet) {
   return frame;
 }
 function render() {
+  const logs = new Map([...walletList.querySelectorAll<HTMLDetailsElement>('.retrieval-log')].map(node => {
+    const stream=node.querySelector<HTMLElement>('.log-stream')!;
+    return [node.closest<HTMLElement>('.wallet')!.dataset.address,{open:node.open,top:stream.scrollTop,tail:stream.scrollHeight-stream.clientHeight-stream.scrollTop<5}] as const;
+  }));
   const detailPositions = new Map([...walletList.querySelectorAll<HTMLElement>('.detail-scroll')].map(node => [node.dataset.address, node.scrollTop]));
   const openFailures = new Set([...walletList.querySelectorAll('.failure-technical[open]')].map(node => node.closest('.detail-scroll')?.getAttribute('data-address') + ':' + node.closest('.read-failure')?.getAttribute('aria-label')));
   const openBlocks = new Set([...walletList.querySelectorAll<HTMLElement>('.snapshot-hash[open]')].map(node => node.closest<HTMLElement>('.wallet')?.dataset.address + ':' + node.dataset.block));
@@ -644,7 +661,7 @@ function render() {
     details.hidden = !expanded;
     const detailCell = document.createElement('td');
     detailCell.colSpan = assets.length + 3;
-    const content = walletDetails(wallet);
+    const content = walletDetails(wallet, logs.get(wallet.address)?.open);
     const detailActions = document.createElement('div');
     detailActions.className = 'detail-actions';
     detailActions.append(remove);
@@ -655,6 +672,10 @@ function render() {
     table.append(card);
   });
   walletList.append(table);
+  walletList.querySelectorAll<HTMLElement>('.log-stream').forEach(stream => {
+    const previous=logs.get(stream.closest<HTMLElement>('.wallet')!.dataset.address);
+    if(previous?.open) stream.scrollTop=previous.tail?stream.scrollHeight:previous.top;
+  });
   walletList.querySelectorAll<HTMLDetailsElement>('.failure-technical').forEach(node => {
     node.open = openFailures.has(node.closest('.detail-scroll')?.getAttribute('data-address') + ':' + node.closest('.read-failure')?.getAttribute('aria-label'));
   });
@@ -689,15 +710,19 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   wallet.stageStartedAt = Date.now();
   wallet.networkRequests = [];
   wallet.queuedForVerifier = false;
+  appendRetrievalLog(wallet, (onlyFailed?'Automatic retry':'Refresh')+' started · '+new URL(wallet.rpcUrl).hostname+' through the address’s Anon-RPC route.');
+  appendRetrievalLog(wallet, state==='ready'?'Using the ready private worker.':connectionMessage);
   prepareActivity(wallet, selectedTokens, onlyFailed);
   render();
   try {
     if (!navigator.onLine) throw new Error('Offline');
     const worker = await connection.get();
+    appendRetrievalLog(wallet,'Private worker ready; requesting finalized verification.');
     if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { pruneTokenBalances(wallet); persist(); render(); }, onlyFailed);
   } catch (cause) {
     const failure = readFailure(navigator.onLine ? cause : 'Browser is offline.', 'Starting the private connection');
     wallet.verificationStatus = failure.message;
+    appendRetrievalLog(wallet,'Refresh failed: '+failure.message,'error');
     wallet.activity.forEach(item => {
       const token = selectedTokens.find(token => token.address === item.asset);
       if (token) { tokenBalance(wallet, token).failed = true; tokenBalance(wallet, token).failure = failure; }

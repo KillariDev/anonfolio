@@ -1,3 +1,4 @@
+import { appendRetrievalLog, logVerificationEvent, type RetrievalLog } from './retrieval-log';
 import type { NetworkProgress, VerificationStage } from './verification/progress';
 import { formatUnits, type Address } from 'viem';
 import { errorMessage, readFailure, type ReadFailure } from './errors';
@@ -17,7 +18,7 @@ export type RequestActivity = {
   phase: 'waiting' | 'requesting' | 'received' | 'failed';
   attempt: number;
 };
-export type Wallet = {
+export type Wallet = RetrievalLog & {
   address: Address;
   name?: string;
   isolationKey: string;
@@ -63,6 +64,7 @@ export async function readBalances(
   const selected = tokens.filter(token => !onlyFailed || tokenBalance(wallet, token).failed || !tokenBalance(wallet, token).verifiedBlock);
   prepareActivity(wallet, selected);
   wallet.verificationStatus = 'Starting balance verification.';
+  appendRetrievalLog(wallet,wallet.verificationStatus);
   wallet.networkRequests = [];
   wallet.queuedForVerifier = false;
   const pending = new Set(selected.map(token => token.address as string));
@@ -71,6 +73,7 @@ export async function readBalances(
   let fatal: ReadFailure | undefined;
   try {
     await verifier(wallet, worker, selected, event => {
+      logVerificationEvent(wallet,event,selected);
       const stage = event.stage || (event.type === 'queued' ? 'queued' : event.type === 'started' ? 'verifier' : event.type === 'asset' ? 'balances' : event.type === 'price-start' ? 'pricing' : undefined);
       if (stage && stage !== wallet.verificationStage) { wallet.verificationStage = stage; wallet.stageStartedAt = Date.now(); }
       if (event.type === 'network' && event.request) {
@@ -110,7 +113,7 @@ export async function readBalances(
       }
       onChange();
     });
-  } catch (error) { fatal = readFailure(error, wallet.verificationStatus); wallet.verificationStatus = fatal.message; }
+  } catch (error) { fatal = readFailure(error, wallet.verificationStatus); wallet.verificationStatus = fatal.message; appendRetrievalLog(wallet, 'Verification stopped: '+fatal.message, 'error'); }
   wallet.queuedForVerifier = false;
   wallet.networkRequests = [];
   for (const token of selected) if (pending.has(token.address)) {
@@ -120,6 +123,7 @@ export async function readBalances(
     if (activity) activity.phase = 'failed';
   }
   if (!pending.size && selected.length) wallet.verificationStatus = 'Verification complete: ' + selected.length + ' assets at one verified finalized block.';
+  appendRetrievalLog(wallet, fatal ? 'Refresh stopped; already proved balances are retained.' : pending.size ? 'Refresh ended without a proven result for '+pending.size+' assets.' : wallet.verificationStatus || 'Verification finished.', fatal || pending.size ? 'error' : 'success');
   onChange();
 }
 export function formatBalance(amount: bigint, decimals = 18): string {
