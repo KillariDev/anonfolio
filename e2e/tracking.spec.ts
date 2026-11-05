@@ -1062,3 +1062,59 @@ for (const viewport of [{width:1280,height:800},{width:390,height:844}]) test(`o
     expect(Math.max(...values)-Math.min(...values),key+' changed across progress events: '+JSON.stringify(values)).toBeLessThanOrEqual(1);
   }
 });
+
+test('compact status icons explain verification, proven zero, missing prices and saved or failed reads', async ({page}) => {
+  await mockConnection(page);
+  await mockVerification(page,true);
+  await page.goto('/');
+  await addToken(page);
+  await openAddressForm(page);
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await expect(page.locator('.amount')).toHaveText(['1','0','1.23']);
+  const eth=page.locator('.balance').nth(0), weth=page.locator('.balance').nth(1), custom=page.locator('.balance').nth(2);
+  const proven=eth.getByRole('img',{name:'Verified finalized',exact:true});
+  await expect(proven.locator('svg')).toBeVisible();
+  await proven.hover();
+  await expect(proven).toHaveAttribute('title','Verified finalized');
+  await expect(weth.getByRole('img',{name:'Verified finalized · proven zero',exact:true})).toHaveAttribute('title','Verified finalized · proven zero');
+  await expect(custom.locator('.price-estimate').getByRole('img')).toHaveAttribute('title',/Unpriced: No direct pool qualifies/);
+  await expect(page.locator('.row-status').getByRole('img')).toHaveAttribute('title',/^Current\./);
+  for(const node of await page.locator('.status-icon').all()) {
+    await expect(node).toHaveAttribute('title',/.+/);
+    await expect(node).toHaveAttribute('aria-label',/.+/);
+    // Labels remain available to assistive technology, without visible repeated text.
+    await expect(node.locator('.sr-only')).toHaveCSS('position','absolute');
+  }
+  await proven.focus();
+  await expect(proven).toBeFocused();
+  await page.screenshot({path:'/tmp/anonfolio-status-icons.png',fullPage:true});
+  await page.unroute('**/src/connection.ts*');
+  await mockConnection(page,true,true);
+  await page.reload();
+  await expect(page.locator('.balance small.cached .status-saved')).toHaveCount(3);
+  await expect(page.locator('.balance small.cached .status-saved').first()).toHaveAttribute('title','Saved verified balance; refresh to check for updates.');
+  await page.evaluate(()=>(window as any).__releaseConnection());
+  await expect(page.locator('.balance small.error .status-stale')).toHaveCount(3);
+  const explain=page.getByRole('button',{name:'Explain ETH failure for '+a,exact:true});
+  await expect(explain.locator('svg')).toBeVisible();
+  await expect(explain).toHaveAttribute('title',/private connection unavailable/);
+  await explain.click();
+  await expect(page.getByRole('region',{name:'ETH balance failure',exact:true})).toBeVisible();
+});
+
+test('refresh preserves focus on the same address and token when status icons share labels', async ({page}) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await addToken(page);
+  await openAddressForm(page);
+  await page.locator('#address').fill(a+'\n'+b);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await expect(page.locator('.amount')).toHaveText(['1','0','1.23','1','0','1.23']);
+  const icon=page.locator('.wallet').nth(1).locator('.balance').nth(2).getByRole('img',{name:'Verified finalized',exact:true});
+  await icon.focus();
+  await page.locator('.refresh-icon').first().evaluate(button=>(button as HTMLButtonElement).click());
+  await expect(icon).toBeFocused();
+  await expect(page.locator('.refresh-icon').first()).toBeEnabled();
+  await expect(icon).toBeFocused();
+});

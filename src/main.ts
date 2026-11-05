@@ -16,12 +16,12 @@ import { validateToken, defaultTokens, type Token } from './tokens';
 import { RetryQueue } from './retries';
 import { loadPricing, savePricing, validatePricing, defaultPricing, usableEstimate, valueFraction, displayValue } from './pricing';
 import { estimatedTotal, portfolioTotals } from './totals';
-import { readIcon, tokenIcon } from './icons';
+import { readIcon, tokenIcon, statusIcon, type StatusIcon } from './icons';
 import './style.css';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <header><a class="brand" href="./" aria-label="Anonfolio home"><img class="brand-mark" src="${appIcon}" width="28" height="28" alt="">anonfolio<span class="brand-dot">.</span></a><details id="connection" aria-label="Private connection details"></details><div class="header-actions"><span class="network"><i></i>Ethereum mainnet</span><details id="network-settings"><summary class="settings-toggle" role="button" aria-label="Settings" title="Settings" aria-controls="settings-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.5"/></svg></summary>
-<section id="settings-panel" class="settings-panel" aria-label="Application settings"><div class="settings-heading"><h2>Settings</h2><button id="close-settings" type="button" aria-label="Close settings">×</button></div>
+<section id="settings-panel" class="settings-panel" aria-label="Application settings"><div class="settings-heading"><h2>Settings</h2><button id="close-settings" type="button" aria-label="Close settings" title="Close settings">×</button></div>
 <details class="token-settings"><summary>Tracked tokens <span id="token-count"></span></summary>
 <p class="form-hint">Choose the tokens to track across every address. Token changes save automatically.</p>
 <ul id="token-list" aria-label="Tracked tokens"></ul>
@@ -219,9 +219,10 @@ function failureReport(label: string, failure: ReadFailure, rpcHost?: string) {
 function balanceFailure(balance: Balance): ReadFailure | undefined {
   return balance.failed ? balance.failure || { message: 'No error details were saved for the previous failure. Refresh this address to capture a new error.', at: 0 } : undefined;
 }
-function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: Balance, pending: boolean, native = false) {
+function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: Balance, pending: boolean, asset: string) {
   const box = document.createElement('td');
   box.className = 'balance';
+  box.dataset.asset = asset;
   const label = document.createElement('div');
   label.className = 'token';
   label.textContent = symbol;
@@ -235,13 +236,19 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   status.textContent = balance.failed ? (balance.amount === undefined ? 'Unavailable · verification failed' : 'Stale · refresh failed')
     : balance.cached ? (balance.verifiedBlock ? '' : 'Unverified saved value · reverify required') : balance.updatedAt ? (balance.verifiedBlock ? 'Verified finalized' + (balance.amount === 0n ? ' · proven zero' : '') : 'Unverified · reverify required') : 'Awaiting first read';
   if (balance.amount !== undefined && !balance.verifiedBlock) status.textContent = 'Unverified saved value · ' + (balance.failed ? 'verification failed' : 'reverify required');
+  const statusText = status.textContent || (balance.cached ? 'Saved verified balance' : 'Awaiting first read');
+  const statusKind: StatusIcon = balance.failed ? (balance.amount === undefined ? 'unavailable' : 'stale') : balance.cached ? (balance.verifiedBlock ? 'saved' : 'unverified') : balance.verifiedBlock ? 'verified' : balance.amount !== undefined ? 'unverified' : 'waiting';
+  status.replaceChildren(statusIcon(statusKind, statusText, balance.cached && balance.verifiedBlock && !balance.failed ? 'Saved verified balance; refresh to check for updates.' : statusText));
   const statusLine = document.createElement('div'); statusLine.className = 'balance-status';
   statusLine.append(status);
   box.append(label, amount, statusLine);
   const failure = balanceFailure(balance);
   if (failure) {
     const explain = document.createElement('button'); explain.type = 'button'; explain.className = 'failure-link';
-    explain.textContent = explainFailure(failure).summary + ' · Details';
+    const meaning = explainFailure(failure).summary + ' · Details';
+    const icon = statusIcon('unavailable', meaning, meaning + ': ' + failure.message);
+    icon.removeAttribute('tabindex');
+    explain.append(icon);
     explain.title = failure.message;
     explain.setAttribute('aria-label', 'Explain ' + symbol + ' failure for ' + wallet.address);
     explain.onclick = () => { expandedAddresses.add(wallet.address); render(); document.getElementById('details-' + wallet.address)?.scrollIntoView({ block: 'nearest' }); };
@@ -251,6 +258,11 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   const price = document.createElement('small'); price.className = 'price-estimate';
   price.textContent = estimate ? '≈ ' + formatBalance(displayValue(valueFraction(balance.amount!, estimate)), estimate.decimals + 18) + ' ' + pricing.quote.symbol + (balance.cached || balance.failed ? ' · stale' : '') : 'Unpriced';
   price.title = estimate ? '30-minute direct-pool TWAP · ' + estimate.pool + ' · finalized block ' + estimate.blockHash : balance.priceError || 'Waiting for a qualifying direct pool at the balance’s verified block.';
+  if (!estimate) price.replaceChildren(statusIcon('unpriced', 'Unpriced', 'Unpriced: ' + price.title));
+  else if (balance.cached || balance.failed) {
+    price.textContent = price.textContent!.replace(/ · stale$/, '');
+    price.append(statusIcon('stale', ' · stale', 'Saved price estimate; it may be out of date.'));
+  }
   const values = document.createElement('div'); values.className = 'balance-values';
   values.append(amount, price); box.insertBefore(values, statusLine);
   if (balance.verifiedBlock) box.title = 'Finalized block ' + BigInt(balance.verifiedBlock.number) + ' · ' + balance.verifiedBlock.hash + ' · ' + new Date(balance.verifiedBlock.timestamp).toLocaleString();
@@ -473,7 +485,10 @@ function render() {
   syncProgressClock();
   renderTotals();
   document.querySelector('#count')!.textContent = String(wallets.length);
-  const focus = document.activeElement?.getAttribute('aria-label');
+  const activeElement = document.activeElement as HTMLElement | null;
+  const focus = activeElement?.getAttribute('aria-label');
+  const focusAddress = activeElement?.closest<HTMLElement>('.wallet')?.dataset.address;
+  const focusAsset = activeElement?.closest<HTMLElement>('.balance')?.dataset.asset;
   const scrollLeft = walletList.scrollLeft;
   const scrollTop = walletList.scrollTop;
   walletList.replaceChildren();
@@ -513,6 +528,7 @@ function render() {
     const card = document.createElement('tbody');
     card.className = 'wallet';
     card.dataset.loading = String(wallet.loading);
+    card.dataset.address = wallet.address;
     const row = document.createElement('tr');
     row.className = 'balances';
     row.setAttribute('aria-busy', String(wallet.loading));
@@ -544,7 +560,7 @@ function render() {
     }
     row.append(identity);
     const pending = (asset: string) => wallet.loading && !wallet.queuedForVerifier && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
-    row.append(...assets.map(token => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address === 'eth')));
+    row.append(...assets.map(token => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address)));
     const status = document.createElement('td');
     status.className = 'row-status';
     status.setAttribute('aria-live', 'polite');
@@ -558,6 +574,11 @@ function render() {
       : failed ? 'Read failed' : known < values.length ? 'Partial' : cached ? 'Saved' : 'Current';
     status.title = wallet.verificationStatus || retryMessage(wallet) || (failed ? 'Some reads failed; previous amounts are retained' : 'Expand Details for read timestamps');
     status.classList.toggle('warning', failed || cached || known < values.length);
+    if (!wallet.loading && !retry) {
+      const label = status.textContent!;
+      const kind: StatusIcon = !tokens.length ? 'waiting' : failed ? 'unavailable' : known < values.length ? 'partial' : cached ? 'saved' : 'current';
+      status.replaceChildren(statusIcon(kind, label, label + '. ' + status.title));
+    }
     const actions = document.createElement('td');
     actions.className = 'actions';
     const expanded = expandedAddresses.has(wallet.address);
@@ -613,7 +634,12 @@ function render() {
   walletList.querySelectorAll<HTMLElement>('.detail-scroll').forEach(node => { node.scrollTop = detailPositions.get(node.dataset.address) || 0; });
   walletList.scrollLeft = scrollLeft;
   walletList.scrollTop = scrollTop;
-  if (focus) [...walletList.querySelectorAll<HTMLElement>('[aria-label]')].find(button => button.getAttribute('aria-label') === focus)?.focus({ preventScroll: true });
+  if (focus) {
+    const card = [...walletList.querySelectorAll<HTMLElement>('.wallet')].find(node => node.dataset.address === focusAddress);
+    const cell = card && [...card.querySelectorAll<HTMLElement>('.balance')].find(node => node.dataset.asset === focusAsset);
+    const scope = cell || card || walletList;
+    [...scope.querySelectorAll<HTMLElement>('[aria-label]')].find(node => node.getAttribute('aria-label') === focus)?.focus({ preventScroll: true });
+  }
 }
 function pruneTokenBalances(wallet: Wallet) {
   for (const token of defaultTokens()) {

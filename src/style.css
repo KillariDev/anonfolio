@@ -260,3 +260,14 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .balance-status { display: flex; align-items: baseline; gap: 5px; height: 14px; margin-top: 3px; max-width: 240px; }
 .balance-status .error, .balance-status .cached { min-width: 0; overflow: hidden; text-overflow: ellipsis; margin: 0; }
 .balance-status .failure-link { min-width: 0; margin: 0; line-height: 12px; }
+
+.status-icon { display: inline-flex; flex: 0 0 14px; width: 14px; height: 14px; align-items: center; justify-content: center; vertical-align: middle; cursor: help; }
+.status-icon svg { display: block; }
+.status-icon:focus-visible { outline: 2px solid #b8ec8c; outline-offset: 3px; border-radius: 3px; }
+.status-verified, .status-current { color: #b8dca3; }
+.status-stale, .status-saved, .status-unverified, .status-partial { color: #d2bd86; }
+.status-unavailable { color: #e8af94; }
+.status-unpriced, .status-waiting { color: #94a58b; }
+.balance-status > small { display: inline-flex; height: 14px; margin: 0; }
+.balance-status .failure-link { overflow: visible; }
+.balance .price-estimate { display: inline-flex; align-items: center; gap: 5px; }
