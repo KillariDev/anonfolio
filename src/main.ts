@@ -235,7 +235,9 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   status.textContent = balance.failed ? (balance.amount === undefined ? 'Unavailable · verification failed' : 'Stale · refresh failed')
     : balance.cached ? (balance.verifiedBlock ? '' : 'Unverified saved value · reverify required') : balance.updatedAt ? (balance.verifiedBlock ? 'Verified finalized' + (balance.amount === 0n ? ' · proven zero' : '') : 'Unverified · reverify required') : 'Awaiting first read';
   if (balance.amount !== undefined && !balance.verifiedBlock) status.textContent = 'Unverified saved value · ' + (balance.failed ? 'verification failed' : 'reverify required');
-  box.append(label, amount, status);
+  const statusLine = document.createElement('div'); statusLine.className = 'balance-status';
+  statusLine.append(status);
+  box.append(label, amount, statusLine);
   const failure = balanceFailure(balance);
   if (failure) {
     const explain = document.createElement('button'); explain.type = 'button'; explain.className = 'failure-link';
@@ -243,14 +245,14 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
     explain.title = failure.message;
     explain.setAttribute('aria-label', 'Explain ' + symbol + ' failure for ' + wallet.address);
     explain.onclick = () => { expandedAddresses.add(wallet.address); render(); document.getElementById('details-' + wallet.address)?.scrollIntoView({ block: 'nearest' }); };
-    box.append(explain);
+    statusLine.append(explain);
   }
   const estimate = usableEstimate(balance, pricing);
   const price = document.createElement('small'); price.className = 'price-estimate';
   price.textContent = estimate ? '≈ ' + formatBalance(displayValue(valueFraction(balance.amount!, estimate)), estimate.decimals + 18) + ' ' + pricing.quote.symbol + (balance.cached || balance.failed ? ' · stale' : '') : 'Unpriced';
   price.title = estimate ? '30-minute direct-pool TWAP · ' + estimate.pool + ' · finalized block ' + estimate.blockHash : balance.priceError || 'Waiting for a qualifying direct pool at the balance’s verified block.';
   const values = document.createElement('div'); values.className = 'balance-values';
-  values.append(amount, price); box.insertBefore(values, status);
+  values.append(amount, price); box.insertBefore(values, statusLine);
   if (balance.verifiedBlock) box.title = 'Finalized block ' + BigInt(balance.verifiedBlock.number) + ' · ' + balance.verifiedBlock.hash + ' · ' + new Date(balance.verifiedBlock.timestamp).toLocaleString();
   if (balance.updatedAt) {
     const time = document.createElement('time');
@@ -418,7 +420,10 @@ function verificationPanel(wallet: Wallet) {
 }
 function walletDetails(wallet: Wallet) {
   const content = document.createElement('div');
-  content.className = 'detail-inner';
+  content.className = 'detail-scroll';
+  content.dataset.address = wallet.address;
+  content.tabIndex = 0;
+  content.setAttribute('aria-label', 'Read progress and results for ' + wallet.address);
   const timestamps = document.createElement('p');
   timestamps.className = 'detail-times';
   timestamps.textContent = tokens.map(token => ({ symbol: token.symbol, balance: tokenBalance(wallet, token) })).map(({ symbol, balance }) => symbol + ': ' + (balance.updatedAt
@@ -458,9 +463,13 @@ function walletDetails(wallet: Wallet) {
     });
     content.append(activity);
   }
-  return content;
+  const frame = document.createElement('div'); frame.className = 'detail-inner';
+  frame.append(content);
+  return frame;
 }
 function render() {
+  const detailPositions = new Map([...walletList.querySelectorAll<HTMLElement>('.detail-scroll')].map(node => [node.dataset.address, node.scrollTop]));
+  const openFailures = new Set([...walletList.querySelectorAll('.failure-technical[open]')].map(node => node.closest('.detail-scroll')?.getAttribute('data-address') + ':' + node.closest('.read-failure')?.getAttribute('aria-label')));
   syncProgressClock();
   renderTotals();
   document.querySelector('#count')!.textContent = String(wallets.length);
@@ -524,12 +533,13 @@ function render() {
     addressLine.className = 'address-line';
     addressLine.append(address, refresh);
     identity.append(addressLine);
-    if (wallet.loading && wallet.verificationStatus) {
+    {
       const progress = document.createElement('small');
       progress.className = 'verification-progress compact-progress';
       const request = wallet.networkRequests?.[0];
       progress.textContent = request ? (request.state === 'waiting' ? 'Waiting for ' : 'Receiving ') + request.method + ' · ' + request.host : stageLabels[wallet.verificationStage || 'connection'];
-      progress.title = wallet.verificationStatus;
+      progress.title = wallet.verificationStatus || '';
+      if (!wallet.loading) { progress.textContent = ''; progress.setAttribute('aria-hidden', 'true'); }
       identity.append(progress);
     }
     row.append(identity);
@@ -597,9 +607,13 @@ function render() {
     table.append(card);
   });
   walletList.append(table);
+  walletList.querySelectorAll<HTMLDetailsElement>('.failure-technical').forEach(node => {
+    node.open = openFailures.has(node.closest('.detail-scroll')?.getAttribute('data-address') + ':' + node.closest('.read-failure')?.getAttribute('aria-label'));
+  });
+  walletList.querySelectorAll<HTMLElement>('.detail-scroll').forEach(node => { node.scrollTop = detailPositions.get(node.dataset.address) || 0; });
   walletList.scrollLeft = scrollLeft;
   walletList.scrollTop = scrollTop;
-  if (focus) [...walletList.querySelectorAll<HTMLButtonElement>('button')].find(button => button.getAttribute('aria-label') === focus)?.focus({ preventScroll: true });
+  if (focus) [...walletList.querySelectorAll<HTMLElement>('[aria-label]')].find(button => button.getAttribute('aria-label') === focus)?.focus({ preventScroll: true });
 }
 function pruneTokenBalances(wallet: Wallet) {
   for (const token of defaultTokens()) {

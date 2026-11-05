@@ -80,7 +80,7 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .wallet-table thead th:first-child, .wallet-head { position: sticky; left: 0; z-index: 1; }
 .wallet-table thead th:first-child { z-index: 3; }
 .wallet-head { font-weight: 400; min-width: 200px; width: clamp(200px, 34vw, 430px); max-width: 430px; }
-.balances > th, .balances > td { padding: 7px 14px; border-bottom: 1px solid #2b3826; background: #192019; vertical-align: middle; height: 43px; }
+.balances > th, .balances > td { padding: 6px 14px; border-bottom: 1px solid #2b3826; background: #192019; vertical-align: middle; height: 54px; }
 .wallet:last-child .balances > th, .wallet:last-child .balances > td { border-bottom: 0; }
 .wallet:hover .balances > th, .wallet:hover .balances > td { background: #1c271a; }
 .address-line { display: flex; align-items: center; gap: 10px; }
@@ -106,6 +106,8 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .wallet-details[hidden] { display: none; }
 .wallet-details > td { background: #121b11; border-bottom: 1px solid #35422f; padding: 0; }
 .detail-inner { padding: 13px 16px; max-width: 1100px; }
+.detail-scroll { height: clamp(20rem, 50vh, 28rem); overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; overflow-anchor: none; padding-right: 8px; }
+.detail-scroll:focus-visible { outline: 2px solid #b8ec8c; outline-offset: 2px; }
 .full-address { font: 12px ui-monospace, monospace; color: #c1d6b5; overflow-wrap: anywhere; }
 .detail-times { font-size: 10px; color: #8fa681; margin: 7px 0; line-height: 1.7; overflow-wrap: anywhere; }
 .activity { font-size: 11px; color: #9fb492; border-top: 1px solid #2d3829; margin-top: 10px; padding-top: 9px; }
@@ -148,7 +150,7 @@ footer { border-top: 1px solid #273223; max-width: 1216px; margin: 20px auto 0; 
   .scroll-hint { display: block; color: #819777; font-size: 10px; margin: 0 0 7px; }
   .wallet-head, .wallet-table thead th:first-child { min-width: 200px; width: 200px; max-width: 200px; }
   .address-line { gap: 6px; }
-  .balances > th, .balances > td { padding: 7px 11px; }
+  .balances > th, .balances > td { padding: 6px 11px; }
   .address-value { font-size: 10px; }
   .detail-inner { width: calc(100vw - 34px); position: sticky; left: 0; padding: 12px; }
   footer { margin: 18px 16px 0; font-size: 9px; gap: 16px; }
@@ -192,7 +194,7 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .activity-item .blockie { width: 20px; height: 20px; flex-basis: 20px; }
 
 .verification-progress { font-size: 10px; line-height: 1.5; color: #bdcda8; overflow-wrap: anywhere; }
-.compact-progress { display: block; max-width: 230px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compact-progress { display: block; min-height: 12px; line-height: 12px; max-width: 230px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .balance .proven { display: block; color: #a4be91; }
 
@@ -224,9 +226,9 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 #pricing-form button { margin-top: 12px; }
 #estimated-total { margin: 8px 0 14px; color: #b8ec8c; font-size: 13px; }
 .balance .price-estimate { display: block; color: #b0c3a4; font-size: 10px; margin: 0; }
-.balance-values { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; }
+.balance-values { display: flex; align-items: baseline; flex-wrap: nowrap; gap: 3px 10px; }
 
-.failure-link { display: block; max-width: 240px; margin-top: 3px; padding: 0; border: 0; background: transparent; color: #e6bd91; font-size: 10px; text-decoration: underline; text-align: left; }
+.failure-link { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; margin-top: 3px; padding: 0; border: 0; background: transparent; color: #e6bd91; font-size: 10px; text-decoration: underline; text-align: left; }
 .read-failure { margin: 12px 0; padding: 16px; border: 1px solid #514333; border-radius: 10px; background: #211e17; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
 .failure-heading { display: flex; flex-direction: column; gap: 3px; }
 .failure-label { color: #b4a48d; font-size: 10px; letter-spacing: .5px; }
@@ -254,3 +256,7 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .progress-request p { margin: 0 0 4px; font: 11px/1.5 ui-monospace, monospace; color: #c8d9bc; overflow-wrap: anywhere; }
 .progress-request span { display: block; font-size: 10px; color: #97ab89; margin-bottom: 5px; }
 .verification-panel .verification-progress, .progress-hint { margin: 8px 0 0; color: #92a786; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+
+.balance-status { display: flex; align-items: baseline; gap: 5px; height: 14px; margin-top: 3px; max-width: 240px; }
+.balance-status .error, .balance-status .cached { min-width: 0; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+.balance-status .failure-link { min-width: 0; margin: 0; line-height: 12px; }

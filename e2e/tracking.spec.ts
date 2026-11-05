@@ -1003,3 +1003,62 @@ test('parallel prices remain hidden until the matching finalized balance is prov
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
   await expect(page.locator('.amount').first()).toHaveText('1');
 });
+
+for (const viewport of [{width:1280,height:800},{width:390,height:844}]) test(`open address details stay stable through loading updates at ${viewport.width}px`, async ({page}) => {
+  await page.setViewportSize(viewport);
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a+'\n'+b);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await openWalletDetails(page,a);
+  const samples: {height:number; top:number; next:number; row:number; page:number; table:number}[]=[];
+  let readerScroll: number | undefined;
+  async function sample(event?:object) {
+    if(event) await page.evaluate(event=>{
+      const worker=(window as any).__verifiers[0];
+      worker.onmessage({data:{...event,run:worker.request.id}});
+    },event);
+    await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())));
+    samples.push(await page.evaluate(()=>{
+      const first=document.querySelector('.detail-inner')!.getBoundingClientRect();
+      return {height:first.height,top:first.top,next:document.querySelectorAll('.balances')[1].getBoundingClientRect().top-first.top,
+        row:document.querySelector('.balances')!.getBoundingClientRect().height,
+        page:window.scrollY,table:document.querySelector('#wallets')!.scrollTop};
+    }));
+    if(readerScroll !== undefined) {
+      await expect(page.locator('.detail-scroll').first()).toBeFocused();
+      expect(await page.locator('.detail-scroll').first().evaluate(node=>node.scrollTop)).toBe(readerScroll);
+    }
+  }
+  // Put the reader part-way down the portfolio, where anchoring can amplify shifts.
+  await page.evaluate(()=>window.scrollTo(0,150));
+  await sample();
+  await sample({type:'progress',stage:'consensus',message:'Verifying finalized signatures.'});
+  const startedAt=Date.now();
+  const request={requestId:1,method:'GET eth/v1/beacon/light_client/updates',host:'ethereum-beacon-api.publicnode.com',state:'waiting',startedAt,deadline:startedAt+90_000};
+  await sample({type:'network',request});
+  await sample({type:'network',request:{...request,requestId:2,method:'eth_getProof'}});
+  await sample({type:'network',request:{...request,state:'reading'}});
+  await sample({type:'network',request:{...request,state:'received'}});
+  await sample({type:'network',request:{...request,requestId:2,state:'received'}});
+  await sample({type:'asset',asset:'eth',stage:'balances-pricing'});
+  await sample({type:'progress',stage:'balances-pricing',message:'Checking account and requested storage proofs against the verified finalized state root, while the independent oracle lane executes balance-independent pricing calls locally. '.repeat(6)});
+  await sample({type:'network',request:{...request,requestId:3}});
+  await sample({type:'network',request:{...request,requestId:4}});
+  await page.locator('.detail-scroll').first().evaluate(node=>node.focus({preventScroll:true}));
+  readerScroll = await page.locator('.detail-scroll').first().evaluate(node=>{node.scrollTop=48;return node.scrollTop;});
+  expect(readerScroll).toBeGreaterThan(0);
+  const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60_000};
+  await sample({type:'balance',asset:'eth',amount:'1000000000000000000',block});
+  await sample({type:'asset-error',asset:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',error:'Contract balance proof failed'});
+  const technical=page.getByRole('region',{name:'WETH balance failure',exact:true}).locator('.failure-technical');
+  await technical.evaluate(node=>(node as HTMLDetailsElement).open=true);
+  await sample({type:'price-error',asset:'eth',error:'No direct pool qualifies'});
+  await sample({type:'done'});
+  await expect(technical).toHaveJSProperty('open',true);
+  await page.screenshot({path:'/tmp/anonfolio-stable-details-'+viewport.width+'.png',fullPage:true});
+  for(const key of ['height','top','next','row','page','table'] as const) {
+    const values=samples.map(sample=>sample[key]);
+    expect(Math.max(...values)-Math.min(...values),key+' changed across progress events: '+JSON.stringify(values)).toBeLessThanOrEqual(1);
+  }
+});
