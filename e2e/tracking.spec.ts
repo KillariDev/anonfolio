@@ -607,7 +607,7 @@ test('address removal requires confirmation and cancellation preserves saved bal
   page.once('dialog', dialog => dialog.accept());
   await remove.click();
   await expect(page.locator('.wallet')).toHaveCount(0);
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets)).toEqual([]);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets)).toEqual([]);
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(0);
 });
