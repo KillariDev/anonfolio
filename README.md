@@ -20,6 +20,8 @@ This is the content address of the exported build validated with local IPFS gate
 *Public mainnet snapshot · 6 Nov 2026 · ETH, WETH, USDC and UNI · Helios-verified over direct HTTPS. [Capture details](docs/images/README.md).*
 <!-- /portfolio-screenshot -->
 
+Explore the [10-image mainnet screenshot gallery](scerenshots/README.md), featuring public DAO treasuries, custom ERC-20s, verification details and mobile layouts.
+
 ## Technologies
 
 | Technology | How Anonfolio uses it |
