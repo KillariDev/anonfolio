@@ -68,7 +68,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   await expect(page.locator('.activity').first()).toContainText('eth_getProof(address)');
   await expect(page.locator('.activity').first()).toContainText(usdc);
   await expect(page.locator('.activity').first()).not.toContainText('eth.drpc.org');
-  await expect(page.locator('.amount')).toHaveText(['1', '1.23', '0', '1', '1.23', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1', '1.23', '1', '1.23']);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
   const calls = await page.evaluate(() => (window as any).__calls);
@@ -88,8 +88,8 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '1.23', '0']);
-  const originalTimes = await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => [node.closest('.balance')!.getAttribute('data-asset'),node.getAttribute('datetime')]).sort());
+  await expect(page.locator('.amount')).toHaveText(['1', '1.23']);
+  const originalTimes = await page.evaluate(() => Object.entries(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances).map(([asset,value]:[string,any]) => [asset,value.updatedAt]).sort());
   const snapshot = await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!));
   expect(snapshot.tokens.find((token: any) => token.address === usdc).decimals).toBe(6);
   expect(snapshot.wallets[0].balances.eth.amount).toBe('1000000000000000000');
@@ -98,13 +98,13 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.error')).toHaveCount(3);
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
-  expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => [node.closest('.balance')!.getAttribute('data-asset'),node.getAttribute('datetime')]).sort())).toEqual(originalTimes);
+  expect(await page.evaluate(() => Object.entries(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances).map(([asset,value]:[string,any]) => [asset,value.updatedAt]).sort())).toEqual(originalTimes);
   await page.unroute('**/src/connection.ts*');
   await mockConnection(page, false, true);
   await page.reload();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
   await expect(page.locator('.error')).toHaveCount(3);
-  expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => [node.closest('.balance')!.getAttribute('data-asset'),node.getAttribute('datetime')]).sort())).toEqual(originalTimes);
+  expect(await page.evaluate(() => Object.entries(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances).map(([asset,value]:[string,any]) => [asset,value.updatedAt]).sort())).toEqual(originalTimes);
   await openTokenSettings(page);
   await page.getByRole('button', { name: 'Remove token USDC' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
@@ -143,7 +143,7 @@ test('storage write failure is visible while reads and changes still work', asyn
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   await expect(page.locator('#storage-warning')).toContainText('could not be saved');
 });
 
@@ -156,7 +156,7 @@ test('failed retrieval retries automatically without a button click and stops af
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   const originalCalls = await page.evaluate(() => (window as any).__calls);
   await page.evaluate(() => { (window as any).__fail = true; });
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
@@ -164,7 +164,7 @@ test('failed retrieval retries automatically without a button click and stops af
   await expect(page.locator('.activity')).toContainText('Automatic retry 1 scheduled');
   await page.evaluate(() => { (window as any).__fail = false; });
   await expect(page.locator('.error')).toHaveCount(0, { timeout: 8000 });
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   await expect(page.locator('.activity')).not.toContainText('Automatic retry');
   const after = await page.evaluate(() => (window as any).__calls);
   expect(new Set(after.map((call: any) => call.key))).toEqual(new Set(originalCalls.map((call: any) => call.key)));
@@ -179,7 +179,7 @@ test('offline reads resume automatically on reconnect and removed addresses neve
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   const initial = await page.evaluate(() => (window as any).__calls.length);
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
@@ -229,7 +229,7 @@ test('worker startup failures reconnect automatically and resume pending reads',
   await expect(page.locator('#connection strong')).toHaveAttribute('title', /Automatic retry/);
   await page.evaluate(() => { (window as any).__recover = true; });
   await expect(page.locator('#connection')).toContainText('Private worker ready', { timeout: 8000 });
-  await expect(page.locator('.amount')).toHaveText(['0', '0'], { timeout: 8000 });
+  await expect(page.locator('.amount')).toHaveCount(0, { timeout: 8000 });
   await expect(page.locator('.error')).toHaveCount(0);
 });
 
@@ -298,12 +298,12 @@ test('default tokens have icons and can be removed and re-added like other token
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   await openTokenSettings(page);
   await page.getByRole('button', { name: 'Remove token ETH', exact: true }).click();
   await expect(page.locator('.total-label')).toHaveText(['WETH']);
   await page.reload();
-  await expect(page.locator('.amount')).toHaveText(['0']);
+  await expect(page.locator('.amount')).toHaveCount(0);
   const calls = await page.evaluate(() => (window as any).__calls);
   expect(calls.every((call: any) => call.body.method === 'eth_call')).toBe(true);
   await openTokenSettings(page);
@@ -317,7 +317,7 @@ test('default tokens have icons and can be removed and re-added like other token
     await page.locator('#token-preset').selectOption(preset);
     await page.getByRole('button', { name: 'Add token', exact: true }).click();
   }
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   await expect(page.locator('.total-label')).toHaveText(['ETH', 'WETH']);
   await page.reload();
   await expect(page.locator('.total-label')).toHaveText(['ETH', 'WETH']);
@@ -371,7 +371,7 @@ test('network settings validate, reconnect with new private RPCs, preserve cache
   await page.goto('/');
   await page.locator('#address').fill(a + '\n' + b);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0', '1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1', '1']);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
   await page.locator('#network-settings > summary').click();
   const originalGateway = await page.getByLabel('Tor gateways', { exact: true }).inputValue();
@@ -452,7 +452,7 @@ test('pinned local startup never queries RPC directly; retries keep their privat
   await expect(page.getByLabel('Public discovery RPC')).toHaveCount(0);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   await page.evaluate(() => { (window as any).__fail = true; });
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.balance small.error')).toHaveCount(2);
@@ -472,7 +472,7 @@ test('named addresses use blockies in rows, avoid duplicate detail addresses, pe
   await page.getByLabel('Address name', { exact: false }).fill(' Savings ');
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   const row = page.locator('.wallet-head .address-display');
   await expect(row.locator('.address-name')).toHaveText('Savings');
   await expect(row.locator('.wallet-address')).toHaveText(a);
@@ -547,7 +547,7 @@ test('header settings icon, responsive full addresses and application favicon', 
   await expect(page.locator('#settings-panel')).not.toBeVisible();
   await page.locator('#address').fill('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   const address = page.locator('.wallet-head .wallet-address');
   await expect(address).toHaveText('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
   expect(await address.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
@@ -577,7 +577,7 @@ test('address removal requires confirmation and cancellation preserves saved bal
   await page.getByLabel('Address name', { exact: false }).fill('Savings');
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   const saved = await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2'));
   const remove = page.getByRole('button', { name: 'Remove ' + a + ' · Savings', exact: true });
   await expect(remove).toBeHidden();
@@ -593,7 +593,7 @@ test('address removal requires confirmation and cancellation preserves saved bal
   await prompt.dismiss();
   await cancelClick;
   await expect(page.locator('.wallet')).toHaveCount(1);
-  await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   expect(await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2'))).toBe(saved);
   await page.reload();
   await expect(page.locator('.wallet-head .address-name')).toHaveText('Savings');
@@ -614,13 +614,13 @@ test('TWAP holding estimates, partial totals and custom quote settings persist',
   await page.goto('/');
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', '≈ 0 USDC']);
+  await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC']);
   await expect(page.locator('.price-estimate').first()).toBeVisible();
   await expect(page.locator('#estimated-total .portfolio-value-amount')).toHaveText('≈ 2000 USDC');
   await expect(page.locator('#estimated-total .status-partial')).toHaveCount(0);
   await addToken(page);
   await page.getByRole('button', { name: 'Close settings', exact: true }).click();
-  await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', 'Unpriced', '≈ 0 USDC']);
+  await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', 'Unpriced']);
   await expect(page.locator('#estimated-total .valuation-coverage')).toHaveText('2 / 3 priced');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Quote token', { exact: true }).selectOption('custom');
@@ -633,7 +633,7 @@ test('TWAP holding estimates, partial totals and custom quote settings persist',
   await page.getByLabel('Minimum quote-side liquidity').fill('100');
   await page.getByRole('button', { name: 'Save pricing and refresh' }).click();
   await expect(page.locator('#estimated-total .portfolio-value-amount')).toHaveText('— CUSTOM');
-  await expect(page.locator('.price-estimate')).toHaveText(['Unpriced', 'Unpriced', 'Unpriced']);
+  await expect(page.locator('.price-estimate')).toHaveText(['Unpriced', 'Unpriced']);
   await page.reload();
   await expect(page.locator('#estimated-total .status-partial')).toHaveCount(1);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -1068,14 +1068,14 @@ test('compact status icons explain verification, proven zero, missing prices and
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
-  await expect(page.locator('.amount')).toHaveText(['1','1.23','0']);
+  await expect(page.locator('.amount')).toHaveText(['1','1.23']);
   const eth=page.locator('.balance[data-asset="eth"]'), weth=page.locator('.balance[data-asset="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]'), custom=page.locator('.balance[data-asset="'+usdc+'"]');
-  await page.locator('.zero-holdings > summary').click();
+  await expect(page.locator('.zero-holdings')).toHaveCount(0);
   const proven=eth.getByRole('img',{name:'Verified finalized',exact:true});
   await expect(proven.locator('svg')).toBeVisible();
   await proven.hover();
   await expect(proven).toHaveAttribute('title','Verified finalized');
-  await expect(weth.getByRole('img',{name:'Verified finalized · proven zero',exact:true})).toHaveAttribute('title','Verified finalized · proven zero');
+  await expect(weth).toHaveCount(0);
   await expect(custom.locator('.price-estimate').getByRole('img')).toHaveAttribute('title',/Unpriced: No direct pool qualifies/);
   await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toHaveCount(0);
   await expect(page.locator('.row-status')).toHaveCount(0);
@@ -1109,7 +1109,7 @@ test('refresh preserves focus on the same address and token when status icons sh
   await openAddressForm(page);
   await page.locator('#address').fill(a+'\n'+b);
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
-  await expect(page.locator('.amount')).toHaveText(['1','1.23','0','1','1.23','0']);
+  await expect(page.locator('.amount')).toHaveText(['1','1.23','1','1.23']);
   const icon=page.locator('.wallet').nth(1).locator('.balance[data-asset="'+usdc+'"]').getByRole('img',{name:'Verified finalized',exact:true});
   await icon.focus();
   await page.locator('.refresh-icon').first().evaluate(button=>(button as HTMLButtonElement).click());
@@ -1165,7 +1165,7 @@ test('read history groups shared blocks and keeps read times without displaying 
   await page.goto('/');
   await page.locator('#address').fill(a);
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
-  await expect(page.locator('.amount')).toHaveText(['1','0']);
+  await expect(page.locator('.amount')).toHaveText(['1']);
   await openWalletDetails(page,a);
   await page.locator('.history-details > summary').first().click();
   const history=page.getByRole('region',{name:'Balance read history',exact:true});
@@ -1590,7 +1590,7 @@ for (const [target, fail] of [[a,false],[b,false],[b,true]] as const) {
     await page.goto('/');
     await page.locator('#address').fill(a+'\n'+b);
     await page.getByRole('button',{name:'add address to track',exact:true}).click();
-    await expect(page.locator('.amount')).toHaveText(['1','0','1','0']);
+    await expect(page.locator('.amount')).toHaveText(['1','1']);
     await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
     const other=target===a?b:a;
     await openWalletDetails(page,other);
@@ -1702,7 +1702,7 @@ for (const width of [1280, 768, 390, 320]) test(`large balances and estimated va
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-for (const width of [1280, 390]) test(`sparse holdings hide only proven zeroes and preserve their disclosure at ${width}px`, async ({ page }) => {
+for (const width of [1280, 390]) test(`sparse holdings omit proven zeroes without a disclosure at ${width}px`, async ({ page }) => {
   await page.setViewportSize({width,height:844});
   await stalledVerifier(page);
   await page.addInitScript(() => {
@@ -1729,24 +1729,18 @@ for (const width of [1280, 390]) test(`sparse holdings hide only proven zeroes a
   await complete(false);
   await expect(first.locator('.holdings-content > .holdings-list > .balance:visible')).toHaveCount(2);
   await expect(first.locator('.address-valuation')).toContainText('≈ 14000 USDC');
-  await expect(first.locator('.zero-holdings > summary')).toHaveText('10 zero-balance tokens');
+  await expect(first.locator('.zero-holdings')).toHaveCount(0);
+  await expect(first).not.toContainText('zero-balance token');
   const weth=first.locator('.balance[data-asset="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]');
-  await expect(weth).toBeHidden();
-  await first.locator('.zero-holdings > summary').click();
-  await expect(weth).toBeVisible();
-  await expect(weth.locator('.status-verified')).toHaveAttribute('title','Verified finalized · proven zero');
+  await expect(weth).toHaveCount(0);
   await page.evaluate(() => {
     const worker=(window as any).__verifiers[0],run=worker.request.id;
     worker.onmessage({data:{type:'asset-error',run,asset:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',error:'Private route unavailable'}});
   });
   await expect(first.locator('.holdings-content > .holdings-list > .balance:visible')).toHaveCount(3);
-  await expect(first.locator('.zero-holdings > summary')).toHaveText('9 zero-balance tokens');
-  await expect(first.locator('.zero-holdings')).toHaveAttribute('open','');
+  await expect(weth).toBeVisible();
   await complete(true);
-  await expect(first.locator('.zero-holdings > summary')).toHaveText('10 zero-balance tokens');
-  await expect(first.locator('.zero-holdings')).toHaveAttribute('open','');
-  await first.locator('.zero-holdings > summary').click();
-  await expect(weth).toBeHidden();
+  await expect(weth).toHaveCount(0);
   await complete(true);
   const second=page.locator('.wallet').nth(1);
   await expect(second.locator('.holdings-content > .holdings-list > .balance:visible')).toHaveCount(2);

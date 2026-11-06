@@ -45,7 +45,7 @@ test('cancel ends startup without automatic retries or direct RPC, and manual re
   await page.getByRole('button',{name:'Retry connection'}).click();
   await expect.poll(()=>page.evaluate(()=>(window as any).__torWorkers.length)).toBe(2);
   await page.evaluate(()=>(window as any).__torWorkers[1].resolve());
-  await expect(page.locator('.amount')).toHaveText(['0','0']);
+  await expect(page.locator('.amount')).toHaveCount(0);
   expect(publicPosts).toEqual([]);
 });
 test('fresh mirrored directory bytes reach the hash-pinned worker, without fetching RPC',async({page})=>{

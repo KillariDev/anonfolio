@@ -355,11 +355,6 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .balance .token { display: inline-flex; align-items: center; gap: 5px; color: #abc29e; font-size: 10px; }
 .balance .token .token-icon { flex-basis: 16px; width: 16px; height: 16px; font-size: 8px; }
 .balance-values { min-width: 0; max-width: 100%; }
-.zero-holdings { min-width: 0; max-width: 100%; }
-.zero-holdings[hidden] { display: none; }
-.zero-holdings[open] { flex-basis: 100%; }
-.zero-holdings > summary { width: fit-content; padding: 4px 0; font-size: 10px; color: #8fa583; }
-.zero-holdings[open] > summary { border-bottom: 0; margin-bottom: 4px; }
 @media (max-width: 720px) {
   .wallet-table, .wallet-table > tbody { display: block; }
   .wallet-table > colgroup, .wallet-table > thead { display: none; }

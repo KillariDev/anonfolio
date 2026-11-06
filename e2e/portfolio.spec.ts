@@ -44,7 +44,7 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
     await page.getByRole('button', { name: 'add address to track' }).click();
   }
   await expect(page.locator('.wallet')).toHaveCount(2);
-  await expect(page.locator('.amount')).toHaveText(['0', '0', '0', '0']);
+  await expect(page.locator('.amount')).toHaveCount(0);
   await expect(page.locator('.error')).toHaveCount(0);
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh ' + a, exact: true })).toBeEnabled();
@@ -59,7 +59,7 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.error .failure-link')).toHaveCount(2);
   for (const warning of await page.locator('.error .failure-link').all()) await expect(warning).toHaveAttribute('aria-description', 'Stale · refresh failed');
-  await expect(page.locator('.amount')).toHaveText(['0', '0', '0', '0']);
+  await expect(page.locator('.amount')).toHaveText(['0', '0']);
   await expect(page.locator('.wallet').nth(1).locator('.error')).toHaveCount(0);
   expect(publicRpc).toEqual([]);
   await page.evaluate(() => { (window as any).__fail = false; });
@@ -68,7 +68,7 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
   expect(page.url()).not.toContain(a);
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(2);
-  await expect(page.locator('.amount')).toHaveText(['0', '0', '0', '0']);
+  await expect(page.locator('.amount')).toHaveCount(0);
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
@@ -115,18 +115,20 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   await openAddressForm(page);
   await page.locator('#address').fill(liveAddress);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount').first()).not.toHaveText('—', { timeout: 210_000 });
-  await expect(page.locator('.amount').nth(1)).not.toHaveText('—', { timeout: 180_000 });
-  await expect(page.locator('.amount').nth(2)).not.toHaveText('—', { timeout: 180_000 });
+  await expect.poll(() => page.evaluate(() => {
+    const values=Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances) as any[];
+    return values.length===3 && values.every(value=>value.verifiedBlock?.hash&&!value.failed);
+  }),{timeout:210_000}).toBe(true);
   expect(publicBalanceCalls).toEqual([]);
   const refresh = page.getByRole('button', { name: 'Refresh ' + liveAddress, exact: true });
   await expect(refresh).toBeEnabled({ timeout: 180_000 });
   // Exercise manual recovery from an unavailable oracle without permitting a fallback.
-  if ((await page.locator('.price-estimate').first().textContent()) === 'Unpriced') {
+  const hasEthPrice = () => page.evaluate(() => Boolean(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances.eth?.estimate));
+  if (!(await hasEthPrice())) {
     await refresh.click();
     await expect(refresh).toBeEnabled({ timeout: 180_000 });
   }
-  await expect(page.locator('.price-estimate').first()).toContainText('USDC', { timeout: 5000 });
+  await expect.poll(hasEthPrice,{timeout:5000}).toBe(true);
   const proven = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances) as any[]);
   expect(proven).toHaveLength(3);
   await test.info().attach('verified-balances', { body: JSON.stringify(proven, null, 2), contentType: 'application/json' });
@@ -144,7 +146,11 @@ test('live mainnet through the actual tor-js worker', async ({ page }) => {
   await openAddressForm(page);
   await page.locator('#address').fill('0x57f138c846dd879810213d0d23c583a9961b7ba2');
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.wallet').nth(1).locator('.amount')).toHaveText(['0', '0', '0'], { timeout: 180_000 });
+  await expect.poll(() => page.evaluate(() => {
+    const values=Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[1].balances) as any[];
+    return values.length===3 && values.every(value=>value.amount==='0'&&value.verifiedBlock?.hash&&!value.failed);
+  }),{timeout:180_000}).toBe(true);
+  await expect(page.locator('.wallet').nth(1).locator('.balance')).toHaveCount(0);
   expect(publicBalanceCalls).toEqual([]);
   await page.screenshot({ path: process.env.IPFS_GATEWAY_URL ? 'ipfs-artifacts/live-mainnet.png' : 'test-results/live-mainnet.png', fullPage: true });
 });
@@ -192,6 +198,6 @@ test('failed private startup shows retry and never displays a false zero', async
   await page.getByRole('button', { name: 'Retry connection' }).click();
   await expect(page.locator('#connection')).toContainText('Private worker ready');
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
-  await expect(page.locator('.amount')).toHaveText(['0', '0']);
+  await expect(page.locator('.amount')).toHaveCount(0);
   await expect(page.locator('.error')).toHaveCount(0);
 });

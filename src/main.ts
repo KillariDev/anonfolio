@@ -1,4 +1,4 @@
-import { partitionHoldings } from './holdings';
+import { visibleHoldings } from './holdings';
 import { captureViewport, restoreViewport } from './viewport';
 import { updateChildren } from './dom';
 import { appendRetrievalLog } from './retrieval-log';
@@ -659,20 +659,10 @@ function render() {
     const holdingsContent = document.createElement('div'); holdingsContent.className = 'holdings-content';
     const holdings = document.createElement('div'); holdings.className = 'holdings-list';
     holdings.setAttribute('aria-label', 'Holdings for ' + (wallet.name || wallet.address));
-    const groups = partitionHoldings(wallet, assets);
+    const visible = visibleHoldings(wallet, assets);
     const holding = (token: Token) => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address);
-    holdings.append(...groups.visible.map(holding));
+    holdings.append(...visible.map(holding));
     holdingsContent.append(holdings);
-    const zero = document.createElement('details'); zero.className = 'zero-holdings';
-    // Keep the disclosure mounted even at zero entries to preserve the reader's
-    // open state when a refresh temporarily makes a saved zero stale/unavailable.
-    zero.hidden = !groups.zero.length;
-    const zeroToggle = document.createElement('summary');
-    zeroToggle.textContent = groups.zero.length + ' zero-balance token' + (groups.zero.length === 1 ? '' : 's');
-    zeroToggle.title = 'Show tokens with a verified zero balance';
-    const zeroList = document.createElement('div'); zeroList.className = 'holdings-list';
-    zeroList.append(...groups.zero.map(holding));
-    zero.append(zeroToggle, zeroList); holdingsContent.append(zero);
     if (!assets.length) {
       const empty = document.createElement('p'); empty.className = 'form-hint'; empty.textContent = 'No tokens tracked.';
       holdingsCell.append(empty);
