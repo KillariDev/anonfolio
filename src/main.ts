@@ -176,11 +176,7 @@ function renderConnection() {
     : state === 'starting' ? 'Starting private connection…'
     : 'Private connection unavailable';
   heading.append(title);
-  const current = document.createElement('span');
-  current.className = 'connection-current';
-  current.textContent = state === 'starting' ? connectionMessage : state === 'failed' ? [connection.lastError, retryMessage('connection')].filter(Boolean).join(' · ') : 'Separate private route per address';
-  current.title = current.textContent;
-  heading.append(current);
+  if (state === 'failed') title.title = [connection.lastError, retryMessage('connection')].filter(Boolean).join(' · ');
   if (state === 'failed') {
     const button = document.createElement('button');
     button.textContent = 'Retry connection';

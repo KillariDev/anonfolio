@@ -53,7 +53,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   await mockConnection(page, true);
   await page.goto('/');
   await expect(page.locator('#connection .spinner')).toBeVisible();
-  await expect(page.locator('#connection')).toContainText('bundled Tor worker');
+  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
   await addToken(page);
   await openAddressForm(page);
   await page.locator('#address').fill(a + ',\n' + b + '\n' + a);
@@ -226,7 +226,7 @@ test('worker startup failures reconnect automatically and resume pending reads',
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.error')).toHaveCount(2);
-  await expect(page.locator('#connection')).toContainText('Automatic retry');
+  await expect(page.locator('#connection strong')).toHaveAttribute('title', /Automatic retry/);
   await page.evaluate(() => { (window as any).__recover = true; });
   await expect(page.locator('#connection')).toContainText('Private worker ready', { timeout: 8000 });
   await expect(page.locator('.amount')).toHaveText(['0', '0'], { timeout: 8000 });
@@ -532,7 +532,7 @@ test('header settings icon, responsive full addresses and application favicon', 
   await expect(page.locator('header #connection')).toBeVisible();
   await expect(page.locator('main #connection')).toHaveCount(0);
   await expect(page.locator('#connection')).toContainText('Private worker ready');
-  await expect(page.locator('#connection')).toContainText('Separate private route per address');
+  await expect(page.locator('#connection')).toHaveText('Private worker ready');
   await expect(page.locator('details#connection, #connection summary, #connection button')).toHaveCount(0);
   await expect(page.locator('#connection')).not.toContainText('Tor gateway');
   await expect(page.locator('#connection')).not.toContainText('152.236.3.22');
@@ -731,8 +731,8 @@ test('private startup failures expose Tor warning causes, preserve wallet detail
     `,
   }));
   await page.goto('/');
-  await expect(page.locator('#connection .connection-heading')).toContainText('Gateway connection refused (ECONNREFUSED)');
-  await expect(page.locator('#connection .connection-heading')).toContainText('Tor bootstrap failed');
+  await expect(page.locator('#connection strong')).toHaveAttribute('title', /Gateway connection refused \(ECONNREFUSED\)/);
+  await expect(page.locator('#connection strong')).toHaveAttribute('title', /Tor bootstrap failed/);
   expect(await page.locator('#connection').textContent()).not.toMatch(/password|token-secret|key=secret/);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
@@ -825,7 +825,7 @@ test('manual PublicNode worker update is explicit, cached, applied on save and f
     for (const key of await cache.keys()) await cache.put(key, new Response('tampered'));
   });
   await page.reload();
-  await expect(page.locator('#connection .connection-heading')).toContainText('Saved Tor worker digest mismatch');
+  await expect(page.locator('#connection strong')).toHaveAttribute('title', /Saved Tor worker digest mismatch/);
   expect(requests).toHaveLength(3); expect(downloads).toBe(1);
   await page.getByRole('button', {name:'Settings',exact:true}).click();
   await page.getByLabel('Tor worker source',{exact:true}).selectOption('bundled');
@@ -1450,4 +1450,35 @@ for (const width of [1280, 390]) test(`add-address plus button sits below tracke
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(2);
   await expect(page.locator('#wallet-form')).not.toBeVisible();
+});
+
+for (const width of [1280, 390]) test(`connection header stays concise through Tor diagnostics at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await page.route('**/src/connection.ts*', route => route.fulfill({contentType:'text/javascript',body:`
+    export class Connection {
+      constructor(onState, onProgress) { this.onState=onState;this.onProgress=onProgress;window.__connection=this; }
+      get() {
+        this.onState('starting');
+        this.onProgress('Tor worker: [00.095] [tor_memquota::config] Unable to get the total available memory. Using a constant max instead.');
+        return new Promise(resolve=>{window.__ready=()=>{this.onState('ready');resolve({fetch:()=>Promise.reject(new Error('Unused'))});};});
+      }
+      close() {}
+    }
+  `}));
+  await page.goto('/');
+  const header=page.locator('#connection');
+  await expect(header).toHaveText('Starting private connection…');
+  const before=await header.boundingBox();
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await openWalletDetails(page,a);
+  await page.locator('.retrieval-log > summary').first().click();
+  await expect(page.locator('.log-stream')).toContainText('Unable to get the total available memory');
+  await page.evaluate(()=>(window as any).__connection.onProgress('Tor worker: '+ 'A long startup diagnostic. '.repeat(30)));
+  await expect(header).toHaveText('Starting private connection…');
+  expect((await header.boundingBox())!.height).toBe(before!.height);
+  await expect(header.locator('.spinner')).toHaveCount(1);
+  await page.evaluate(()=>(window as any).__ready());
+  await expect(header).toHaveText('Private worker ready');
+  await expect(header.locator('.spinner')).toHaveCount(0);
 });
