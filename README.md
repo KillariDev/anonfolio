@@ -62,6 +62,20 @@ bun run test:all
 
 For real-provider tests, Windows setup and screenshot regeneration, see the [testing guide](docs/documentation.html#testing-and-maintenance).
 
+## GitHub Pages deployment
+
+After the first deployment, the GitHub Pages site will be available at **https://killaridev.github.io/anonfolio/**.
+
+To activate deployment:
+
+1. Move [`.github-workflows/pages.yml`](.github-workflows/pages.yml) to `.github/workflows/pages.yml` and commit the change to `main`. The file is staged outside the active workflow directory because the setup token lacks permission to create GitHub Actions workflows; use GitHub's web editor or credentials with workflow write permission for this step.
+2. In **Settings → Pages → Build and deployment**, select **GitHub Actions** as the source.
+3. Run **Deploy GitHub Pages** from the Actions tab, or push a commit to `main`.
+
+The workflow tests and builds the app with Bun 1.3.14, then deploys `dist/` on every push to `main`. It can also be run manually from the Actions tab.
+
+The existing relative asset paths support the `/anonfolio/` project path, including workers, WebAssembly, documentation and the offline service worker. Public build-time network settings use the defaults in `src/config.ts`; to customize a deployment, set `VITE_*` values in the workflow's build step (see `.env.example`).
+
 ## IPFS deployment
 
 Publish the complete `dist/` directory to IPFS, preferably through an HTTPS subdomain gateway. Each release has an immutable CID; a new CID/origin does not automatically carry over saved portfolios.
