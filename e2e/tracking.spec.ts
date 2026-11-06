@@ -1063,6 +1063,9 @@ for (const viewport of [{width:1280,height:800},{width:390,height:844}]) test(`o
   await sample({type:'balance',asset:'eth',amount:'1000000000000000000',block});
   await sample({type:'asset-error',asset:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',error:'Contract balance proof failed'});
   await sample({type:'price-error',asset:'eth',error:'No direct pool qualifies'});
+  await expect(page.locator('.activity-item.received').first()).toBeEmpty();
+  await expect(page.locator('.activity-item.received').first()).toHaveAttribute('aria-hidden','true');
+  await expect(page.getByText(/· Balance received/)).toHaveCount(0);
   await page.screenshot({path:'/tmp/anonfolio-stable-details-'+viewport.width+'.png',fullPage:true});
   for(const key of ['height','top','next','row','page','table'] as const) {
     const values=samples.map(sample=>sample[key]);
