@@ -58,6 +58,7 @@ input, textarea { width: 100%; min-width: 0; border: 1px solid #3b4835; border-r
 textarea { resize: vertical; min-height: 58px; flex: 1; }
 input::placeholder, textarea::placeholder { color: #687462; }
 .input-row { display: flex; gap: 8px; align-items: stretch; }
+#wallet-form .primary { align-self: flex-start; flex: 0 0 auto; }
 .primary { background: #b8ec8c; color: #1d2b14; border-color: #b8ec8c; white-space: nowrap; }
 .primary:hover { background: #cdf9a8; }
 .primary span { margin-left: 8px; }
