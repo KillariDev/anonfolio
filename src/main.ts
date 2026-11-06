@@ -3,7 +3,7 @@ import { updateChildren } from './dom';
 import { appendRetrievalLog } from './retrieval-log';
 import { logStream } from './log-stream';
 import { readHistory } from './read-history';
-import { stageLabels, progressTime, waitingReason, type VerificationStage } from './verification/progress';
+import { stageLabels, progressTime, type VerificationStage } from './verification/progress';
 import chevronDown from './assets/chevron-down.svg?raw';
 import { discoverTorWorker, cacheTorWorker } from './worker-update';
 import type { WorkerMetadata } from './worker-metadata';
@@ -84,7 +84,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <p id="input-error" class="input-error" role="alert"></p><p id="wallet-notice" class="form-hint" role="status"></p></form></details>
 
 </div>
-</main><footer><span>anonfolio / balance reader</span><span>Ethereum mainnet · Verified finalized state</span></footer>`;
+</main>`;
 
 let state: ConnectionState = 'starting';
 let connectionMessage = 'Preparing the bundled Tor worker. Ethereum requests wait for the private connection.';
@@ -260,11 +260,12 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   if (failure) {
     const explain = document.createElement('button'); explain.type = 'button'; explain.className = 'failure-link';
     const meaning = explainFailure(failure).summary + ' · Details';
-    const icon = statusIcon('unavailable', meaning, meaning + ': ' + failure.message);
+    const icon = statusIcon(statusKind, meaning, statusText + ' · ' + meaning + ': ' + failure.message);
     icon.removeAttribute('tabindex');
     explain.append(icon);
     explain.title = failure.message;
     explain.setAttribute('aria-label', 'Explain ' + symbol + ' failure for ' + wallet.address);
+    explain.setAttribute('aria-description', statusText);
     explain.onclick = () => {
       expandedAddresses.add(wallet.address); render();
       const details = document.getElementById('details-' + wallet.address)!;
@@ -272,7 +273,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
       const report = [...details.querySelectorAll<HTMLElement>('.read-failure')].find(node => node.dataset.viewKey === asset + ':balance');
       (report || details.querySelector('.failure-details')!).scrollIntoView({ block: 'nearest' });
     };
-    statusLine.append(explain);
+    status.replaceChildren(explain);
   }
   const estimate = usableEstimate(balance, pricing);
   const price = document.createElement('small'); price.className = 'price-estimate';
@@ -281,7 +282,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   if (!estimate) price.replaceChildren(statusIcon('unpriced', 'Unpriced', 'Unpriced: ' + price.title));
   else if (balance.cached || balance.failed) {
     price.textContent = price.textContent!.replace(/ · stale$/, '');
-    price.append(statusIcon('stale', ' · stale', 'Saved price estimate; it may be out of date.'));
+    price.title += ' · Saved price estimate; it may be out of date.';
   }
   if (estimate) {
     const text = [...price.childNodes].find(node => node.nodeType === Node.TEXT_NODE);
@@ -453,19 +454,19 @@ function verificationPanel(wallet: Wallet) {
   const panel = document.createElement('section'); panel.className = 'verification-panel';
   panel.setAttribute('aria-label', 'Verification progress');
   const stage = wallet.verificationStage || 'connection';
-  const phases: VerificationStage[] = ['connection', 'verifier', 'consensus', 'balances', 'pricing'];
-  const index = !wallet.loading ? 5 : stage === 'queued' ? 1 : stage === 'balances-pricing' ? 3 : phases.indexOf(stage);
+  const phases: VerificationStage[] = ['verifier', 'consensus', 'balances', 'pricing'];
+  const index = !wallet.loading ? 4 : stage === 'queued' ? 0 : stage === 'balances-pricing' ? 2 : phases.indexOf(stage);
   const steps = document.createElement('ol'); steps.className = 'verification-stages';
-  ['Connection', 'Verifier', 'Consensus', 'Balances', 'Prices'].forEach((label, step) => {
+  ['Verifier', 'Consensus', 'Balances', 'Prices'].forEach((label, step) => {
     const item = document.createElement('li'); item.textContent = label; item.dataset.viewKey = label;
-    item.className = !wallet.loading ? '' : step < index ? 'completed' : (step === index || stage === 'balances-pricing' && step === 4) ? 'current' : '';
-    if (wallet.loading && (step === index || stage === 'balances-pricing' && step === 4)) item.setAttribute('aria-current', 'step');
+    item.className = !wallet.loading ? '' : step < index ? 'completed' : (step === index || stage === 'balances-pricing' && step === 3) ? 'current' : '';
+    if (wallet.loading && (step === index || stage === 'balances-pricing' && step === 3)) item.setAttribute('aria-current', 'step');
     steps.append(item);
   });
   const heading = document.createElement('div'); heading.className = 'progress-heading';
-  const title = document.createElement('strong'); title.textContent = wallet.loading ? stageLabels[stage] : retries.info(wallet) ? 'Waiting to retry' : 'Read attempt finished';
+  const title = document.createElement('strong'); title.textContent = wallet.loading ? stage === 'connection' ? 'Verification' : stageLabels[stage] : 'Read attempt finished';
   title.title = title.textContent;
-  const active = wallet.loading && !wallet.queuedForVerifier;
+  const active = wallet.loading && !wallet.queuedForVerifier && stage !== 'connection';
   const clock = active ? progressClock(wallet.stageStartedAt || Date.now()) : document.createElement('small');
   clock.className = 'progress-clock';
   if (!active) clock.textContent = 'No request running';
@@ -483,11 +484,13 @@ function verificationPanel(wallet: Wallet) {
       requestArea.append(row);
     }
     const hint = document.createElement('p'); hint.className = 'progress-hint';
-    hint.textContent = requests.length > 2 ? '+' + (requests.length - 2) + ' more private requests · see Retrieval log' : 'Full request history is available in Retrieval log.';
+    hint.textContent = requests.length > 2 ? '+' + (requests.length - 2) + ' more private requests' : '';
     requestArea.append(hint);
   } else {
     const operation = document.createElement('p'); operation.className = 'verification-progress';
-    operation.setAttribute('role', 'status'); operation.textContent = wallet.loading ? wallet.verificationStatus || stageLabels[stage] : retryMessage(wallet) || 'Each token below shows its latest read result. Refresh to retrieve new balances.';
+    operation.setAttribute('role', 'status');
+    const detail = wallet.verificationStatus || '';
+    operation.textContent = wallet.loading && stage !== 'connection' && stage !== 'queued' && detail !== stageLabels[stage] ? detail : '';
     operation.title = operation.textContent;
     requestArea.append(operation);
   }
@@ -523,8 +526,7 @@ function walletDetails(wallet: Wallet, logOpen=false) {
     activity.className = 'activity';
     const summary = document.createElement('p');
     const finished = wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length;
-    summary.textContent = wallet.queuedForVerifier ? 'Queued for the shared verifier. No balance request is running for this address yet.' : wallet.loading ? (finished + '/' + wallet.activity.length + ' reads finished · ' + (wallet.activity.some(item => item.attempt > 0) ? 'Balance verification in progress.' : waitingReason(wallet.verificationStage) + '; balance calls have not been submitted yet.'))
-      : finished + '/' + wallet.activity.length + ' reads finished. Each amount shows its own result and last successful time.';
+    summary.textContent = finished + '/' + wallet.activity.length + ' reads finished';
     const retry = retryMessage(wallet);
     if (retry) summary.textContent += ' ' + retry;
     summary.title = summary.textContent;
@@ -533,15 +535,15 @@ function walletDetails(wallet: Wallet, logOpen=false) {
       const line = document.createElement('div');
       line.className = 'activity-item ' + item.phase; line.dataset.asset = item.asset;
       const indicator = document.createElement('span'); indicator.className = 'activity-indicator';
-      if (wallet.loading && !wallet.queuedForVerifier && (item.phase === 'waiting' || item.phase === 'requesting')) indicator.append(spinner());
+      if (wallet.loading && item.phase === 'requesting') indicator.append(spinner());
       line.append(indicator);
       const detail = document.createElement('div');
       const title = document.createElement('strong');
-      title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? waitingReason(wallet.verificationStage)
+      title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? 'Pending'
         : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' on the same private route; verifying finalized state' : 'Verifying locally; fetching private proofs as needed')
         : item.phase === 'received' ? 'Balance received' : 'Read failed; previous amount kept if available');
       const payload = document.createElement('small');
-      payload.textContent = item.phase === 'waiting' ? 'Balance request not submitted for this token yet.' : item.description + ' → ' + new URL(wallet.rpcUrl).hostname;
+      payload.textContent = item.phase === 'waiting' || item.phase === 'received' || item.phase === 'failed' ? '' : item.description;
       title.title = title.textContent; payload.title = payload.textContent;
       detail.append(title, payload);
       line.append(detail);
@@ -637,11 +639,11 @@ function render() {
       const request = wallet.networkRequests?.[0];
       progress.textContent = request ? (request.state === 'waiting' ? 'Waiting for ' : 'Receiving ') + request.method + ' · ' + request.host : stageLabels[wallet.verificationStage || 'connection'];
       progress.title = wallet.verificationStatus || '';
-      if (!wallet.loading) { progress.textContent = ''; progress.setAttribute('aria-hidden', 'true'); }
+      if (!wallet.loading || wallet.verificationStage === 'connection' || expandedAddresses.has(wallet.address)) { progress.textContent = ''; progress.setAttribute('aria-hidden', 'true'); }
       identity.append(progress);
     }
     row.append(identity);
-    const pending = (asset: string) => wallet.loading && !wallet.queuedForVerifier && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
+    const pending = (asset: string) => wallet.loading && wallet.verificationStage !== 'connection' && !wallet.queuedForVerifier && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
     row.append(...assets.map(token => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address)));
     const actions = document.createElement('td');
     actions.className = 'actions';

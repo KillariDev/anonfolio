@@ -57,7 +57,8 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
   expect(destinations[0]).not.toEqual(destinations[1]);
   await page.evaluate(() => { (window as any).__fail = true; });
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
-  await expect(page.locator('.error')).toHaveText(['Stale · refresh failed', 'Stale · refresh failed']);
+  await expect(page.locator('.error .failure-link')).toHaveCount(2);
+  for (const warning of await page.locator('.error .failure-link').all()) await expect(warning).toHaveAttribute('aria-description', 'Stale · refresh failed');
   await expect(page.locator('.amount')).toHaveText(['0', '0', '0', '0']);
   await expect(page.locator('.wallet').nth(1).locator('.error')).toHaveCount(0);
   expect(publicRpc).toEqual([]);
@@ -182,7 +183,8 @@ test('failed private startup shows retry and never displays a false zero', async
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.error')).toHaveText(['Unavailable · verification failed', 'Unavailable · verification failed']);
+  await expect(page.locator('.error .failure-link')).toHaveCount(2);
+  for (const warning of await page.locator('.error .failure-link').all()) await expect(warning).toHaveAttribute('aria-description', 'Unavailable · verification failed');
   await expect(page.locator('.amount')).toHaveText(['—', '—']);
   await expect(page.getByRole('button', { name: 'Retry connection' })).toBeVisible();
   expect(rpcRequests).toEqual([]);

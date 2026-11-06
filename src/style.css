@@ -155,7 +155,6 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .empty p { font-size: 11px; color: #8fa182; margin: 0; }
 .spinner { display: inline-block; width: 12px; height: 12px; flex: 0 0 12px; border: 2px solid #6e865d; border-top-color: #c6f3a4; border-radius: 50%; animation: spin .9s linear infinite; vertical-align: middle; }
 .amount .spinner { margin-right: 6px; }
-footer { border-top: 1px solid #273223; max-width: 1216px; margin: 20px auto 0; padding: 12px 0 20px; display: flex; justify-content: space-between; font-size: 10px; color: #687c5d; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
@@ -182,7 +181,6 @@ footer { border-top: 1px solid #273223; max-width: 1216px; margin: 20px auto 0; 
   .balances > th, .balances > td { padding: 6px 11px; }
   .address-value { font-size: 10px; }
   .detail-inner { padding: 12px; }
-  footer { margin: 18px 16px 0; font-size: 9px; gap: 16px; }
 }
 
 .token-icon { display: inline-flex; flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; overflow: hidden; background: #32422a; color: #c9dfb9; align-items: center; justify-content: center; font: 9px ui-monospace, monospace; letter-spacing: 0; }

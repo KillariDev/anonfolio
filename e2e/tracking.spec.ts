@@ -61,13 +61,13 @@ test('bulk additions show spinners and the current stage, then private per-token
   await expect(page.locator('.wallet')).toHaveCount(2);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(2);
   await expect(page.locator('.activity-item.waiting')).toHaveCount(6);
-  await expect(page.locator('.activity').first()).toContainText('balance calls have not been submitted yet');
+  await expect(page.locator('.activity-item.waiting strong')).toHaveText(['ETH · Pending', 'WETH · Pending', 'USDC · Pending', 'ETH · Pending', 'WETH · Pending', 'USDC · Pending']);
   expect(await page.evaluate(() => (window as any).__calls.length)).toBe(0);
   await page.evaluate(() => { (window as any).__delay = 1000; (window as any).__releaseConnection(); });
   await expect(page.locator('.activity-item.requesting')).toHaveCount(6);
   await expect(page.locator('.activity').first()).toContainText('eth_getProof(address)');
   await expect(page.locator('.activity').first()).toContainText(usdc);
-  await expect(page.locator('.activity').first()).toContainText('eth.drpc.org');
+  await expect(page.locator('.activity').first()).not.toContainText('eth.drpc.org');
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23', '1', '0', '1.23']);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
@@ -667,7 +667,8 @@ test('saved balance errors expose per-asset causes and recovery actions, then cl
   ` }));
   await page.goto('/');
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
-  await expect(page.locator('.balance small.error')).toHaveText(['Unverified saved value · verification failed', 'Unverified saved value · verification failed']);
+  await expect(page.locator('.balance small.error button')).toHaveCount(2);
+  for (const warning of await page.locator('.balance small.error button').all()) await expect(warning).toHaveAttribute('aria-description', /Unverified saved value · verification failed/);
   await expect(page.locator('.failure-link').first()).toHaveText('RPC cannot prove this finalized block · Details');
   const ethFailure = page.getByRole('region', { name: 'ETH balance failure', exact: true });
   await expect(ethFailure).toBeHidden();
@@ -951,7 +952,7 @@ test('verification progress distinguishes consensus, actual private requests and
   }
   await emit({type:'progress',stage:'consensus',message:'Checking finalized headers.'});
   await expect(panel.locator('[aria-current="step"]')).toHaveText('Consensus');
-  await expect(page.locator('.activity-item.waiting').first()).toContainText('balance request not sent');
+  await expect(page.locator('.activity-item.waiting').first()).toContainText('Pending');
   await expect(page.locator('.activity-item.waiting').first()).not.toContainText('eth_getProof');
   const startedAt = await page.evaluate(()=>Date.now());
   const request={requestId:1,method:'GET eth/v1/beacon/light_client/updates',host:'beacon.example',state:'waiting',startedAt,deadline:startedAt+90_000};
@@ -1524,4 +1525,59 @@ test('stalled Tor startup retries promptly, separates diagnostics and ignores la
   await page.evaluate(()=>(window as any).__torWorkers[1].resolve());
   await expect(page.locator('#connection')).toHaveText('Private worker ready');
   expect(direct).toEqual([]);
+});
+
+
+test('shared startup status appears only in the header, with both address details open', async ({page}) => {
+  await mockConnection(page,true);
+  await page.goto('/');
+  await page.locator('#address').fill(a+'\n'+b);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await openWalletDetails(page,a);
+  await openWalletDetails(page,b);
+  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await expect(page.locator('.compact-progress')).toHaveText(['','']);
+  for (const detail of await page.locator('.detail-content').all()) {
+    await expect(detail).not.toContainText('Starting private connection');
+    await expect(detail).not.toContainText('Loading bundled Tor worker');
+  }
+  await expect(page.locator('.verification-stages')).toHaveText(['VerifierConsensusBalancesPrices','VerifierConsensusBalancesPrices']);
+  for (const activity of await page.locator('.activity').all()) await expect(activity).not.toContainText('private connection');
+  await expect(page.locator('footer')).toHaveCount(0);
+  expect(await page.evaluate(()=>(window as any).__calls.length)).toBe(0);
+});
+
+test('expanded request details replace the compact preview and retain the historical log', async ({page}) => {
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>(window as any).__verifiers?.length)).toBe(1);
+  await page.evaluate(()=>{
+    const worker=(window as any).__verifiers[0];
+    worker.onmessage({data:{type:'progress',run:worker.request.id,stage:'consensus',message:'Checking signed finalized headers.'}});
+    worker.onmessage({data:{type:'network',run:worker.request.id,request:{requestId:1,method:'eth_getProof',host:'rpc.example',state:'waiting',startedAt:Date.now(),deadline:Date.now()+90000}}});
+  });
+  await expect(page.locator('.compact-progress')).toContainText('eth_getProof · rpc.example');
+  await openWalletDetails(page,a);
+  await expect(page.locator('.compact-progress')).toBeEmpty();
+  await expect(page.locator('.progress-request')).toHaveCount(1);
+  await expect(page.locator('.progress-request')).toContainText('eth_getProof → rpc.example');
+  await page.locator('.retrieval-log > summary').click();
+  await expect(page.locator('.log-stream')).toContainText('Checking signed finalized headers.');
+  await page.getByRole('button',{name:'Details '+a,exact:true}).click();
+  await expect(page.locator('.compact-progress')).toContainText('eth_getProof · rpc.example');
+});
+
+test('a failed balance has one actionable warning instead of duplicate warning icons', async ({page}) => {
+  await mockConnection(page,false,true);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  const balance=page.locator('.balance').first();
+  await expect(balance.locator('.status-unavailable')).toHaveCount(1);
+  await expect(balance.locator('.balance-status [role="img"]')).toHaveCount(1);
+  await balance.locator('.failure-link').click();
+  await expect(page.locator('.failure-details')).toHaveAttribute('open','');
+  await expect(page.locator('.read-failure').first()).toContainText('private connection unavailable');
 });
