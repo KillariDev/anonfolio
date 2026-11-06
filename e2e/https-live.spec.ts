@@ -18,6 +18,8 @@ test('live mainnet verified ETH and WETH through explicitly selected HTTPS',asyn
   const values=await page.evaluate(()=>Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances) as any[]);
   expect(values).toHaveLength(2);
   expect(values.every(value=>value.estimate?.blockHash===value.verifiedBlock.hash)).toBe(true);
+  await expect(page.locator('#helios-status strong')).toHaveText('Helios · ready');
+  await expect(page.locator('#helios-status')).toHaveAttribute('title',new RegExp('Last verified finalized block '+BigInt(values[0].verifiedBlock.number)));
   await page.locator('.retrieval-log > summary').click();
   await expect(page.locator('.log-stream')).toContainText('WETH bytecode');
   await expect(page.locator('.log-stream')).toContainText('Tracked address account proof');

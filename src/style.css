@@ -74,6 +74,24 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .token-inputs { display: grid; grid-template-columns: minmax(0,1fr) 80px 75px; gap: 8px; }
 .token-inputs > div { min-width: 0; }
 #token-form { padding-top: 5px; }
+.header-statuses { display: grid; grid-template-columns: minmax(0, 360px) 156px; gap: 8px; justify-self: end; width: 524px; max-width: 100%; min-width: 0; align-items: center; }
+.helios-indicator { display: flex; align-items: center; gap: 8px; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid #39433c; border-radius: 22px; background: #19201b; color: #b2c1ab; }
+.helios-indicator strong { font-size: 11px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helios-indicator > .status-icon { flex: 0 0 14px; }
+.helios-indicator.ready { color: #c8e2b6; }
+.helios-indicator.unavailable { color: #ecd1ab; border-color: #67543b; background: #252119; }
+.helios-indicator:focus-visible { outline: 2px solid #b8ec8c; outline-offset: 3px; }
+@media (max-width: 1000px) {
+  header { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+  .header-statuses { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 480px) {
+  .helios-indicator { padding: 0 8px; gap: 6px; }
+  .helios-indicator strong { font-size: 10px; }
+  .header-statuses .connection button { font-size: 0; width: 24px; height: 24px; padding: 0; }
+  .header-statuses .connection.starting button::after { content: "×"; font-size: 16px; }
+  .header-statuses .connection.failed button::after { content: "↻"; font-size: 16px; }
+}
 .connection { justify-self: end; width: 360px; max-width: 100%; min-width: 0; margin: 0; border: 1px solid #39433c; border-radius: 22px; background: #19201b; font-size: 11px; }
 .connection-heading { height: 38px; display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 5px; }
 .connection-technology { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; background: #ddcbed; }
@@ -164,7 +182,7 @@ input::placeholder, textarea::placeholder { color: #687462; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 @media (max-width: 720px) {
   header { padding: 16px; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
-  header > .connection { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
+  header > .header-statuses { justify-self: start; width: 100%; grid-template-columns: minmax(0, 1fr) 120px; }
   main { padding: 0 16px; margin-top: 15px; }
   .page-heading { align-items: flex-start; gap: 8px; }
   .page-heading .local-note { max-width: 150px; font-size: 10px; text-align: right; }

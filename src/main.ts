@@ -1,3 +1,4 @@
+import { heliosStatus, subscribeHeliosStatus } from './verification/status';
 import { technologyIcon } from './technology-icons';
 import { visibleHoldings } from './holdings';
 import { captureViewport, restoreViewport } from './viewport';
@@ -27,7 +28,7 @@ import { readIcon, tokenIcon, statusIcon, type StatusIcon } from './icons';
 import './style.css';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<header><a class="brand" href="./" aria-label="Anonfolio home"><img class="brand-mark" src="${appIcon}" width="28" height="28" alt="">anonfolio<span class="brand-dot">.</span></a><div id="connection" role="status" aria-label="Private connection"></div><div class="header-actions"><span class="network"><i></i>Ethereum mainnet</span><details id="network-settings"><summary class="settings-toggle" role="button" aria-label="Settings" title="Settings" aria-controls="settings-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.5"/></svg></summary>
+<header><a class="brand" href="./" aria-label="Anonfolio home"><img class="brand-mark" src="${appIcon}" width="28" height="28" alt="">anonfolio<span class="brand-dot">.</span></a><div class="header-statuses"><div id="connection" role="status" aria-label="Private connection"></div><div id="helios-status" role="status" aria-label="Helios light client" tabindex="0"></div></div><div class="header-actions"><span class="network"><i></i>Ethereum mainnet</span><details id="network-settings"><summary class="settings-toggle" role="button" aria-label="Settings" title="Settings" aria-controls="settings-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.5"/></svg></summary>
 <section id="settings-panel" class="settings-panel" aria-label="Application settings"><div class="settings-heading"><h2>Settings</h2><button id="close-settings" type="button" aria-label="Close settings" title="Close settings">×</button></div>
 <details class="token-settings"><summary>Tracked tokens <span id="token-count"></span></summary>
 <p class="form-hint">Choose the tokens to track across every address. Token changes save automatically.</p>
@@ -213,6 +214,27 @@ function retryMessage(key: Wallet | 'connection') {
     ? 'Automatic retry ' + retry.attempt + ' scheduled at ' + new Date(retry.dueAt).toLocaleTimeString() + '.'
     : 'Automatic retry paused until the connection returns.';
 }
+function renderHeliosStatus() {
+  const node = document.querySelector<HTMLElement>('#helios-status')!;
+  const status = heliosStatus();
+  node.className = 'helios-indicator ' + status.phase;
+  const labels = { idle: 'idle', starting: 'starting', syncing: 'syncing', ready: 'ready', unavailable: 'unavailable' };
+  const description = status.phase === 'idle' ? 'Helios starts when you refresh an address.'
+    : status.phase === 'starting' ? 'Loading and checking the pinned Helios verifier.'
+    : status.phase === 'syncing' ? 'Verifying Ethereum consensus signatures and finalized headers.'
+    : status.phase === 'unavailable' ? errorMessage(status.error || 'Helios verification is unavailable. Refresh an address to retry.')
+    : status.block ? 'Last verified finalized block ' + BigInt(status.block.number) + ' · ' + new Date(status.block.timestamp).toLocaleString()
+    : 'Helios light client is ready.';
+  node.title = description;
+  const busy = status.phase === 'starting' || status.phase === 'syncing';
+  const icon = busy ? spinner() : statusIcon(status.phase === 'ready' ? 'verified' : status.phase === 'unavailable' ? 'unavailable' : 'waiting', description);
+  // The pill itself is keyboard-focusable and exposes one shared tooltip.
+  icon.removeAttribute('tabindex');
+  icon.setAttribute('aria-hidden', 'true');
+  const label = document.createElement('strong');
+  label.textContent = 'Helios · ' + labels[status.phase];
+  updateChildren(node, [icon, label]);
+}
 function renderConnection() {
   const node = document.querySelector<HTMLElement>('#connection')!;
   node.className = 'connection ' + state;
@@ -237,7 +259,7 @@ function renderConnection() {
   heading.append(title);
   if (state === 'failed') title.title = [connection.lastError, retryMessage('connection')].filter(Boolean).join(' · ');
   if (state === 'starting') {
-    const cancel = document.createElement('button'); cancel.textContent = 'Cancel'; cancel.setAttribute('aria-label', 'Cancel connection');
+    const cancel = document.createElement('button'); cancel.textContent = 'Cancel'; cancel.setAttribute('aria-label', 'Cancel connection'); cancel.title = 'Cancel connection';
     cancel.onclick = () => {
       connection.cancel(); retries.cancel('connection');
       wallets.forEach(wallet => { const pending = wallet.loading; cancelRefresh(wallet); if (pending) cancelledRefreshes.add(wallet); });
@@ -246,7 +268,7 @@ function renderConnection() {
   }
   if (state === 'failed') {
     const button = document.createElement('button');
-    button.textContent = 'Retry connection';
+    button.textContent = 'Retry connection'; button.title = 'Retry connection';
     button.onclick = event => { event.preventDefault(); event.stopPropagation(); void start(); };
     heading.append(button);
   }
@@ -1012,6 +1034,7 @@ function renderOffline() {
   document.querySelector('#offline-notice')!.textContent = navigator.onLine ? ''
     : 'You appear to be offline. Saved wallets, tokens and balances remain available. Failed reads will retry when the connection returns.';
 }
+subscribeHeliosStatus(renderHeliosStatus);
 renderTokens(); render(); renderConnection(); renderOffline();
 void start();
 window.addEventListener('offline', () => { retries.pause(); renderOffline(); });

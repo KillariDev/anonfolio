@@ -11,6 +11,7 @@ import { RequestPurposes } from './request-purpose';
 import { parallelReads } from './parallel';
 import { VerifiedCodeCache } from './code-cache';
 import { executionCode } from './execution-code';
+import type { HeliosStatus } from './status';
 
 let activeCheckpoint: Checkpoint = DEFAULT_CHECKPOINT;
 const EXECUTION_URL = 'https://helios-execution.invalid/';
@@ -25,6 +26,7 @@ let queue = Promise.resolve();
 const replies = new Map<number, { resolve: (data: any) => void; reject: (error: Error) => void }>();
 const codeHashes = new Map<string, `0x${string}`>();
 const send = (type: string, extra: object = {}) => scope.postMessage({ type, run: current?.id, ...extra });
+const lightClientStatus = (status: HeliosStatus) => scope.postMessage({ type: 'helios-status', status });
 const step = (message: string, stage?: VerificationStage) => send('progress', { message, ...(stage ? { stage } : {}) });
 function rpcResponse(data: unknown) {
   const response = Response.json(data);
@@ -107,6 +109,7 @@ async function synced(checkpoint: Checkpoint) {
     step('Bootstrapping shared consensus light client from ' + (activeCheckpoint.root === DEFAULT_CHECKPOINT.root && activeCheckpoint.slot === DEFAULT_CHECKPOINT.slot ? 'the release-pinned' : 'your configured') + ' checkpoint at slot ' + activeCheckpoint.slot + '.', 'consensus');
     // Memory DB prevents an older persisted client from replacing the selected root.
     client = new EthereumClient(EXECUTION_URL, undefined, CONSENSUS_RPC, 'mainnet', activeCheckpoint.root, 'config');
+    lightClientStatus({ phase: 'syncing' });
     await client.wait_synced();
   }
   return client;
@@ -120,6 +123,7 @@ async function refresh(message: any) {
     step('Consensus synchronized; selecting one verified finalized block for this refresh.', 'consensus');
     const block = verifiedBlock(await helios.get_block_by_number('finalized', false));
     current.block = block;
+    lightClientStatus({ phase: 'ready', block });
     send('block', { block });
     step('Verified finalized block ' + BigInt(block.number) + ' selected for every balance in this refresh.', 'balances');
     let stage: VerificationStage = 'balances-pricing';

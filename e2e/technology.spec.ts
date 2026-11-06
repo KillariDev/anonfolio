@@ -14,10 +14,12 @@ async function demo(page: Page, mode: 'tor' | 'https' = 'tor') {
     }
   ` }));
   await page.route('**/src/verification/client.ts*', route => route.fulfill({ contentType: 'text/javascript', body: `
+    import { setHeliosStatus } from '/src/verification/status.ts';
     export async function verifyWallet(wallet,worker,tokens,emit) {
       const index=Number(wallet.address.slice(-1))-1;
       const amounts=[['130000000000000000','20000000000000000'],['1420000000000000000','750000000000000000'],['3120000000000000000','1250000000000000000']];
       const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x1800000',timestamp:Date.now()-15*60000};
+      setHeliosStatus({phase:'ready',block});
       for(const token of tokens) {
         emit({type:'asset',asset:token.address});
         emit({type:'balance',asset:token.address,amount:amounts[index][token.address==='eth'?0:1],block});

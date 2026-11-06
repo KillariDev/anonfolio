@@ -1,3 +1,4 @@
+import { setHeliosStatus } from './status';
 import { RequestPurposes } from './request-purpose';
 import { operatorRoute, executionWithOperators, type OperatorRoute } from './operators';
 import type { NetworkProgress, VerificationStage } from './progress';
@@ -17,18 +18,19 @@ type Session = { wallet: Wallet; privateWorker: PrivateWorker; event: (event: Ve
   purposes:RequestPurposes; route:OperatorRoute; remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAssets: Set<string>; controller: AbortController; timer?: ReturnType<typeof setTimeout>; cleanup?: () => void; request: object };
 const sessions = new Map<string, Session>();
 let active: string | undefined;
-function resetWorker(error: Error) {
+function resetWorker(error: Error, cancelled = false) {
+  setHeliosStatus(cancelled ? { phase: 'idle' } : { phase: 'unavailable', error: error.message });
   shared?.terminate(); shared = undefined;
   verifierAbort?.abort(error); verifierAbort = undefined;
 }
-function finish(id: string, error?: Error, reset = false) {
+function finish(id: string, error?: Error, reset = false, cancelled = false) {
   const session = sessions.get(id);
   if (!session) return;
   clearTimeout(session.timer); sessions.delete(id); session.cleanup?.();
   if (error) for (const asset of session.pricingAssets) session.event({ type: 'price-error', asset, error: error.message });
   session.controller.abort(error || new Error('Verification finished.'));
   if (active === id) active = undefined;
-  if (reset) resetWorker(error || new Error('Verifier reset.'));
+  if (reset) resetWorker(error || new Error('Verifier reset.'), cancelled);
   if (error) session.reject(error); else session.resolve();
   // Let this wallet leave its loading state before starting another one.
   queueMicrotask(pump);
@@ -59,6 +61,7 @@ function networkReporter(session: Session, info: Pick<NetworkProgress, 'requestI
 }
 function getWorker() {
   if (shared) return shared;
+  setHeliosStatus({ phase: 'starting' });
   const worker = shared = new Worker(new URL('./helios.worker.ts', import.meta.url), { type: 'module' });
   const lifetime = verifierAbort = new AbortController();
   worker.onerror = event => {
@@ -67,11 +70,17 @@ function getWorker() {
     if (active) finish(active, error, true); else resetWorker(error);
   };
   worker.onmessageerror = () => {
-    if (shared === worker && active) finish(active, new Error('Helios worker response could not be decoded.'), true);
+    if (shared !== worker) return;
+    const error = new Error('Helios worker response could not be decoded.');
+    if (active) finish(active, error, true); else resetWorker(error);
   };
   worker.onmessage = async event => {
     if (shared !== worker) return;
     const message = event.data;
+    if (message.type === 'helios-status') {
+      setHeliosStatus(message.status);
+      return;
+    }
     if (message.type === 'consensus') {
       try {
         const session = active ? sessions.get(active) : undefined;
@@ -131,7 +140,7 @@ export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker,
   return new Promise<void>((resolve, reject) => {
     sessions.set(id, { wallet, privateWorker, purposes:new RequestPurposes(wallet.address,tokens,pricing), event, resolve, reject, route:operatorRoute(wallet.rpcUrl,[...config.rpcUrls]), remaining: new Set(tokens.map(token => token.address)), succeeded: 0, pricingAssets: new Set(), controller: new AbortController(),
       request: { type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, mode: privateWorker.transport || 'tor', checkpoint: config.checkpoint || DEFAULT_CHECKPOINT, tokens, pricing } });
-    const aborted = () => finish(id, new Error('Address verification cancelled.'), active === id);
+    const aborted = () => finish(id, new Error('Address verification cancelled.'), active === id, true);
     sessions.get(id)!.cleanup = () => signal?.removeEventListener('abort', aborted);
     signal?.addEventListener('abort', aborted, { once: true });
     if (signal?.aborted) aborted(); else pump();
