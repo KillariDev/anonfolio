@@ -20,6 +20,7 @@ export class RetryQueue<Key> {
     private online: () => boolean,
     private changed: () => void,
     private time: Clock = clock,
+    private delayFor: (attempt: number, key: Key) => number = retryDelay,
   ) {}
   info(key: Key) { return this.pending.get(key); }
   schedule(key: Key) {
@@ -29,7 +30,7 @@ export class RetryQueue<Key> {
     const entry: { attempt: number; dueAt?: number; cancel?: () => void } = { attempt };
     this.pending.set(key, entry);
     if (!this.paused && this.online()) {
-      const delay = retryDelay(attempt);
+      const delay = this.delayFor(attempt, key);
       entry.dueAt = this.time.now() + delay;
       entry.cancel = this.time.schedule(() => this.fire(key), delay);
     }

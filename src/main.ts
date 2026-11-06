@@ -17,7 +17,7 @@ import { Connection, type ConnectionState } from './connection';
 import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance, setTokenBalance, type Balance, type Wallet } from './balances';
 import { loadPortfolio, savePortfolio } from './storage';
 import { validateToken, defaultTokens, type Token } from './tokens';
-import { RetryQueue } from './retries';
+import { RetryQueue, retryDelay } from './retries';
 import { loadPricing, savePricing, validatePricing, defaultPricing, usableEstimate, valueFraction, displayValue } from './pricing';
 import { estimatedTotal, portfolioTotals } from './totals';
 import { readIcon, tokenIcon, statusIcon, type StatusIcon } from './icons';
@@ -65,7 +65,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="settings-actions"><button class="primary" type="submit">Save settings and reconnect</button><button id="reset-settings" type="button">Restore defaults</button></div>
 <p id="settings-error" class="input-error" role="alert"></p></form></section></details></div></header>
 <main>
-<div class="page-heading"><h1>Portfolio</h1><span class="local-note">Ethereum balances · saved on this browser</span></div>
+<div class="page-heading"><h1>Portfolio</h1></div>
 <section class="overview" aria-label="Portfolio token totals">
 <div id="estimated-total" class="portfolio-value" aria-label="Estimated portfolio value" aria-live="polite"></div>
 <div id="totals" class="totals" aria-live="polite"></div></section>
@@ -137,6 +137,8 @@ const retries = new RetryQueue<Wallet | 'connection'>(
     for(const wallet of loggedRetries.keys()) if(!wallets.includes(wallet)) loggedRetries.delete(wallet);
     renderConnection(); render();
   },
+  undefined,
+  (attempt, key) => key === 'connection' ? Math.min(retryDelay(attempt), 10_000) : retryDelay(attempt),
 );
 const connection = new Connection(
   next => {

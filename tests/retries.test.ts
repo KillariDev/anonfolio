@@ -85,3 +85,13 @@ test('pausing cancels timers, including new retries queued while the page is sus
   await state.advance(0);
   expect(state.calls).toEqual(['a']);
 });
+
+test('connection recovery caps its pause at ten seconds without speeding up wallet RPC retries', () => {
+  const delays: number[] = [];
+  const queue = new RetryQueue<string>(() => {}, () => true, () => {}, {
+    now: () => 0,
+    schedule: (_, delay) => { delays.push(delay); return () => {}; },
+  }, (attempt, key) => key === 'connection' ? Math.min(retryDelay(attempt), 10_000) : retryDelay(attempt));
+  for (const key of ['connection', 'wallet']) for (let i = 0; i < 7; i++) { queue.schedule(key); queue.begin(key); }
+  expect(delays).toEqual([2000,4000,8000,10000,10000,10000,10000,2000,4000,8000,16000,32000,60000,60000]);
+});

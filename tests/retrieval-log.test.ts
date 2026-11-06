@@ -28,3 +28,12 @@ test('event log records all network phases and results without serializing priva
   expect(owner.retrievalLog!.at(-1)!.level).toBe('error');
   expect(messages.join(' ')).not.toMatch(/password|key-secret|query-secret|private-wallet|private-key/);
 });
+
+test('multiline Tor failures keep each diagnostic in a separate timestamped log entry', () => {
+  const owner: RetrievalLog = {};
+  appendRetrievalLog(owner, 'Private connection timed out\nRecent Tor diagnostics:\n[01:52.583] Guard unavailable\n[01:57.599] Guard unavailable', 'error');
+  expect(owner.retrievalLog!.map(entry => entry.message)).toEqual(['Private connection timed out','Recent Tor diagnostics:','[01:52.583] Guard unavailable','[01:57.599] Guard unavailable']);
+  expect(owner.retrievalLog!.map(entry => entry.id)).toEqual([1,2,3,4]);
+  expect(new Set(owner.retrievalLog!.map(entry => entry.at)).size).toBe(1);
+  expect(owner.retrievalLog!.every(entry => entry.level === 'error')).toBe(true);
+});

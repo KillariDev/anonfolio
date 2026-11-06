@@ -1482,3 +1482,46 @@ for (const width of [1280, 390]) test(`connection header stays concise through T
   await expect(header).toHaveText('Private worker ready');
   await expect(header.locator('.spinner')).toHaveCount(0);
 });
+
+test('stalled Tor startup retries promptly, separates diagnostics and ignores late readiness', async ({page}) => {
+  await page.clock.install();
+  const direct: string[]=[];
+  page.on('request',request=>{if(/^https?:/.test(request.url())&&!request.url().startsWith('http://127.0.0.1:5173'))direct.push(request.url());});
+  await page.route('https://**/*',route=>route.abort('failed'));
+  await page.route('**/node_modules/.vite/deps/@anon-rpc_browser-harness.js*',route=>route.fulfill({contentType:'text/javascript',body:`
+    window.__torWorkers=[];
+    export class AnonRpcWorker {
+      constructor() {
+        window.__torWorkers.push(this);this.closed=false;
+        this.logs=[{level:'warn',args:['[01:52.583] Could not connect to guard [scrubbed]. Retrying in 2m 30s.']},{level:'warn',args:['[01:57.599] Could not connect to guard [scrubbed]. Retrying in 2m 30s.']}];
+        this.ready=new Promise(resolve=>{this.resolve=resolve;});
+      }
+      acceptLog(){return this.logs.length?Promise.resolve(this.logs.shift()):new Promise(()=>{});}
+      close(){this.closed=true;}
+      fetch(_,init){const body=JSON.parse(init.body);return Promise.resolve(Response.json({jsonrpc:'2.0',id:body.id,result:'0x'+'0'.repeat(64)}));}
+    }
+  `}));
+  await page.goto('/');
+  await expect(page.getByText('Ethereum balances · saved on this browser',{exact:true})).toHaveCount(0);
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await page.clock.fastForward(30_001);
+  await expect(page.locator('#connection')).toContainText('Private connection unavailable');
+  expect(await page.evaluate(()=>(window as any).__torWorkers.length)).toBe(1);
+  expect(await page.evaluate(()=>(window as any).__torWorkers[0].closed)).toBe(true);
+  await openWalletDetails(page,a);
+  await page.locator('.retrieval-log > summary').click();
+  const lines=await page.locator('.log-stream li > span').allTextContents();
+  expect(lines.some(line=>line.includes('[01:52.583]'))).toBe(true);
+  expect(lines.some(line=>line.includes('[01:57.599]'))).toBe(true);
+  expect(lines.every(line=>!(line.includes('[01:52.583]')&&line.includes('[01:57.599]')))).toBe(true);
+  await page.clock.fastForward(2000);
+  expect(await page.evaluate(()=>(window as any).__torWorkers.length)).toBe(2);
+  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await page.evaluate(()=>(window as any).__torWorkers[0].resolve());
+  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await page.evaluate(()=>(window as any).__torWorkers[1].resolve());
+  await expect(page.locator('#connection')).toHaveText('Private worker ready');
+  expect(direct).toEqual([]);
+});

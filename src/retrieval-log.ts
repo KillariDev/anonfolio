@@ -7,7 +7,10 @@ export type RetrievalLog = { retrievalLog?:RetrievalEntry[]; logSequence?:number
 export const LOG_LIMIT = 1000;
 export function appendRetrievalLog(owner: RetrievalLog, message: string, level:RetrievalEntry['level']='info') {
   const entries = owner.retrievalLog ??= [];
-  entries.push({id:owner.logSequence=(owner.logSequence||0)+1,at:Date.now(),level,message:errorMessage(message).slice(0,2000)});
+  const at = Date.now();
+  for (const line of errorMessage(message).split(/\r?\n/).map(line => line.trim()).filter(Boolean)) {
+    entries.push({id:owner.logSequence=(owner.logSequence||0)+1,at,level,message:line.slice(0,2000)});
+  }
   if(entries.length>LOG_LIMIT) { owner.droppedLogEntries=(owner.droppedLogEntries||0)+entries.length-LOG_LIMIT; entries.splice(0,entries.length-LOG_LIMIT); }
 }
 export function logVerificationEvent(owner:RetrievalLog,event:VerificationEvent,tokens:Token[]) {
