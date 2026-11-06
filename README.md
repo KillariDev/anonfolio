@@ -1,6 +1,6 @@
-# Anonfolio
+![Anonfolio — Private Ethereum portfolios. Verified in your browser.](docs/images/anonfolio-cover.png)
 
-<img src="src/assets/branding/anonfolio-icon.png" width="80" height="80" alt="Anonfolio: a mint-green folded shield with a check-shaped opening">
+# Anonfolio
 
 An Ethereum mainnet portfolio reader that verifies balances in your browser. Track named addresses, ETH, WETH and custom ERC-20 tokens without connecting a wallet, signing messages or sending transactions.
 
