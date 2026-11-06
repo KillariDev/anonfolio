@@ -17,7 +17,6 @@ This is the content address of the exported build validated with local IPFS gate
 <!-- portfolio-screenshot -->
 ![Anonfolio tracking vitalik.eth, the Ethereum Foundation and Uniswap treasury with real ETH, WETH, USDC and UNI holdings.](docs/images/readme-portfolio.png)
 
-*Public mainnet snapshot · 6 Nov 2026 · ETH, WETH, USDC and UNI · Helios-verified over direct HTTPS. [Capture details](docs/images/README.md).*
 <!-- /portfolio-screenshot -->
 
 Explore the [10-image mainnet screenshot gallery](screenshots/README.md), featuring public DAO treasuries, custom ERC-20s, verification details and mobile layouts.
