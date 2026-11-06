@@ -9,6 +9,12 @@ A browser-verified Ethereum mainnet portfolio tracker, built for IPFS. Track nam
 <!-- portfolio-screenshot -->
 ![Anonfolio tracking vitalik.eth, the Ethereum Foundation and Uniswap treasury with real ETH, WETH, USDC and UNI holdings.](docs/images/readme-portfolio.png)
 
+<details><summary>Light theme</summary>
+
+![Anonfolio tracking vitalik.eth, the Ethereum Foundation and Uniswap treasury with real ETH, WETH, USDC and UNI holdings. Light theme.](docs/images/readme-portfolio-light.png)
+
+</details>
+
 <!-- /portfolio-screenshot -->
 
 [More screenshots](screenshots/README.md)

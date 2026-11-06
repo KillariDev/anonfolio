@@ -29,9 +29,24 @@ import { RetryQueue, retryDelay } from './retries';
 import { loadPricing, savePricing, validatePricing, defaultPricing, usableEstimate, valueFraction, displayValue, retryPrice, pricingSettingsKey, PRICING_KEY, type PricingSettings } from './pricing';
 import { estimatedTotal, portfolioTotals } from './totals';
 import { readIcon, tokenIcon, statusIcon, type StatusIcon } from './icons';
+import { applyTheme, loadTheme, otherTheme, saveTheme, THEME_KEY } from './theme';
 import './style.css';
 
+let theme = loadTheme();
+applyTheme(theme);
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = pageMarkup(appIcon);
+const themeToggle = document.querySelector<HTMLButtonElement>('#theme-toggle')!;
+function renderThemeToggle() {
+  const label = 'Switch to ' + otherTheme(theme) + ' theme';
+  themeToggle.setAttribute('aria-label', label);
+  themeToggle.title = label;
+  themeToggle.dataset.theme = theme;
+}
+themeToggle.addEventListener('click', () => {
+  theme = otherTheme(theme);
+  applyTheme(theme); saveTheme(theme); renderThemeToggle();
+});
+renderThemeToggle();
 
 installTooltips();
 
@@ -158,6 +173,7 @@ function persist(edit?: () => void) {
 }
 window.addEventListener('storage', event => {
   if (event.storageArea !== localStorage) return;
+  if (event.key === THEME_KEY || event.key === null) { theme = loadTheme(); applyTheme(theme); renderThemeToggle(); }
   if (event.key === PRICING_KEY || event.key === null) {
     adoptPricing(loadPricing());
     showPricingSettings();

@@ -16,7 +16,7 @@ let readme = await readFile(readmePath,'utf8');
 const screenshotBlock = /<!-- portfolio-screenshot -->[\s\S]*?<!-- \/portfolio-screenshot -->/;
 // Preserve the shortened README's choice to omit a visible snapshot caption.
 const readmeCaption = readme.match(screenshotBlock)?.[0].includes('*Public mainnet snapshot') ? `*${caption} [Capture details](docs/images/README.md).*\n` : '';
-readme = readme.replace(screenshotBlock,`<!-- portfolio-screenshot -->\n![${alt}](docs/images/readme-portfolio.png)\n\n${readmeCaption}<!-- /portfolio-screenshot -->`);
+readme = readme.replace(screenshotBlock,`<!-- portfolio-screenshot -->\n![${alt}](docs/images/readme-portfolio.png)\n\n<details><summary>Light theme</summary>\n\n![${alt} Light theme.](docs/images/readme-portfolio-light.png)\n\n</details>\n\n${readmeCaption}<!-- /portfolio-screenshot -->`);
 await writeFile(readmePath,readme);
 const guidePath = new URL('docs/documentation.html',root);
 let guide = await readFile(guidePath,'utf8');

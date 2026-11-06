@@ -1,5 +1,6 @@
 /* Design tokens. Neutral surfaces, one accent, and a small semantic status set.
-   Dark is the default; the light scheme only swaps these variables. */
+   Dark is the default; the light theme is an explicit choice (html[data-theme="light"])
+   that only swaps these variables. */
 :root {
   --bg: #0f1211;
   --surface: #151918;
@@ -39,34 +40,32 @@
   color-scheme: dark;
   -webkit-font-smoothing: antialiased;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f5f7f6;
-    --surface: #ffffff;
-    --surface-2: #f1f4f2;
-    --surface-3: #e7ebe9;
-    --line: #e1e6e3;
-    --line-strong: #c8d0cc;
-    --text: #171b19;
-    --text-2: #5b655f;
-    --text-3: #88928d;
-    --accent: #1f8a3c;
-    --accent-ink: #ffffff;
-    --accent-soft: #e4f4e8;
-    --ok: #1f8a3c;
-    --ok-soft: #e4f4e8;
-    --warn: #9a6b00;
-    --warn-ink: #7a5300;
-    --warn-soft: #fff4d6;
-    --danger: #c0392b;
-    --danger-ink: #a12d20;
-    --danger-soft: #fde8e5;
-    --info: #2563eb;
-    --focus: #1f8a3c;
-    --shadow: 0 16px 48px #0002;
-    --scrollbar-thumb: #c8d0cc;
-    color-scheme: light;
-  }
+:root[data-theme="light"] {
+  --bg: #f5f7f6;
+  --surface: #ffffff;
+  --surface-2: #f1f4f2;
+  --surface-3: #e7ebe9;
+  --line: #e1e6e3;
+  --line-strong: #c8d0cc;
+  --text: #171b19;
+  --text-2: #5b655f;
+  --text-3: #88928d;
+  --accent: #1f8a3c;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4f4e8;
+  --ok: #1f8a3c;
+  --ok-soft: #e4f4e8;
+  --warn: #9a6b00;
+  --warn-ink: #7a5300;
+  --warn-soft: #fff4d6;
+  --danger: #c0392b;
+  --danger-ink: #a12d20;
+  --danger-soft: #fde8e5;
+  --info: #2563eb;
+  --focus: #1f8a3c;
+  --shadow: 0 16px 48px #0002;
+  --scrollbar-thumb: #c8d0cc;
+  color-scheme: light;
 }
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); }
 @supports not (scrollbar-color: auto) {
@@ -148,6 +147,10 @@ header { position: relative; max-width: 1200px; margin: auto; padding: 12px 32px
   .header-statuses { width: 680px; grid-template-columns: minmax(0, 360px) minmax(156px, 1fr); }
   .helios-block { display: inline; }
 }
+.theme-toggle { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text-2); }
+.theme-toggle:hover { background: var(--surface-3); color: var(--text); }
+.theme-toggle svg { display: none; }
+.theme-toggle[data-theme="dark"] .theme-sun, .theme-toggle[data-theme="light"] .theme-moon { display: block; }
 #network-settings { min-width: 0; border: 0; background: transparent; }
 #network-settings > .settings-toggle { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text-2); }
 #network-settings > .settings-toggle::before { display: none; }
@@ -162,9 +165,12 @@ header { position: relative; max-width: 1200px; margin: auto; padding: 12px 32px
   .connection-heading { flex-wrap: nowrap; }
   .connection strong, .helios-indicator strong { font-size: 11px; }
 }
+@media (max-width: 560px) {
+  .network-label { display: none; }
+  .network .technology-logo { margin-right: 0; }
+}
 @media (max-width: 480px) {
   .header-actions { gap: 10px; }
-  .network { font-size: 11px; }
   .brand { font-size: 17px; flex-shrink: 0; }
   .helios-indicator { padding: 0 8px; gap: 6px; }
   .header-statuses .connection button { font-size: 0; width: 24px; height: 24px; padding: 0; }

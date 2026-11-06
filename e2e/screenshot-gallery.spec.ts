@@ -11,7 +11,7 @@ const accounts = [
 const ensIcon = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72/logo.png';
 const directory = new URL('../screenshots/', import.meta.url);
 
-test('capture ten real mainnet portfolio screenshots', async ({ page, request }) => {
+test('capture twelve real mainnet portfolio screenshots in both themes', async ({ page, request }) => {
   test.skip(process.env.SCREENSHOT_GALLERY !== '1', 'Opt-in live mainnet screenshot capture; writes screenshots/.');
   test.skip(!!process.env.BASE_URL || !!process.env.IPFS_GATEWAY_URL, 'Capture the current source application with Vite.');
   test.setTimeout(900_000);
@@ -72,6 +72,11 @@ test('capture ten real mainnet portfolio screenshots', async ({ page, request })
     captures.push({ file, description, capturedAt: new Date().toISOString(), viewport: page.viewportSize(), portfolio: snapshot });
     console.log('Captured ' + file + ': ' + portfolio.wallets.map((wallet: any) => wallet.name).join(', '));
   }
+  async function setTheme(theme: 'dark' | 'light') {
+    const toggle = page.getByRole('button', { name: 'Switch to ' + theme + ' theme', exact: true });
+    if (await toggle.count()) await toggle.click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  }
   async function remove(account: typeof accounts[number]) {
     await openWalletDetails(page, account.address + ' · ' + account.name);
     page.once('dialog', dialog => dialog.accept());
@@ -85,6 +90,9 @@ test('capture ten real mainnet portfolio screenshots', async ({ page, request })
     expect(initial.wallets.some((wallet: any) => BigInt(wallet.balances[token.address].amount) > 0n)).toBe(true);
   }
   await capture('01-public-mainnet-portfolios.png', 'Four public accounts, five tracked assets, combined token totals and USDC estimates.');
+  await setTheme('light');
+  await capture('11-light-public-mainnet-portfolios.png', 'The same four public accounts in the light theme.');
+  await setTheme('dark');
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await openTokenSettings(page);
@@ -125,7 +133,10 @@ test('capture ten real mainnet portfolio screenshots', async ({ page, request })
   }
   await page.setViewportSize({ width: 430, height: 932 });
   await capture('10-mobile-portfolios.png', 'ENS DAO treasury on mobile: compact token totals, named address and verified holdings.');
-  expect(captures).toHaveLength(10);
+  await setTheme('light');
+  await capture('12-light-mobile-portfolios.png', 'ENS DAO treasury on mobile in the light theme.');
+  await setTheme('dark');
+  expect(captures).toHaveLength(12);
   expect(methods).toContain('eth_getProof');
   expect(methods).not.toContain('eth_call');
   expect(methods).not.toContain('eth_getBalance');

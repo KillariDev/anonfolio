@@ -1,6 +1,6 @@
 # Anonfolio screenshot gallery
 
-Ten real application screenshots featuring publicly identified Ethereum mainnet accounts, ETH/WETH and custom USDC, UNI and ENS tokens. These are browser captures of the application, with no invented balances or prices and no pixel retouching.
+Twelve real application screenshots featuring publicly identified Ethereum mainnet accounts, ETH/WETH and custom USDC, UNI and ENS tokens, in the default dark theme and the light theme. These are browser captures of the application, with no invented balances or prices and no pixel retouching.
 
 [![Four public mainnet portfolios](01-public-mainnet-portfolios.png)](01-public-mainnet-portfolios.png)
 
@@ -16,6 +16,8 @@ Ten real application screenshots featuring publicly identified Ethereum mainnet 
 | [08 · Local verification log](08-local-verification-log.png) | Real timestamped proof, bytecode and price-oracle execution events. |
 | [09 · Tablet portfolios](09-tablet-portfolios.png) | All four accounts in the tablet layout. |
 | [10 · Mobile portfolio](10-mobile-portfolios.png) | The ENS DAO treasury in the compact mobile layout. |
+| [11 · Light theme portfolios](11-light-public-mainnet-portfolios.png) | The four accounts with the light theme selected. |
+| [12 · Light theme mobile](12-light-mobile-portfolios.png) | The ENS DAO treasury on mobile in the light theme. |
 
 ## Capture provenance
 
@@ -50,6 +52,6 @@ SCREENSHOT_GALLERY=1 bun run test:browser e2e/screenshot-gallery.spec.ts
 
 In PowerShell, set `$env:SCREENSHOT_GALLERY = '1'`, run `bun run test:browser e2e/screenshot-gallery.spec.ts`, then clear the flag with `Remove-Item Env:SCREENSHOT_GALLERY`.
 
-The opt-in capture starts/reuses the Vite development server, performs real verified reads, and writes exactly ten numbered PNGs plus `mainnet-snapshots.json` into this folder. It uses the application's ordinary controls to change the watchlist and open details/settings. Normal test-suite runs skip this network-dependent asset-generation task. Fresh data can change the displayed amounts, block numbers and pool availability.
+The opt-in capture starts/reuses the Vite development server, performs real verified reads, and writes exactly twelve numbered PNGs plus `mainnet-snapshots.json` into this folder. It uses the header theme toggle for the two light-theme captures; the app defaults to dark. It uses the application's ordinary controls to change the watchlist and open details/settings. Normal test-suite runs skip this network-dependent asset-generation task. Fresh data can change the displayed amounts, block numbers and pool availability.
 
 ETH/WETH/USDC/UNI icons use the project's [existing artwork and MIT license](../src/assets/tokens/README.md). The additional ENS icon is embedded in the snapshot's local token metadata, copied from [Trust Wallet assets](https://github.com/trustwallet/assets/blob/master/blockchains/ethereum/assets/0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72/logo.png), copyright 2019–2023 Trust Wallet, under the [same MIT license](../src/assets/tokens/LICENSE). Icons are fetched only by the opt-in capture setup and rendered from local data URLs in the app.
