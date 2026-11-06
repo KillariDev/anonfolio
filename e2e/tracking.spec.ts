@@ -244,7 +244,8 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.wallet')).toHaveCount(10);
   await expect(page.locator('.total-amount')).toHaveText(['10', '0', '12.35']);
-  await expect(page.locator('.total-status')).toHaveText(['10/10 addresses', '10/10 addresses', '10/10 addresses']);
+  await expect(page.locator('.total-status')).toHaveCount(0);
+  for (const amount of await page.locator('.total-amount').all()) await expect(amount).toHaveAttribute('title', /10\/10 addresses/);
   await expect(page.locator('.wallet-details:visible')).toHaveCount(0);
   await expect(page.locator('#address')).not.toBeVisible();
   const table = await page.locator('.wallet-table').boundingBox();
@@ -278,15 +279,16 @@ test('overview flags partial and stale totals while preserving known values duri
   await page.locator('#address').fill(a + '\n' + b);
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.total-amount')).toHaveText(['—', '—']);
-  await expect(page.locator('.total-status').first()).toContainText('Partial · 0/2 addresses');
+  await expect(page.locator('.total-status')).toHaveCount(0);
+  await expect(page.locator('.total-amount').first()).toHaveAttribute('title', /Partial · 0\/2 addresses/);
   await page.evaluate(() => { (window as any).__releaseConnection(); });
   await expect(page.locator('.total-amount')).toHaveText(['2', '0']);
   await page.evaluate(() => { (window as any).__fail = true; });
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
-  await expect(page.locator('.total-status')).toHaveText(['2/2 addresses · 1 stale', '2/2 addresses · 1 stale']);
+  for (const amount of await page.locator('.total-amount').all()) await expect(amount).toHaveAttribute('title', /2\/2 addresses · 1 stale/);
   await expect(page.locator('.total-amount')).toHaveText(['2', '0']);
   await page.evaluate(() => { (window as any).__fail = false; });
-  await expect(page.locator('.total-status')).toHaveText(['2/2 addresses', '2/2 addresses'], { timeout: 8000 });
+  for (const amount of await page.locator('.total-amount').all()) await expect(amount).toHaveAttribute('title', / · 2\/2 addresses$/, { timeout: 8000 });
 });
 
 test('default tokens have icons and can be removed and re-added like other tokens', async ({ page }) => {
@@ -1607,7 +1609,7 @@ for (const [target, fail] of [[a,false],[b,false],[b,true]] as const) {
     await expect(untouched).toHaveAttribute('data-loading','false');
     await expect(untouched.locator('.spinner')).toHaveCount(0);
     await expect(page.locator('.total .spinner')).toHaveCount(0);
-    await expect(page.locator('.total-status')).not.toContainText(['updating','updating']);
+    await expect(page.locator('.total-status')).toHaveCount(0);
     await expect(page.locator('.total-amount')).toHaveText(['2','0']);
     expect(await untouched.innerHTML()).toBe(otherHTML);
     await expect(page.getByRole('button',{name:'Refresh '+target,exact:true})).toBeEnabled({timeout:10000});

@@ -42,8 +42,6 @@ h2 { font-size: 14px; font-weight: 550; margin: 0; }
 .total { background: #192219; border: 1px solid #35452e; border-radius: 9px; padding: 11px 15px; min-width: 0; }
 .total-label { font-size: 10px; letter-spacing: 1px; font-weight: 600; color: #b7ceaa; display: flex; align-items: center; gap: 7px; }
 .total-amount { min-width: 0; white-space: normal; font: 23px/1.35 ui-monospace, monospace; letter-spacing: -.8px; margin: 5px 0 3px; overflow-wrap: anywhere; }
-.total-status { display: block; height: 14px; line-height: 14px; font-size: 10px; color: #8fa580; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.total.incomplete .total-status { color: #ccb98c; }
 .controls { margin-top: 12px; }
 .token-settings, #network-settings { min-width: 0; border: 1px solid #303d2b; border-radius: 7px; background: #151c14; }
 .address-settings { min-width: 0; }
@@ -163,7 +161,6 @@ input::placeholder, textarea::placeholder { color: #687462; }
   .totals { gap: 8px; }
   .total { padding: 10px; }
   .total-amount { font-size: 18px; letter-spacing: -.5px; }
-  .total-status { font-size: 9px; }
   .input-row { flex-direction: column; }
   .token-inputs { grid-template-columns: 1fr 1fr; }
   .token-inputs > div:first-child { grid-column: 1/-1; }

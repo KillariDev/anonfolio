@@ -420,15 +420,12 @@ function renderTotals() {
     amount.className = 'total-amount';
     amount.textContent = total.amount === undefined ? '—' : formatBalance(total.amount, total.decimals);
     amount.title = amount.textContent;
-    const status = document.createElement('small');
-    status.className = 'total-status';
     const coverage = total.known + '/' + total.addresses + ' addresses';
-    status.textContent = !total.addresses ? 'Add an address to start'
+    let provenance = !total.addresses ? 'Add an address to start'
       : total.known < total.addresses ? 'Partial · ' + coverage : coverage;
-    if (total.mixedBlocks) status.textContent += ' · mixed finalized blocks';
-    if (total.stale) status.textContent += ' · ' + total.stale + ' stale';
-    status.title = status.textContent;
-    card.classList.toggle('incomplete', total.known < total.addresses || total.stale > 0);
+    if (total.mixedBlocks) provenance += ' · mixed finalized blocks';
+    if (total.stale) provenance += ' · ' + total.stale + ' stale';
+    amount.title += ' · ' + provenance;
     const valuation = estimatedTotal(wallets, [total], pricing);
     const quote = document.createElement('div'); quote.className = 'token-value';
     quote.dataset.state = !valuation.known || valuation.decimalsMismatch ? 'unavailable' : valuation.known < valuation.count ? 'partial' : 'complete';
@@ -439,7 +436,7 @@ function renderTotals() {
     quote.title = subtotal.textContent + ' · ' + quote.title;
     quote.append(subtotal, valuationFlags(valuation));
     const amounts = document.createElement('div'); amounts.className = 'total-balances'; amounts.append(amount, quote);
-    card.append(label, amounts, status);
+    card.append(label, amounts);
     totals.append(card);
   }
   updateChildren(document.querySelector('#totals')!, [...totals.childNodes]);
