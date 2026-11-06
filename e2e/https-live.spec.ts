@@ -1,3 +1,4 @@
+import { openWalletDetails } from './helpers';
 import { expect, test } from '@playwright/test';
 test('live mainnet verified ETH and WETH through explicitly selected HTTPS',async({page})=>{
   test.skip(!process.env.LIVE_HTTPS,'Opt in with bun run test:live:https. Uses real mainnet providers and verification.');
@@ -12,6 +13,11 @@ test('live mainnet verified ETH and WETH through explicitly selected HTTPS',asyn
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
   await expect(page.locator('.balance .status-verified')).toHaveCount(2,{timeout:180_000});
   const values=await page.evaluate(()=>Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances) as any[]);
+  await openWalletDetails(page,'0x0000000000000000000000000000000000000001');
+  await expect(page.locator('.progress-heading')).toContainText(/\d\/4 checks/);
+  await page.locator('.retrieval-log > summary').click();
+  await expect(page.locator('.log-stream')).toContainText('WETH bytecode');
+  await expect(page.locator('.log-stream')).toContainText('Tracked address account proof');
   expect(values.every(value=>value.verifiedBlock?.hash&&value.verifiedBlock.timestamp&&!value.failed)).toBe(true);
   expect(new Set(values.map(value=>value.verifiedBlock.hash)).size).toBe(1);
   expect(methods).toContain('eth_getProof');

@@ -1,3 +1,4 @@
+import { RequestPurposes } from './request-purpose';
 import { operatorRoute, executionWithOperators, type OperatorRoute } from './operators';
 import type { NetworkProgress, VerificationStage } from './progress';
 import { config } from '../config';
@@ -13,7 +14,7 @@ let shared: Worker | undefined;
 let verifierAbort: AbortController | undefined;
 let consensusRoute: { worker: PrivateWorker; key: string } | undefined;
 type Session = { wallet: Wallet; privateWorker: PrivateWorker; event: (event: VerificationEvent) => void; resolve: () => void; reject: (error: Error) => void;
-  route:OperatorRoute; remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAssets: Set<string>; controller: AbortController; timer?: ReturnType<typeof setTimeout>; request: object };
+  purposes:RequestPurposes; route:OperatorRoute; remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAssets: Set<string>; controller: AbortController; timer?: ReturnType<typeof setTimeout>; request: object };
 const sessions = new Map<string, Session>();
 let active: string | undefined;
 function resetWorker(error: Error) {
@@ -46,7 +47,7 @@ function pump() {
     worker.postMessage(session.request);
   } catch (error) { finish(id, error instanceof Error ? error : new Error(String(error)), true); }
 }
-function networkReporter(session: Session, info: Pick<NetworkProgress, 'requestId' | 'method' | 'host' | 'asset'>) {
+function networkReporter(session: Session, info: Pick<NetworkProgress, 'requestId' | 'method' | 'host' | 'asset' | 'purpose' | 'target'>) {
   const startedAt = Date.now();
   return (state: NetworkProgress['state']) => {
     if (![...sessions.values()].includes(session)) return;
@@ -91,7 +92,7 @@ function getWorker() {
       try {
         const data = await executionWithOperators(session.privateWorker,session.route,session.wallet.isolationKey,message.body,session.controller.signal,
           (url,state)=>{
-            if(state==='waiting') report=networkReporter(session,{requestId:message.id,method:message.body.method,host:new URL(url).hostname,asset:message.asset});
+            if(state==='waiting') report=networkReporter(session,{requestId:message.id,method:message.body.method,host:new URL(url).hostname,asset:message.asset,...session.purposes.describe(message.body),...(message.purpose ? {purpose:message.purpose} : {})});
             report(state);
           },(from,to)=>{
             session.wallet.rpcUrl=to;
@@ -124,7 +125,7 @@ export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker,
   const id = crypto.randomUUID();
   event({ type: 'queued', message: 'Queued for the shared Helios verifier; waiting for the active address to finish.' });
   return new Promise<void>((resolve, reject) => {
-    sessions.set(id, { wallet, privateWorker, event, resolve, reject, route:operatorRoute(wallet.rpcUrl,[...config.rpcUrls]), remaining: new Set(tokens.map(token => token.address)), succeeded: 0, pricingAssets: new Set(), controller: new AbortController(),
+    sessions.set(id, { wallet, privateWorker, purposes:new RequestPurposes(wallet.address,tokens,pricing), event, resolve, reject, route:operatorRoute(wallet.rpcUrl,[...config.rpcUrls]), remaining: new Set(tokens.map(token => token.address)), succeeded: 0, pricingAssets: new Set(), controller: new AbortController(),
       request: { type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, mode: privateWorker.transport || 'tor', checkpoint: config.checkpoint || DEFAULT_CHECKPOINT, tokens, pricing } });
     pump();
   });

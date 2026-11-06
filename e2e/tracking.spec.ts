@@ -1624,3 +1624,40 @@ for (const [target, fail] of [[a,false],[b,false],[b,true]] as const) {
     expect(publicRequests).toEqual([]);
   });
 }
+
+
+test('short request purposes and honest check counts stay accurate during parallel proof work',async({page})=>{
+  await stalledVerifier(page);await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await openWalletDetails(page,a);
+  const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
+  const weth='0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+  async function emit(event:object){await page.evaluate(event=>{const w=(window as any).__verifiers[0];w.onmessage({data:{...event,run:w.request.id}});},event);}
+  await emit({type:'price-error',asset:'eth',error:'No quote'});
+  await emit({type:'balance',asset:'eth',amount:'0',block});
+  await emit({type:'progress',stage:'balances-pricing',message:'Checking independent balance and price reads.'});
+  const startedAt=Date.now(),request={requestId:1,method:'eth_getProof',host:'rpc.example',purpose:'WETH storage proof · 2 slots',target:weth,state:'waiting',startedAt,deadline:startedAt+90000};
+  await emit({type:'network',request});
+  await expect(page.locator('.progress-heading')).toContainText('2/4 checks');
+  await expect(page.locator('.progress-request p')).toContainText('WETH storage proof · 2 slots');
+  await expect(page.locator('.progress-request p')).not.toContainText('eth_getProof');
+  await expect(page.locator('.progress-request p')).toHaveAttribute('title',new RegExp('eth_getProof.*'+weth));
+  await expect(page.locator('.compact-progress')).toBeEmpty();
+  await page.locator('.retrieval-log > summary').click();
+  await expect(page.locator('.log-stream')).toContainText('2/4 checks · WETH storage proof · 2 slots · requested');
+  const height=await page.locator('.verification-panel').evaluate(node=>node.getBoundingClientRect().height);
+  await emit({type:'network',request:{...request,requestId:2,method:'eth_getCode',purpose:'WETH/USDC pool bytecode'}});
+  await expect(page.locator('.progress-request p')).toHaveText(['WETH storage proof · 2 slots → rpc.example','WETH/USDC pool bytecode → rpc.example']);
+  await expect(page.locator('.progress-heading')).toContainText('2/4 checks');
+  await emit({type:'price-error',asset:'eth',error:'Duplicate event'});
+  await expect(page.locator('.progress-heading')).toContainText('2/4 checks');
+  await page.getByRole('button',{name:'Details '+a,exact:true}).click();
+  await expect(page.locator('.compact-progress')).toContainText('2/4 checks · WETH storage proof');
+  await expect(page.locator('.compact-progress')).toHaveAttribute('title',new RegExp('WETH storage proof.*eth_getProof.*'+weth));
+  await openWalletDetails(page,a);
+  await emit({type:'balance',asset:weth,amount:'0',block});
+  await emit({type:'price-error',asset:weth,error:'No pool'});
+  await expect(page.locator('.progress-heading')).toContainText('4/4 checks');
+  expect(await page.locator('.verification-panel').evaluate(node=>node.getBoundingClientRect().height)).toBe(height);
+});

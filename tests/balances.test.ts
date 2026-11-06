@@ -179,3 +179,29 @@ test('retrieval log retains earlier progress, failures and subsequent successful
   expect(wallet.retrievalLog!.at(-1)!.level).toBe('success');
   expect(wallet.retrievalLog!.filter(entry=>entry.level==='error').length).toBeGreaterThan(0);
 });
+
+test('check counts follow completed balance and price jobs, not variable proof requests or duplicate events',async()=>{
+  const wallet=makeWallet(address,'https://one.example');
+  await readBalances(wallet,unusedWorker,defaultTokens(),()=>{},false,engine((tokens,emit)=>{
+    expect(wallet.checkProgress).toEqual({completed:0,total:4});
+    emit({type:'price-error',asset:tokens[0]!.address,error:'No direct pool'});
+    emit({type:'price-error',asset:tokens[0]!.address,error:'Repeated message'});
+    emit({type:'balance',asset:'not-tracked',amount:'0',block});
+    expect(wallet.checkProgress).toEqual({completed:1,total:4});
+    emit({type:'balance',asset:tokens[0]!.address,amount:'0',block});
+    expect(wallet.checkProgress).toEqual({completed:2,total:4});
+    emit({type:'network',request:{requestId:1,method:'eth_getProof',host:'rpc.example',state:'waiting',startedAt:Date.now(),deadline:Date.now()+90000,purpose:'WETH storage proof · 1 slot'}});
+    expect(wallet.checkProgress).toEqual({completed:2,total:4});
+    emit({type:'asset-error',asset:tokens[1]!.address,error:'Proof rejected'});
+    emit({type:'price-error',asset:tokens[1]!.address,error:'No quote'});
+    expect(wallet.checkProgress).toEqual({completed:4,total:4});
+  }));
+  expect(wallet.retrievalLog!.some(entry=>entry.message.includes('2/4 checks · WETH storage proof'))).toBe(true);
+  expect(wallet.eth.amount).toBe(0n);
+  expect(wallet.weth.failed).toBe(true);
+  await readBalances(wallet,unusedWorker,defaultTokens(),()=>{},true,engine((_tokens,emit)=>{
+    expect(wallet.checkProgress).toEqual({completed:0,total:2});
+    emit({type:'asset-error',asset:defaultTokens()[1]!.address,error:'Still unavailable'});
+  }));
+  expect(wallet.checkProgress).toEqual({completed:1,total:2});
+});

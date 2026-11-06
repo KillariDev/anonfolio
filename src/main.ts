@@ -3,7 +3,7 @@ import { updateChildren } from './dom';
 import { appendRetrievalLog } from './retrieval-log';
 import { logStream } from './log-stream';
 import { readHistory } from './read-history';
-import { stageLabels, progressTime, type VerificationStage } from './verification/progress';
+import { checkLabel, stageLabels, progressTime, type VerificationStage } from './verification/progress';
 import chevronDown from './assets/chevron-down.svg?raw';
 import { discoverTorWorker, cacheTorWorker } from './worker-update';
 import type { WorkerMetadata } from './worker-metadata';
@@ -473,7 +473,8 @@ function verificationPanel(wallet: Wallet) {
   });
   const heading = document.createElement('div'); heading.className = 'progress-heading';
   const title = document.createElement('strong'); title.textContent = wallet.loading ? stage === 'connection' ? 'Verification' : stageLabels[stage] : 'Read attempt finished';
-  title.title = title.textContent;
+  if (wallet.checkProgress) title.textContent = checkLabel(wallet.checkProgress) + ' · ' + title.textContent;
+  title.title = title.textContent + ' · Counts balance and price checks, including failed checks. Extra code/storage requests are discovered as contracts execute.';
   const active = wallet.loading && !wallet.queuedForVerifier && stage !== 'connection';
   const clock = active ? progressClock(wallet.stageStartedAt || Date.now()) : document.createElement('small');
   clock.className = 'progress-clock';
@@ -485,10 +486,10 @@ function verificationPanel(wallet: Wallet) {
   if (wallet.loading && requests.length) {
     for (const request of requests.slice(0, 2)) {
       const row = document.createElement('div'); row.className = 'progress-request'; row.dataset.viewKey = String(request.requestId);
-      const operation = document.createElement('p'); operation.textContent = request.method + ' → ' + request.host;
+      const operation = document.createElement('p'); operation.textContent = (request.purpose || request.method) + ' → ' + request.host;
       const state = document.createElement('span'); state.textContent = request.state === 'waiting' ? (config.mode === 'https' ? 'Direct HTTPS · waiting for response headers' : 'Submitted to Anon-RPC · waiting for response headers') : 'Response headers received · reading response body';
       row.append(operation, state, progressClock(request.startedAt, request.deadline));
-      operation.title = operation.textContent; state.title = state.textContent;
+      operation.title = operation.textContent + ' · ' + request.method + (request.target ? ' · ' + request.target : '') + ' → ' + request.host; state.title = state.textContent;
       requestArea.append(row);
     }
     const hint = document.createElement('p'); hint.className = 'progress-hint';
@@ -533,8 +534,7 @@ function walletDetails(wallet: Wallet, logOpen=false) {
     const activity = document.createElement('div');
     activity.className = 'activity';
     const summary = document.createElement('p');
-    const finished = wallet.activity.filter(item => item.phase === 'received' || item.phase === 'failed').length;
-    summary.textContent = finished + '/' + wallet.activity.length + ' reads finished';
+    summary.textContent = '';
     const retry = retryMessage(wallet);
     if (retry) summary.textContent += ' ' + retry;
     summary.title = summary.textContent;
@@ -644,8 +644,9 @@ function render() {
       const progress = document.createElement('small');
       progress.className = 'verification-progress compact-progress';
       const request = wallet.networkRequests?.[0];
-      progress.textContent = request ? (request.state === 'waiting' ? 'Waiting for ' : 'Receiving ') + request.method + ' · ' + request.host : stageLabels[wallet.verificationStage || 'connection'];
-      progress.title = wallet.verificationStatus || '';
+      progress.textContent = request ? (request.purpose || (request.state === 'waiting' ? 'Waiting for ' : 'Receiving ') + request.method) + ' · ' + request.host : stageLabels[wallet.verificationStage || 'connection'];
+      if (wallet.checkProgress) progress.textContent = checkLabel(wallet.checkProgress) + ' · ' + progress.textContent;
+      progress.title = request ? progress.textContent + ' · ' + request.method + (request.target ? ' · ' + request.target : '') : wallet.verificationStatus || '';
       if (!wallet.loading || wallet.verificationStage === 'connection' || expandedAddresses.has(wallet.address)) { progress.textContent = ''; progress.setAttribute('aria-hidden', 'true'); }
       identity.append(progress);
     }
@@ -732,6 +733,7 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   wallet.verificationStage = 'connection';
   wallet.stageStartedAt = Date.now();
   wallet.networkRequests = [];
+  wallet.checkProgress = undefined;
   wallet.queuedForVerifier = false;
   appendRetrievalLog(wallet, (onlyFailed?'Automatic retry':'Refresh')+' started · '+new URL(wallet.rpcUrl).hostname+(config.mode === 'https' ? ' through direct HTTPS (not anonymous).' : ' through the address’s Anon-RPC route.'));
   appendRetrievalLog(wallet, config.mode === 'https' ? 'Using direct HTTPS; RPC providers see your IP and requested addresses.' : state==='ready'?'Using the ready private worker.':connectionMessage);

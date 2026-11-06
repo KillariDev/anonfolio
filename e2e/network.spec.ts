@@ -91,7 +91,7 @@ test('HTTPS selection persists, avoids Tor and sends proof/consensus reads direc
   expect(calls.filter(call=>call.body).map(call=>call.body.method)).toEqual(['eth_getProof']);
   expect(JSON.stringify(calls)).not.toContain('isolationKey');
   await page.locator('.retrieval-log > summary').click();
-  await expect(page.locator('.log-stream')).toContainText('Direct HTTPS; waiting for response headers');
+  await expect(page.locator('.log-stream')).toContainText('Tracked address account proof · requested');
   await expect(page.locator('.log-stream')).not.toContainText('Submitted to Anon-RPC');
   await page.evaluate(()=>{const w=(window as any).__verifiers[0];w.onmessage({data:{type:'fatal',run:w.request.id,error:'Direct HTTPS provider unavailable'}});});
   await expect(page.locator('.amount')).toHaveText(['—','—']);

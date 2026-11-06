@@ -1,5 +1,5 @@
 import { appendRetrievalLog, logVerificationEvent, type RetrievalLog } from './retrieval-log';
-import type { NetworkProgress, VerificationStage } from './verification/progress';
+import type { CheckProgress, NetworkProgress, VerificationStage } from './verification/progress';
 import { formatUnits, type Address } from 'viem';
 import { errorMessage, readFailure, type ReadFailure } from './errors';
 import { verifyWallet, type VerificationEvent } from './verification/client';
@@ -31,6 +31,7 @@ export type Wallet = RetrievalLog & {
   queuedRefresh?: boolean;
   queuedForVerifier?: boolean;
   verificationStatus?: string;
+  checkProgress?: CheckProgress;
   verificationStage?: VerificationStage;
   stageStartedAt?: number;
   networkRequests?: NetworkProgress[];
@@ -67,13 +68,20 @@ export async function readBalances(
   appendRetrievalLog(wallet,wallet.verificationStatus);
   wallet.networkRequests = [];
   wallet.queuedForVerifier = false;
+  wallet.checkProgress = { completed: 0, total: selected.length * 2 };
+  const finishedChecks = new Set<string>();
   const pending = new Set(selected.map(token => token.address as string));
   const reported = new Set<string>();
   const earlyPrices = new Map<string, VerificationEvent>();
   let fatal: ReadFailure | undefined;
   try {
     await verifier(wallet, worker, selected, event => {
-      logVerificationEvent(wallet,event,selected,worker.transport);
+      if (selected.some(token => token.address === event.asset) && (event.type === 'balance' ? Boolean(event.block && event.amount !== undefined) : ['asset-error','price','price-error'].includes(event.type))) {
+        const kind = event.type === 'balance' || event.type === 'asset-error' ? 'balance' : 'price';
+        finishedChecks.add(kind + ':' + event.asset);
+        wallet.checkProgress = { completed: finishedChecks.size, total: selected.length * 2 };
+      }
+      logVerificationEvent(wallet,event,selected,worker.transport,wallet.checkProgress);
       const stage = event.stage || (event.type === 'queued' ? 'queued' : event.type === 'started' ? 'verifier' : event.type === 'asset' ? 'balances' : event.type === 'price-start' ? 'pricing' : undefined);
       if (stage && stage !== wallet.verificationStage) { wallet.verificationStage = stage; wallet.stageStartedAt = Date.now(); }
       if (event.type === 'network' && event.request) {

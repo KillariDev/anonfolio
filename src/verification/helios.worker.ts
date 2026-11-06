@@ -4,15 +4,16 @@ import initWasm, { EthereumClient } from '../../vendor/helios/index.js';
 import { setHeliosFetch } from '../../vendor/helios/fetch.js';
 import { DEFAULT_CHECKPOINT, validateCheckpoint, assertCheckpointSlot, type Checkpoint, CONSENSUS_RPC, HELIOS_WASM_SHA256, checkCheckpointAge, verifiedBlock, type VerifiedBlock } from './trust';
 import { assertPinnedBlock, verifyAccountResponse, verifyCode } from './proofs';
-import { TwapOracle } from '../pricing';
+import { TwapOracle, V3_FACTORY } from '../pricing';
 import { assertConsensusUrl, type RpcRequest } from './transport';
 import { downloadVerifier } from './download';
+import { RequestPurposes } from './request-purpose';
 import { parallelReads } from './parallel';
 
 let activeCheckpoint: Checkpoint = DEFAULT_CHECKPOINT;
 const EXECUTION_URL = 'https://helios-execution.invalid/';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
-let current: { id: string; rpcHost: string; mode?: 'tor'|'https'; requests: number; block?: VerifiedBlock } | undefined;
+let current: { id: string; rpcHost: string; mode?: 'tor'|'https'; purposes: RequestPurposes; block?: VerifiedBlock } | undefined;
 let client: EthereumClient | undefined;
 const oracle = new TwapOracle();
 let sequence = 0;
@@ -33,7 +34,7 @@ async function rpc(body: RpcRequest) {
   const run = current.id;
   const id = ++sequence;
   const response = new Promise<any>((resolve, reject) => replies.set(id, { resolve, reject }));
-  send('rpc', { id, body });
+  send('rpc', { id, body, ...current.purposes.describe(body) });
   const result = await response;
   if (current?.id !== run) throw new Error('Obsolete wallet execution response.');
   return result;
@@ -66,11 +67,11 @@ async function internalFetch(request: Request): Promise<Response> {
     if (!current?.block) throw new Error('State request before verified finalized block selection.');
     assertPinnedBlock(body.params.at(-1), current.block);
   } else if (!['eth_getBlockByHash', 'eth_getBlockByNumber'].includes(body.method)) throw new Error('Unreviewed Helios RPC method.');
-  step((current?.mode === 'https' ? 'Direct HTTPS ' : 'Private ') + body.method + ' request #' + (++current!.requests) + ' → ' + current!.rpcHost + (current?.mode === 'https' ? ' through direct HTTPS; waiting for response.' : ' through Anon-RPC; waiting for response.'));
+  const purpose = current!.purposes.describe(body).purpose;
   let data;
-  try { data = await rpc(body); } catch (error) { step((current?.mode === 'https' ? 'Direct HTTPS ' : 'Private ') + body.method + ' failed: ' + String(error)); throw error; }
+  try { data = await rpc(body); } catch (error) { step(purpose + ' failed: ' + String(error)); throw error; }
   if (body.method === 'eth_getProof') {
-    step('Checking account and requested storage proofs against finalized state root.');
+    step('Verifying ' + purpose + '.');
     const hash = await verifyAccountResponse(body.params[0], body.params[1], current!.block!, data.result);
     codeHashes.set(body.params[0].toLowerCase(), hash);
   } else if (body.method === 'eth_getCode') {
@@ -83,7 +84,7 @@ async function internalFetch(request: Request): Promise<Response> {
       codeHashes.set(body.params[0].toLowerCase(), hash);
     }
     verifyCode(data.result, hash);
-    step('Bytecode hash verified. Helios is executing locally with proven state, including proxy dependencies.');
+    step(purpose + ' verified; executing locally.');
   }
   return rpcResponse(data);
 }
@@ -114,7 +115,7 @@ async function synced(checkpoint: Checkpoint) {
   return client;
 }
 async function refresh(message: any) {
-  current = { id: message.id, rpcHost: message.rpcHost, mode: message.mode, requests: 0 };
+  current = { id: message.id, rpcHost: message.rpcHost, mode: message.mode, purposes: new RequestPurposes(message.address, message.tokens, message.pricing) };
   codeHashes.clear();
   executionFailure = '';
   try {
@@ -147,6 +148,7 @@ async function refresh(message: any) {
       send('price-start', { asset: token.address, stage });
       try {
         const estimate = await oracle.estimate(token, message.pricing, block, async (to, input) => {
+          if (to.toLowerCase() !== V3_FACTORY.toLowerCase()) current!.purposes.name(to, (token.address === 'eth' ? 'WETH' : token.symbol) + '/' + message.pricing.quote.symbol + ' pool');
           return await helios.call({ to, input, gas: '0x989680' }, { blockHash: block.hash }, undefined) as `0x${string}`;
         }, message => step(message));
         send('price', { asset: token.address, estimate, block });

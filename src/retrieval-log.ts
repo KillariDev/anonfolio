@@ -1,3 +1,4 @@
+import { checkLabel, type CheckProgress } from './verification/progress';
 import { errorMessage } from './errors';
 import type { Token } from './tokens';
 import type { VerificationEvent } from './verification/client';
@@ -13,13 +14,15 @@ export function appendRetrievalLog(owner: RetrievalLog, message: string, level:R
   }
   if(entries.length>LOG_LIMIT) { owner.droppedLogEntries=(owner.droppedLogEntries||0)+entries.length-LOG_LIMIT; entries.splice(0,entries.length-LOG_LIMIT); }
 }
-export function logVerificationEvent(owner:RetrievalLog,event:VerificationEvent,tokens:Token[], mode?:'tor'|'https') {
+export function logVerificationEvent(owner:RetrievalLog,event:VerificationEvent,tokens:Token[], mode?:'tor'|'https', checks?:CheckProgress) {
   const token=tokens.find(token=>token.address===event.asset)?.symbol || 'Token';
   if(event.message) appendRetrievalLog(owner,event.message,event.type.endsWith('error')?'error':'info');
   if(event.type==='network'&&event.request) {
     const request=event.request;
     const status=request.state==='waiting'?(mode==='https'?'Direct HTTPS; waiting for response headers':'Submitted to Anon-RPC; waiting for response headers'):request.state==='reading'?'Response headers received; reading body':'Response body received';
-    appendRetrievalLog(owner,'Request #'+request.requestId+' · '+request.method+' → '+request.host+' · '+status);
+    appendRetrievalLog(owner, request.purpose
+      ? (checks ? checkLabel(checks)+' · ' : '') + request.purpose + ' · ' + (request.state === 'waiting' ? 'requested' : request.state === 'reading' ? 'receiving' : 'received')
+      : 'Request #'+request.requestId+' · '+request.method+' → '+request.host+' · '+status);
   } else if(event.type==='block'&&event.block) appendRetrievalLog(owner,'Selected verified finalized block '+BigInt(event.block.number)+' · '+event.block.hash);
   else if(event.type==='asset') appendRetrievalLog(owner,token+' · Starting balance proof / local execution.');
   else if(event.type==='balance'&&event.block&&event.amount!==undefined) appendRetrievalLog(owner,token+' · Balance proved at finalized block '+event.block.hash+'.','success');
