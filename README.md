@@ -6,9 +6,11 @@ An Ethereum mainnet portfolio reader that verifies balances in your browser. Tra
 
 **Tor via Anon-RPC is the default.** Each address uses its own isolation key. You can explicitly select **Direct HTTPS (not anonymous)** in Settings; providers then see your IP and requested addresses. A Tor failure never switches to HTTPS automatically.
 
-![Anonfolio showing token totals, estimated USDC values and named tracked addresses](docs/images/readme-portfolio.png)
+<!-- portfolio-screenshot -->
+![Anonfolio tracking vitalik.eth, the Ethereum Foundation and Uniswap treasury with real ETH, WETH, USDC and UNI holdings.](docs/images/readme-portfolio.png)
 
-*Application screenshot with deterministic demonstration data. The amounts are illustrative, not live balances or evidence of a successful Tor connection.*
+*Public mainnet snapshot · 6 Nov 2026 · ETH, WETH, USDC and UNI · Helios-verified over direct HTTPS. [Capture details](docs/images/README.md).*
+<!-- /portfolio-screenshot -->
 
 ## Technologies
 
@@ -110,11 +112,15 @@ bun run test:live:https      # real verified ETH/WETH using explicitly selected 
 bun run test:live            # real Tor/Helios balance and pricing smoke test
 ```
 
-To regenerate the README screenshot with labelled demonstration data:
+To regenerate all published screenshots from the saved, verified mainnet snapshot:
 
 ```sh
-UPDATE_README_SCREENSHOT=1 bun run test:browser e2e/technology.spec.ts --grep "README portfolio screenshot"
+UPDATE_SCREENSHOTS=1 bun run test:browser e2e/published-screenshots.spec.ts
+bun scripts/sync-screenshot-docs.ts
+UPDATE_PRESENTATION_PDF=1 bun run test:browser e2e/presentation.spec.ts --grep "self-contained presentation"
 ```
+
+Use `SCREENSHOT_LIVE=1` instead of `UPDATE_SCREENSHOTS=1` for a fresh mainnet capture through the real Helios verifier in explicit HTTPS mode. This updates the saved snapshot and both images; run the synchronization and PDF commands shown above to update the captions and presentation. See [screenshot provenance](docs/images/README.md).
 
 Live tests are opt-in and depend on external services. To exercise a production build, build and start `bun run serve`, then set `BASE_URL=http://127.0.0.1:4173` when running the live command. `LIVE_BALANCE_RPC` can select an operator for the smoke test.
 

@@ -204,8 +204,8 @@
 <section class="chapter" id="addresses-tokens-and-the-interface" aria-labelledby="heading-addresses-tokens-and-the-interface">
 <h2 id="heading-addresses-tokens-and-the-interface"><span class="chapter-number">04</span>Addresses, tokens, and the interface
 </h2>
-<figure><a class="screenshot-link" href="images/portfolio.png" target="_blank" rel="noreferrer" aria-label="Open the application image at full size"><img class="screenshot" src="images/portfolio.png" width="1440" height="1000" loading="lazy" decoding="async" alt="Anonfolio desktop fixture: per-token totals above ten tracked addresses, each showing ETH and USDC holdings without zero-balance entries."></a>
-<figcaption>Application image / deterministic browser-test fixture, not a live portfolio. Test addresses and amounts are illustrative; unpriced values deliberately show unavailable estimates. Select the image to open it at full size.
+<figure><a class="screenshot-link" href="images/portfolio.png" target="_blank" rel="noreferrer" aria-label="Open the application image at full size"><img class="screenshot" src="images/portfolio.png" width="1440" height="900" loading="lazy" decoding="async" alt="Anonfolio tracking vitalik.eth, the Ethereum Foundation and Uniswap treasury with real ETH, WETH, USDC and UNI holdings. Custom-token settings show USDC and UNI with their contract addresses and icons."></a>
+<figcaption>Public mainnet snapshot · 6 Nov 2026 · ETH, WETH, USDC and UNI · Helios-verified over direct HTTPS. The settings panel shows the custom ERC-20s included in the watchlist.
 </figcaption>
 </figure>
 <p>Address validation happens locally before the watchlist changes. Plain lists accept whitespace, commas, or semicolons. Named lists accept <code>Name | 0x…</code>, one entry per line. Invalid input rejects the addition as a whole; valid addresses are normalized and duplicates are removed. A single-address name field is also available. Names are trimmed, limited to 80 characters, and rejected if they contain control characters.

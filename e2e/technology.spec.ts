@@ -1,6 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openWalletDetails } from './helpers';
-import { copyFile } from 'node:fs/promises';
 
 async function demo(page: Page, mode: 'tor' | 'https' = 'tor') {
   await page.addInitScript(mode => {
@@ -70,25 +68,6 @@ test('explicit HTTPS mode never shows a Tor connection logo', async ({page}) => 
   await expect(page.locator('#connection')).toHaveText('Direct HTTPS · not anonymous');
   await expect(page.locator('#connection .technology-tor')).toHaveCount(0);
   await expect(page.locator('.network .technology-ethereum')).toBeVisible();
-});
-
-test('README portfolio screenshot shows the current UI with illustrative data', async ({page}) => {
-  test.skip(!!process.env.BASE_URL || !!process.env.IPFS_GATEWAY_URL, 'Development portfolio fixture.');
-  await demo(page); await page.setViewportSize({width:1440,height:810}); await page.goto('/');
-  await page.locator('#address').fill('Daily spending | 0x0000000000000000000000000000000000000001\nSavings | 0x0000000000000000000000000000000000000002\nCold storage | 0x0000000000000000000000000000000000000003');
-  await page.getByRole('button',{name:'add address to track',exact:true}).click();
-  await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
-  await expect(page.locator('.wallet')).toHaveCount(3);
-  await expect(page.locator('#estimated-total .portfolio-value-amount')).toHaveText('≈ 13380 USDC');
-  await expect.poll(()=>page.locator('img').evaluateAll(images=>images.every(image=>image.naturalWidth>0))).toBe(true);
-  await page.evaluate(()=>document.fonts.ready);
-  const screenshot=test.info().outputPath('readme-portfolio.png');
-  await page.screenshot({path:screenshot,animations:'disabled'});
-  if(process.env.UPDATE_README_SCREENSHOT==='1') await copyFile(screenshot,new URL('../docs/images/readme-portfolio.png',import.meta.url));
-  await page.setViewportSize({width:390,height:844});
-  await openWalletDetails(page,'0x0000000000000000000000000000000000000001 · Daily spending');
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await page.screenshot({path:test.info().outputPath('technology-portfolio-mobile.png'),animations:'disabled',fullPage:true});
 });
 
 test('static build technology logos remain available after an offline reload', async ({page,context}) => {
