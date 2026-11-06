@@ -12,19 +12,26 @@ Use case: logo-brand. Asset type: one finished application icon for Anonfolio, a
 
 ## README cover
 
-[`docs/images/anonfolio-cover.png`](../../../docs/images/anonfolio-cover.png) is an original wide cover illustration generated with the built-in image-generation tool on November 6, 2026. It uses the existing forest/mint palette and folded-shield motif. The original 1983 × 793 PNG is copied unchanged into the repository and appears before the README title. It is brand artwork, not an application screenshot or a display of portfolio data.
+[`docs/images/anonfolio-cover.png`](../../../docs/images/anonfolio-cover.png) is the redesigned README cover, generated with the built-in image-generation tool on November 6, 2026. It replaces the earlier grid-backed banner while retaining the exact wordmark, tagline, forest/mint palette, and folded shield/check identity. The cover adds more deliberate typography, dimensional shield lighting, translucent proof-like layers, and flowing private-routing paths.
+
+The generated 1983 × 793 opaque PNG is copied unchanged into the repository and remains the first image in the README. The prior cover and the original application icon were supplied as visual references. This is brand illustration, not an application screenshot, network diagram, or display of portfolio data. The original cover remains available in Git history.
 
 ### Cover generation prompt
 
 ```text
-Use case: ads-marketing
-Asset type: finished wide GitHub README cover image for Anonfolio, an existing Ethereum portfolio application.
-Primary request: create a polished, restrained, professional cover illustration with integrated typography, approximately 2.5:1 landscape banner composition, about 1800 by 720 pixels. This is a cover, not a screenshot or interface mockup.
-Scene/backdrop: very dark forest green #101510, subtle architectural depth and a barely visible technical grid. Elegant editorial technology branding.
-Subject: an original large folded mint-green shield/check emblem representing private requests and locally verified balances, constructed from two broad interlocking sage and mint ribbons with a check-shaped negative-space opening. A few clean curved paths and tiny nodes suggest private routing and cryptographic proofs. Keep these abstract and sparse. Complement the project's existing folded-shield brand.
-Composition: strong asymmetrical hierarchy suitable for a wide README banner: large, carefully typeset lowercase wordmark and short subtitle in generous negative space; dimensional shield illustration balances the other half. Keep every text line comfortably inside the image with broad safe margins, large enough to read when displayed at 900 pixels wide.
-Style/medium: sophisticated geometric digital illustration, crisp forms, matte folded surfaces, restrained depth, soft mint light on forest background, no glossy cyberpunk aesthetic.
-Palette: pale mint #b8ec8c, sage green, off-white #eef4e9, deep forest #101510. High contrast text.
-Text (verbatim, no other text): "anonfolio." as the dominant wordmark in a clean bold modern sans serif. Beneath it, smaller and lighter: "Private Ethereum portfolios." and on the next line "Verified in your browser."
-Constraints: exactly one finished wide cover image. No fabricated dashboard, charts, balances, wallet addresses, token prices, people, third-party logos, generic padlocks, stock-photo objects, border, watermark, extra writing, tiny decorative text, oversaturated glow, gradients obscuring text, or clutter. Preserve clear reading order and visual calm. Opaque full-bleed background.
+Use case: ads-marketing.
+Asset type: a finished, premium wide GitHub README cover for Anonfolio, approximately 2400 × 960, 2.5:1 landscape.
+Input images: Image 1 is the current cover to redesign. Image 2 is the existing application icon and the authoritative brand-shape reference.
+Primary request: make a substantially more art-directed, memorable successor to the current cover. Preserve the exact project name, tagline, forest/mint identity, and folded shield/check silhouette, but rebuild the composition and illustration with a sophisticated visual idea about private routes becoming verified state.
+Scene/backdrop: near-black forest green #0c140f. A luminous but restrained architectural space with beautifully lit translucent layers. Eliminate the generic all-over square grid. Use fine orbital routing curves and a few precise nodes as intentional structural elements.
+Subject: on the right, a beautifully crafted monumental version of the reference folded shield, in pale mint and brushed sage, above a low dark glass plinth made of a few stacked translucent proof-like planes. Thin green routes curve around and behind the shield and resolve into orderly, crisp geometric layers. The shield's cut-out remains a single bold check-shaped negative space. Retain the original recognizable geometry rather than inventing a new logo.
+Style: high-end editorial technology art direction, exquisitely controlled three-dimensional lighting, fine material detail, precision, visual depth, velvety darks, soft rim light. Contemporary and original; neither a stock cybersecurity advertisement nor an overly glossy game render.
+Composition: use the existing banner's left text/right emblem reading order, but improve balance, spacing and depth. Text occupies about the left half, emblem fills the right half with ample breathing room. Keep a clean quiet area behind the type and broad safe margins on every edge. Shield must be fully inside frame. At GitHub's roughly 900px display width, wordmark and both tagline lines must read clearly.
+Typography: the wordmark is large and confident in a beautifully spaced lowercase geometric sans serif, warm off-white, with its final dot mint green. Tagline is smaller but easily legible and deliberately spaced beneath the wordmark. Avoid extreme boldness that overwhelms the illustration.
+Text, verbatim, and no other text:
+"anonfolio."
+"Private Ethereum portfolios."
+"Verified in your browser."
+Palette: forest #101510, near-black, pale mint #b8ec8c, muted sage, off-white #eef4e9. Restrained natural tonal gradients, excellent contrast. No purple or neon blue.
+Constraints: exactly one complete opaque full-bleed cover. Preserve spelling and punctuation. No fake application interface, invented balances, charts, wallet addresses, pseudo-code, crypto coins, token logos, padlocks, hooded figures, badges, frames, watermarks, additional text, excessive glow or visual clutter. This is brand illustration, not a screenshot.
 ```
