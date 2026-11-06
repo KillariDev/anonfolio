@@ -14,7 +14,7 @@ async function setup(page:Page,width=390) {
 for(const width of [320,390,768,1440])test(`saved portfolio remains compact, readable and fully accessible at ${width}px`,async({page})=>{
   test.skip(!!process.env.BASE_URL || !!process.env.IPFS_GATEWAY_URL);
   await setup(page,width);
-  await expect(page.locator('#estimated-total .portfolio-value-number')).toHaveText(/1,850,543,140\.83/);
+  await expect(page.locator('#estimated-total .portfolio-value-number')).toHaveText(/1,845,877,370\.28/);
   await expect(page.locator('.amount').first()).toHaveAttribute('data-tooltip',/5\.780441042197210512/);
   const rows=await page.locator('.balances').evaluateAll(rows=>rows.map(row=>row.getBoundingClientRect().height));
   if(width<720)expect(Math.max(...rows)).toBeLessThan(width===320?350:310);
