@@ -1121,6 +1121,8 @@ void start();
 window.addEventListener('offline', () => { retries.pause(); renderOffline(); });
 window.addEventListener('online', () => { renderOffline(); retries.resume(); if (!connection.cancelled) void start(true); });
 window.addEventListener('pagehide', () => {
+  // An edit still waiting for the portfolio lock must survive an immediate reload or close.
+  if (pendingEdits.length || persistAgain) { persistAgain = false; applyPendingEdits(); savePortfolio(wallets, tokens); }
   pageActive = false;
   refreshGeneration++;
   retries.cancel('connection');
