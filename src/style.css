@@ -110,7 +110,7 @@ details[open] > summary::before { transform: rotate(45deg); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 /* Header: brand, two status badges, network and settings. */
-header { position: relative; max-width: 1200px; margin: auto; padding: 12px 32px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 24px; align-items: center; border-bottom: 1px solid var(--line); }
+header { position: relative; max-width: 1320px; margin: auto; padding: 12px 32px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 24px; align-items: center; border-bottom: 1px solid var(--line); }
 .brand { font-size: 18px; letter-spacing: -.4px; font-weight: 700; color: var(--text); text-decoration: none; display: flex; align-items: center; }
 .brand-mark { display: block; flex: 0 0 26px; width: 26px; height: 26px; object-fit: contain; margin-right: 8px; border-radius: 7px; }
 .brand-dot { color: var(--accent); }
@@ -231,7 +231,7 @@ header { position: relative; max-width: 1200px; margin: auto; padding: 12px 32px
 }
 
 /* Page */
-main { max-width: 1200px; margin: 16px auto 40px; padding: 0 32px; }
+main { max-width: 1320px; margin: 16px auto 40px; padding: 0 32px; }
 .page-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 6px; }
 h1 { font-size: 22px; letter-spacing: -.4px; line-height: 1.2; margin: 0; font-weight: 600; }
 h2 { font-size: 15px; font-weight: 600; margin: 0; }
@@ -315,9 +315,9 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .scroll-hint { display: none; }
 #wallets { container-type: inline-size; scrollbar-gutter: stable; overflow-anchor: none; position: relative; overflow: auto; max-height: 70vh; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .wallet-table { table-layout: fixed; min-width: 0; width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
-.wallet-column-address { width: 23%; }
+.wallet-column-address { width: 31%; }
 .wallet-column-value { width: 14%; }
-.wallet-column-status { width: 11%; }
+.wallet-column-status { width: 118px; }
 .wallet-column-actions { width: 84px; }
 .wallet-table > thead > tr > th { position: sticky; top: 0; z-index: 2; font-size: 12px; font-weight: 500; color: var(--text-3); padding: 8px 14px; background: var(--surface); border-bottom: 1px solid var(--line); white-space: nowrap; }
 .wallet-table > thead > tr > th:first-child { z-index: 3; }
@@ -326,7 +326,10 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .balances > th, .balances > td { padding: 5px 14px; border-bottom: 1px solid var(--line); background: var(--surface); vertical-align: middle; height: 50px; font-size: 13px; }
 .wallet:last-child .balances > th, .wallet:last-child .balances > td { border-bottom: 0; }
 .wallet:hover .balances > th, .wallet:hover .balances > td { background: var(--surface-2); }
-.address-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.address-line { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* With a name, the copy control sits at the end of the name line so the address keeps the full width. */
+.address-line:has(.address-name) > .copy-address { position: absolute; top: 0; right: 0; width: 22px; height: 20px; }
+.address-line:has(.address-name) .address-name { padding-right: 26px; }
 .address-display { display: inline-flex; align-items: center; gap: 10px; min-width: 0; vertical-align: middle; }
 .compact-address { max-width: 100%; flex: 1 1 auto; width: 0; }
 .compact-address .address-text { overflow: hidden; }
@@ -334,9 +337,10 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .address-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .address-name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.3; }
 .wallet-address { font: 12px/1.3 var(--mono); color: var(--text-2); }
+/* The full address shows whenever it fits; only its middle clips, with an ellipsis, when the cell is too narrow. */
 .address-value { display: inline-flex; max-width: 100%; min-width: 0; white-space: nowrap; }
-.address-middle { display: inline-block; width: 0; overflow: hidden; }
-.address-tail::before { content: "…"; }
+.address-head, .address-tail { flex: 0 0 auto; }
+.address-middle { flex: 0 1 auto; min-width: 1ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .address-display.full-address .address-name { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .address-display.full-address .wallet-address { overflow-wrap: anywhere; min-width: 0; }
 .full-address { font: 12px var(--mono); color: var(--text-2); overflow-wrap: anywhere; }
@@ -346,16 +350,18 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .balances:hover .copy-address, .copy-address:focus-visible, .balances:focus-within .copy-address { opacity: 1; }
 @media (hover: none) { .copy-address { opacity: 1; } }
 .wallet-value { text-align: right; }
-.address-valuation { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 2px 5px; max-width: 100%; color: var(--text); font-size: 13px; font-weight: 500; }
+/* Two lines are always reserved so a value that wraps its currency never changes the row height. */
+.address-valuation { display: inline-flex; flex-wrap: wrap; align-items: center; align-content: center; justify-content: flex-end; gap: 0 5px; max-width: 100%; min-height: 36px; color: var(--text); font-size: 13px; font-weight: 500; line-height: 1.35; }
 .address-value-estimate { min-width: 0; overflow-wrap: anywhere; }
 .address-value-estimate > .value-number { white-space: nowrap; }
 .address-value-estimate > .value-trail { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; margin-left: 4px; }
 .value-currency { color: var(--text-3); font-weight: 500; }
 /* Holdings are plain text separated by dots. Verified icons only appear on hover or focus. */
 .holdings-content { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
-.holdings-list { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; min-width: 0; max-width: 100%; row-gap: 2px; }
+/* Two holding lines fit inside the 50px row, so wrapping never changes the row height. */
+.holdings-list { display: flex; flex-wrap: wrap; align-items: center; gap: 0; min-width: 0; max-width: 100%; }
 .holdings-list:empty { display: none; }
-.holdings-list > .balance { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; max-width: 100%; min-height: 22px; padding: 0 8px 0 0; margin-right: 4px; position: relative; }
+.holdings-list > .balance { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; max-width: 100%; min-height: 20px; padding: 0 8px 0 0; margin-right: 4px; position: relative; }
 .holdings-list > .balance:not(:last-child)::after { content: ""; position: absolute; right: 0; top: 50%; width: 3px; height: 3px; margin-top: -1px; border-radius: 50%; background: var(--text-3); }
 .balance .token { display: inline-flex; align-items: center; gap: 5px; color: var(--text-2); font-size: 12px; font-weight: 550; }
 .balance .token .token-icon { flex-basis: 16px; width: 16px; height: 16px; font-size: 7px; }
@@ -409,7 +415,7 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 @media (max-width: 720px) {
   main { padding: 0 16px; margin-top: 16px; }
 }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .wallet-table, .wallet-table > tbody { display: block; }
   .wallet-table > colgroup, .wallet-table > thead { display: none; }
   .balances { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-bottom: 1px solid var(--line); }
