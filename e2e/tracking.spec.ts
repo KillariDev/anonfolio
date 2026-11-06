@@ -266,9 +266,12 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('#wallets')).toBeVisible();
   await page.locator('#wallets').evaluate(node => { node.scrollLeft = 300; });
+  expect(await page.locator('#wallets').evaluate(node => node.scrollLeft)).toBeGreaterThan(200);
   await page.getByRole('button', { name: 'Refresh ' + b, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh ' + b, exact: true })).toBeEnabled();
-  expect(await page.locator('#wallets').evaluate(node => node.scrollLeft)).toBeGreaterThan(200);
+  // Mobile addresses scroll with the table so they cannot cover token values.
+  // Clicking its refresh control brings that address back into view.
+  expect(await page.locator('#wallets').evaluate(node => node.scrollLeft)).toBeLessThan(20);
   const left = await page.locator('.wallet-head .address-display').first().boundingBox();
   expect(left!.x).toBeLessThan(35);
   await page.locator('#wallets').evaluate(node => { node.scrollLeft = 0; });
@@ -1660,4 +1663,47 @@ test('short request purposes and honest check counts stay accurate during parall
   await emit({type:'price-error',asset:weth,error:'No pool'});
   await expect(page.locator('.progress-heading')).toContainText('4/4 checks');
   expect(await page.locator('.verification-panel').evaluate(node=>node.getBoundingClientRect().height)).toBe(height);
+});
+
+for (const width of [1280, 768, 390, 320]) test(`large balances and estimated values remain complete at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await stalledVerifier(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button', { name: 'add address to track', exact: true }).click();
+  await page.evaluate(() => {
+    const worker = (window as any).__verifiers[0], run = worker.request.id;
+    const block = { hash: '0x'+'11'.repeat(32), stateRoot: '0x'+'22'.repeat(32), number: '0x100', timestamp: Date.now()-60_000 };
+    for (const asset of ['eth', '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2']) {
+      worker.onmessage({data:{type:'balance',run,asset,amount:'7012610000000000000000',block}});
+      worker.onmessage({data:{type:'price',run,asset,block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',symbol:'USDC',decimals:6,numerator:'15637500690000',denominator:'7012610000000000000000',window:1800,blockHash:block.hash,minLiquidity:'10000'}}});
+    }
+  });
+  await expect(page.locator('.balance .amount').first()).toHaveText('7012.61');
+  await expect(page.locator('.balance .price-value').first()).toHaveText('≈ 15637500.69 USDC');
+  await expect(page.locator('.total .token-value-amount').first()).toHaveText('≈ 15637500.69 USDC');
+  await expect(page.locator('.portfolio-value-number')).toHaveText('≈ 31275001.38');
+  const clipped = await page.locator('.amount, .price-value, .total-amount, .token-value-amount, .portfolio-value-number').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map(node => ({className:node.className,text:node.textContent})));
+  expect(clipped).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // A complete balance column must be reachable, without the sticky address
+  // covering its leading digits when the portfolio scrolls horizontally.
+  const visible = await page.locator('.balance').last().evaluate(cell => {
+    cell.scrollIntoView({block:'nearest',inline:'end'});
+    const rect = cell.getBoundingClientRect(), root = document.querySelector('#wallets')!.getBoundingClientRect();
+    return rect.left >= root.left && rect.right <= root.right;
+  });
+  expect(visible).toBe(true);
+  if (width === 1280 || width === 390) await page.screenshot({path:'test-results/large-balances-'+width+'.png',fullPage:true});
+  // Even unusually large uint256 balances and price ratios must wrap instead
+  // of silently dropping digits, without overflowing the page or token cell.
+  await page.evaluate(() => {
+    const worker = (window as any).__verifiers[0], run = worker.request.id;
+    const block = { hash: '0x'+'11'.repeat(32), stateRoot: '0x'+'22'.repeat(32), number: '0x100', timestamp: Date.now()-60_000 };
+    worker.onmessage({data:{type:'balance',run,asset:'eth',amount:(2n**256n-1n).toString(),block}});
+    worker.onmessage({data:{type:'price',run,asset:'eth',block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',symbol:'USDC',decimals:6,numerator:'1000000000000000000000000',denominator:'1',window:1800,blockHash:block.hash,minLiquidity:'10000'}}});
+  });
+  await expect(page.locator('.balance .amount').first()).toContainText('115792089237316195423570985008687907853269984665640564039457.58');
+  expect(await page.locator('.amount, .price-value, .total-amount, .token-value-amount, .portfolio-value-number').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map(node => node.className))).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
