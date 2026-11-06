@@ -1,9 +1,11 @@
+import { readResponseBytes, readResponseJson } from './response-body';
 import { decodeAbiParameters, keccak256 } from 'viem';
 import { TOR_SPECIFIER } from './config';
 import { WORKER_HASH_SELECTOR, WORKER_RESOLVERS_SELECTOR } from './bootstrap';
 import { errorMessage } from './errors';
 import { validateWorkerMetadata, type WorkerMetadata } from './worker-metadata';
 export const WORKER_DISCOVERY_RPC = 'https://ethereum-rpc.publicnode.com/';
+export const WORKER_DOWNLOAD_LIMIT = 20_000_000;
 const CACHE = 'anonfolio-user-tor-worker-v1';
 const cacheKey = (hash: string) => new URL('anonfolio-tor-worker/' + hash, document.baseURI).href;
 type Progress = (message: string) => void;
@@ -12,10 +14,11 @@ export async function discoverTorWorker(progress: Progress, fetcher: typeof fetc
   let id = 0;
   async function rpc(method: 'eth_blockNumber' | 'eth_call', params: unknown[]) {
     const requestId = ++id;
+    const signal = AbortSignal.timeout(30_000);
     const response = await fetcher(WORKER_DISCOVERY_RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: requestId, method, params }), credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal: AbortSignal.timeout(30_000) });
-    if (!response.ok) throw new Error('PublicNode worker discovery returned HTTP ' + response.status);
-    const data = await response.json();
+      body: JSON.stringify({ jsonrpc: '2.0', id: requestId, method, params }), credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal });
+    if (!response.ok) { void response.body?.cancel().catch(() => {}); throw new Error('PublicNode worker discovery returned HTTP ' + response.status); }
+    const data = await readResponseJson(response, 256 * 1024, 'PublicNode worker discovery', signal);
     if (data.error) throw new Error('PublicNode worker discovery rejected: ' + errorMessage(data.error));
     if (data.jsonrpc !== '2.0' || data.id !== requestId || typeof data.result !== 'string') throw new Error('PublicNode returned invalid worker discovery data.');
     return data.result as `0x${string}`;
@@ -42,10 +45,10 @@ export async function cacheTorWorker(metadata: WorkerMetadata, progress: Progres
   for (const url of selected.resolvers) {
     try {
       progress('Downloading Tor worker directly from ' + new URL(url).hostname + '; wallet requests are not sent to this host.');
-      const response = await fetcher(url, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal: AbortSignal.timeout(90_000) });
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      const bytes = await response.arrayBuffer();
-      if (bytes.byteLength > 20_000_000) throw new Error('Tor worker exceeds the 20 MB limit.');
+      const signal = AbortSignal.timeout(90_000);
+      const response = await fetcher(url, { credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal });
+      if (!response.ok) { void response.body?.cancel().catch(() => {}); throw new Error('HTTP ' + response.status); }
+      const bytes = await readResponseBytes(response, WORKER_DOWNLOAD_LIMIT, 'Tor worker', signal);
       progress('Checking the downloaded Tor worker against the discovered Keccak-256 digest.');
       if (keccak256(new Uint8Array(bytes)) !== selected.hash) throw new Error('Tor worker digest mismatch.');
       const cache = await caches.open(CACHE);
@@ -59,7 +62,7 @@ export async function cachedTorWorkerUrl(metadata: WorkerMetadata) {
   const selected = validateWorkerMetadata(metadata);
   const response = await (await caches.open(CACHE)).match(cacheKey(selected.hash));
   if (!response) throw new Error('Saved Tor worker bundle is unavailable. Update it again in Settings → Tor worker, or select the bundled worker.');
-  const bytes = await response.arrayBuffer();
+  const bytes = await readResponseBytes(response, WORKER_DOWNLOAD_LIMIT, 'Saved Tor worker');
   if (keccak256(new Uint8Array(bytes)) !== selected.hash) throw new Error('Saved Tor worker digest mismatch. Update it again in Settings → Tor worker, or select the bundled worker.');
   return URL.createObjectURL(new Blob([bytes], { type: 'text/javascript' }));
 }

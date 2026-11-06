@@ -28,7 +28,7 @@ test('missing, stale, oversized, cross-origin and tampered mirrors fall back wit
   }
   await expect(loadTorBootstrap('./tor-bootstrap.json',new AbortController().signal,()=>{},async()=>new Response('missing',{status:404}),base)).resolves.toBeUndefined();
   await expect(boundedBytes(new Response(new Uint8Array(100)),50)).rejects.toThrow('size limit');
-  await expect(boundedBytes(new Response('x',{headers:{'content-length':'100'}}),50)).rejects.toThrow('too large');
+  await expect(boundedBytes(new Response('x',{headers:{'content-length':'100'}}),50)).rejects.toThrow('size limit');
   const controller=new AbortController();controller.abort(new Error('cancelled'));
   await expect(loadTorBootstrap('./tor-bootstrap.json',controller.signal,()=>{},async()=>Response.json(manifest()),base)).rejects.toThrow('cancelled');
 });

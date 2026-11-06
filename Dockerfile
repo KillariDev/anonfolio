@@ -7,6 +7,7 @@ COPY scripts/ scripts/
 COPY src/ src/
 COPY vendor/ vendor/
 COPY tests/ tests/
+COPY docs/ docs/
 RUN bun --bun run build
 
 FROM ipfs/kubo:v0.25.0@sha256:0c17b91cab8ada485f253e204236b712d0965f3d463cb5b60639ddd2291e7c52 AS ipfs-kubo

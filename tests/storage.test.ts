@@ -61,7 +61,7 @@ test('quota errors report that the watchlist was not saved', () => {
   expect(saveAddresses([getAddress(address)])).toBe(false);
 });
 
-import { loadPortfolio, PORTFOLIO_KEY, savePortfolio } from '../src/storage';
+import { loadPortfolio, PORTFOLIO_KEY, savePortfolio, syncPortfolio } from '../src/storage';
 import { makeWallet } from '../src/balances';
 import { validateToken, defaultTokens } from '../src/tokens';
 const operators = ['https://one.invalid', 'https://two.invalid'];
@@ -185,4 +185,61 @@ test('last failure survives reload for saved and unavailable balances without lo
   expect(restored.eth).toMatchObject({ amount: 7n, failed: true, failure, cached: true });
   expect(restored.weth).toMatchObject({ failed: true, failure, cached: true });
   expect(restored.weth.amount).toBeUndefined();
+});
+
+
+test('stale tabs merge independent addresses and never resurrect a removed address', () => {
+  const first = loadPortfolio(operators), second = loadPortfolio(operators);
+  const a = makeWallet('0x0000000000000000000000000000000000000001', operators[0]!);
+  const b = makeWallet('0x0000000000000000000000000000000000000002', operators[1]!);
+  first.wallets.push(a); second.wallets.push(b);
+  expect(savePortfolio(first.wallets, first.tokens)).toBe(true);
+  expect(savePortfolio(second.wallets, second.tokens)).toBe(true);
+  a.eth = { amount: 7n, updatedAt: Date.now(), failed: false };
+  expect(savePortfolio(first.wallets, first.tokens)).toBe(true);
+  expect(first.wallets.map(wallet => wallet.address)).toEqual([a.address, b.address]);
+  expect(first.wallets[0]).toBe(a);
+  expect(loadPortfolio(operators).wallets).toHaveLength(2);
+  second.wallets.splice(second.wallets.findIndex(wallet => wallet.address === a.address), 1);
+  expect(savePortfolio(second.wallets, second.tokens)).toBe(true);
+  // A late successful response in the stale tab must not recreate the row.
+  a.eth.amount = 8n;
+  expect(savePortfolio(first.wallets, first.tokens)).toBe(true);
+  expect(first.wallets.map(wallet => wallet.address)).toEqual([b.address]);
+  expect(loadPortfolio(operators).wallets.map(wallet => wallet.address)).toEqual([b.address]);
+});
+test('cross-tab sync preserves active wallet identity, local edits and atomic balance provenance', () => {
+  const first = loadPortfolio(operators);
+  first.wallets.push(makeWallet(getAddress(address), operators[0]!));
+  savePortfolio(first.wallets, first.tokens);
+  const second = loadPortfolio(operators);
+  const active = second.wallets[0]!, isolation = active.isolationKey;
+  active.loading = true;
+  second.tokens[0]!.icon = 'builtin:weth'; // local edit not yet saved
+  first.wallets[0]!.eth = { amount: 9n, updatedAt: Date.now(), failed: false };
+  first.wallets[0]!.weth = { amount: 11n, updatedAt: Date.now(), failed: false };
+  savePortfolio(first.wallets, first.tokens);
+  syncPortfolio(second.wallets, second.tokens, operators);
+  expect(second.wallets[0]).toBe(active);
+  expect(active.isolationKey).toBe(isolation);
+  expect(active.loading).toBe(true);
+  expect(active.eth).toMatchObject({ amount: 9n, cached: true });
+  expect(second.tokens[0]!.icon).toBe('builtin:weth');
+  savePortfolio(second.wallets, second.tokens);
+  expect(loadPortfolio(operators).tokens[0]!.icon).toBe('builtin:weth');
+  expect(loadPortfolio(operators).wallets[0]!.weth.amount).toBe(11n);
+});
+test('a remote token removal wins over balances arriving in a stale tab', () => {
+  const first = loadPortfolio(operators);
+  const token = validateToken('0x0000000000000000000000000000000000000003', 'CUSTOM', '6');
+  first.tokens.push(token);
+  first.wallets.push(makeWallet(getAddress(address), operators[0]!));
+  savePortfolio(first.wallets, first.tokens);
+  const second = loadPortfolio(operators);
+  first.tokens.splice(2, 1); savePortfolio(first.wallets, first.tokens);
+  second.wallets[0]!.tokens[token.address] = { amount: 55n, updatedAt: Date.now(), failed: false };
+  savePortfolio(second.wallets, second.tokens);
+  expect(loadPortfolio(operators).tokens).toHaveLength(2);
+  expect(second.tokens).toHaveLength(2);
+  expect(second.wallets[0]!.tokens[token.address]).toBeUndefined();
 });

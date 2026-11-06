@@ -14,7 +14,7 @@ let shared: Worker | undefined;
 let verifierAbort: AbortController | undefined;
 let consensusRoute: { worker: PrivateWorker; key: string } | undefined;
 type Session = { wallet: Wallet; privateWorker: PrivateWorker; event: (event: VerificationEvent) => void; resolve: () => void; reject: (error: Error) => void;
-  purposes:RequestPurposes; route:OperatorRoute; remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAssets: Set<string>; controller: AbortController; timer?: ReturnType<typeof setTimeout>; request: object };
+  purposes:RequestPurposes; route:OperatorRoute; remaining: Set<string>; succeeded: number; stage?: VerificationStage; pricingAssets: Set<string>; controller: AbortController; timer?: ReturnType<typeof setTimeout>; cleanup?: () => void; request: object };
 const sessions = new Map<string, Session>();
 let active: string | undefined;
 function resetWorker(error: Error) {
@@ -24,7 +24,7 @@ function resetWorker(error: Error) {
 function finish(id: string, error?: Error, reset = false) {
   const session = sessions.get(id);
   if (!session) return;
-  clearTimeout(session.timer); sessions.delete(id);
+  clearTimeout(session.timer); sessions.delete(id); session.cleanup?.();
   if (error) for (const asset of session.pricingAssets) session.event({ type: 'price-error', asset, error: error.message });
   session.controller.abort(error || new Error('Verification finished.'));
   if (active === id) active = undefined;
@@ -38,7 +38,10 @@ function pump() {
   const [id, session] = sessions.entries().next().value!;
   active = id;
   try {
-    if (consensusRoute?.worker !== session.privateWorker) consensusRoute = { worker: session.privateWorker, key: 'consensus-' + crypto.randomUUID() };
+    if (consensusRoute?.worker !== session.privateWorker) {
+      if (consensusRoute) resetWorker(new Error('Verification transport changed.'));
+      consensusRoute = { worker: session.privateWorker, key: 'consensus-' + crypto.randomUUID() };
+    }
     const worker = getWorker();
     session.stage = 'verifier';
     session.event({ type: 'started', message: 'Starting finalized balance verification.' });
@@ -121,12 +124,16 @@ function getWorker() {
   };
   return worker;
 }
-export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker, tokens: Token[], event: (event: VerificationEvent) => void, pricing: PricingSettings = loadPricing()) {
+export async function verifyWallet(wallet: Wallet, privateWorker: PrivateWorker, tokens: Token[], event: (event: VerificationEvent) => void, pricing: PricingSettings = loadPricing(), signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const id = crypto.randomUUID();
   event({ type: 'queued', message: 'Queued for the shared Helios verifier; waiting for the active address to finish.' });
   return new Promise<void>((resolve, reject) => {
     sessions.set(id, { wallet, privateWorker, purposes:new RequestPurposes(wallet.address,tokens,pricing), event, resolve, reject, route:operatorRoute(wallet.rpcUrl,[...config.rpcUrls]), remaining: new Set(tokens.map(token => token.address)), succeeded: 0, pricingAssets: new Set(), controller: new AbortController(),
       request: { type: 'refresh', id, address: wallet.address, rpcHost: new URL(wallet.rpcUrl).host, mode: privateWorker.transport || 'tor', checkpoint: config.checkpoint || DEFAULT_CHECKPOINT, tokens, pricing } });
-    pump();
+    const aborted = () => finish(id, new Error('Address verification cancelled.'), active === id);
+    sessions.get(id)!.cleanup = () => signal?.removeEventListener('abort', aborted);
+    signal?.addEventListener('abort', aborted, { once: true });
+    if (signal?.aborted) aborted(); else pump();
   });
 }

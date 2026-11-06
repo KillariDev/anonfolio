@@ -17,7 +17,7 @@ import { saveSettings, validateSettings, type NetworkSettings } from './settings
 import { errorMessage, explainFailure, failureEndpoint, readFailure, type ReadFailure } from './errors';
 import { Connection, type ConnectionState } from './connection';
 import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance, setTokenBalance, type Balance, type Wallet } from './balances';
-import { loadPortfolio, savePortfolio } from './storage';
+import { loadPortfolio, savePortfolio, syncPortfolio, PORTFOLIO_KEY } from './storage';
 import { validateToken, defaultTokens, type Token } from './tokens';
 import { RetryQueue, retryDelay } from './retries';
 import { loadPricing, savePricing, validatePricing, defaultPricing, usableEstimate, valueFraction, displayValue } from './pricing';
@@ -66,7 +66,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <label for="settings-checkpoint-root">Mainnet checkpoint root</label><input id="settings-checkpoint-root" type="text" spellcheck="false" autocomplete="off" aria-describedby="checkpoint-hint settings-error">
 <label for="settings-checkpoint-slot">Checkpoint beacon slot</label><input id="settings-checkpoint-slot" type="number" min="1" step="1" aria-describedby="checkpoint-hint settings-error">
 <p id="checkpoint-hint" class="form-hint">A trusted finalized beacon block root and its matching slot, less than 14 days old. Compare them across independent trusted mainnet sources before saving: this checkpoint is the light client's trust anchor. Saving restarts verification. Restore defaults uses the release-pinned checkpoint.</p>
-<p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and restarts reads; saved balances remain visible.</p>
+<p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and reconnects; use an address’s Refresh button to update saved balances.</p>
 <div class="settings-actions"><button class="primary" type="submit">Save settings and reconnect</button><button id="reset-settings" type="button">Restore defaults</button></div>
 <p id="settings-error" class="input-error" role="alert"></p></form></section></details></div></header>
 <main>
@@ -154,10 +154,42 @@ const connection = new Connection(
   },
   message => { connectionMessage = message; for(const wallet of wallets) if(wallet.loading) appendRetrievalLog(wallet,message); renderConnection(); if(wallets.some(wallet=>wallet.loading)) render(); },
 );
-function persist() {
-  document.querySelector('#storage-warning')!.textContent = savePortfolio(wallets, tokens)
-    ? '' : 'Browser storage is unavailable or full. Changes and new balances are visible now but could not be saved.';
+let persistence: Promise<unknown> | undefined;
+let persistAgain = false;
+function reconcileRemoved(before: Wallet[]) {
+  for (const wallet of before) if (!wallets.includes(wallet)) {
+    cancelRefresh(wallet); expandedAddresses.delete(wallet.address);
+  }
 }
+function persist() {
+  persistAgain = true;
+  if (persistence) return;
+  const warning = document.querySelector('#storage-warning')!;
+  if (!navigator.locks) {
+    warning.textContent = 'Safe browser storage requires Web Locks. Changes remain visible in this tab but could not be saved. Use a current browser on HTTPS or localhost.';
+    return;
+  }
+  persistence = navigator.locks.request(PORTFOLIO_KEY, () => {
+    persistAgain = false;
+    const before = [...wallets], previousTokens = JSON.stringify(tokens);
+    const saved = savePortfolio(wallets, tokens);
+    warning.textContent = saved ? '' : 'Browser storage is unavailable or full. Changes and new balances are visible now but could not be saved.';
+    reconcileRemoved(before);
+    if (JSON.stringify(tokens) !== previousTokens) renderTokens();
+    render();
+  }).catch(() => {
+    persistAgain = false;
+    warning.textContent = 'Browser storage could not be locked. Changes remain visible but could not be saved.';
+  }).finally(() => { persistence = undefined; if (persistAgain) persist(); });
+}
+window.addEventListener('storage', event => {
+  if (event.storageArea !== localStorage || (event.key !== PORTFOLIO_KEY && event.key !== null)) return;
+  const before = [...wallets], previousTokens = JSON.stringify(tokens);
+  syncPortfolio(wallets, tokens, config.rpcUrls);
+  reconcileRemoved(before);
+  if (JSON.stringify(tokens) !== previousTokens) renderTokens();
+  render();
+});
 function spinner() {
   const node = document.createElement('span');
   node.className = 'spinner';
@@ -187,7 +219,10 @@ function renderConnection() {
   if (state === 'failed') title.title = [connection.lastError, retryMessage('connection')].filter(Boolean).join(' · ');
   if (state === 'starting') {
     const cancel = document.createElement('button'); cancel.textContent = 'Cancel'; cancel.setAttribute('aria-label', 'Cancel connection');
-    cancel.onclick = () => { connection.cancel(); retries.cancel('connection'); wallets.forEach(wallet => retries.cancel(wallet)); };
+    cancel.onclick = () => {
+      connection.cancel(); retries.cancel('connection');
+      wallets.forEach(wallet => { const pending = wallet.loading; cancelRefresh(wallet); if (pending) cancelledRefreshes.add(wallet); });
+    };
     heading.append(cancel);
   }
   if (state === 'failed') {
@@ -689,7 +724,7 @@ function render() {
     remove.onclick = () => {
       const label = wallet.name ? `${wallet.name}\n${wallet.address}` : wallet.address;
       if (!window.confirm(`Remove this tracked address?\n\n${label}\n\nIts saved balances will also be removed from this browser.`)) return;
-      retries.cancel(wallet);
+      cancelRefresh(wallet);
       expandedAddresses.delete(wallet.address);
       wallets.splice(wallets.indexOf(wallet), 1);
       persist(); render();
@@ -732,6 +767,14 @@ function pruneTokenBalances(wallet: Wallet) {
     if (!tokens.some(token => token.address === address)) delete wallet.tokens[address];
   }
 }
+const refreshControllers = new Map<Wallet, AbortController>();
+const cancelledRefreshes = new Set<Wallet>();
+function cancelRefresh(wallet: Wallet) {
+  cancelledRefreshes.delete(wallet);
+  retries.cancel(wallet);
+  wallet.queuedRefresh = false;
+  refreshControllers.get(wallet)?.abort(new Error('Address refresh cancelled.'));
+}
 let pageActive = true;
 let refreshGeneration = 0;
 async function refreshWallet(wallet: Wallet, onlyFailed = false) {
@@ -744,6 +787,8 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   else retries.cancel(wallet);
   if (connection.cancelled) return;
   const selectedTokens = [...tokens];
+  const controller = new AbortController();
+  refreshControllers.set(wallet, controller);
   wallet.loading = true;
   wallet.verificationStage = 'connection';
   wallet.stageStartedAt = Date.now();
@@ -757,9 +802,11 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   try {
     if (!navigator.onLine) throw new Error('Offline');
     const worker = await connection.get();
+    controller.signal.throwIfAborted();
     appendRetrievalLog(wallet, config.mode === 'https' ? 'HTTPS transport ready; requesting finalized verification.' : 'Private worker ready; requesting finalized verification.');
-    if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { pruneTokenBalances(wallet); persist(); render(); }, onlyFailed);
+    if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { if (!controller.signal.aborted) { pruneTokenBalances(wallet); persist(); render(); } }, onlyFailed, undefined, controller.signal);
   } catch (cause) {
+    if (controller.signal.aborted) return;
     const failure = readFailure(navigator.onLine ? cause : 'Browser is offline.', config.mode === 'https' ? 'Starting the HTTPS connection' : 'Starting the private connection');
     wallet.verificationStatus = failure.message;
     appendRetrievalLog(wallet,'Refresh failed: '+failure.message,'error');
@@ -769,12 +816,13 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
       item.phase = 'failed';
     });
   } finally {
+    refreshControllers.delete(wallet);
     wallet.loading = false;
     wallet.networkRequests = [];
     wallet.queuedForVerifier = false;
     pruneTokenBalances(wallet);
     persist(); render();
-    if (generation !== refreshGeneration || !pageActive || !wallets.includes(wallet) || connection.cancelled) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
+    if (controller.signal.aborted || generation !== refreshGeneration || !pageActive || !wallets.includes(wallet) || connection.cancelled) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
     const failed = tokens.some(token => tokenBalance(wallet, token).failed);
     if (wallet.queuedRefresh && !failed) { wallet.queuedRefresh = false; void refreshWallet(wallet); }
     else if (failed) { wallet.queuedRefresh = false; retries.schedule(wallet); }
@@ -787,7 +835,16 @@ async function start(automatic = false) {
   if (automatic) retries.begin('connection');
   else retries.cancel('connection');
   if (!navigator.onLine) { state = 'failed'; retries.schedule('connection'); renderConnection(); return; }
-  try { await connection.get(); if (resumeCancelled && !automatic) wallets.forEach(wallet => { if (!wallet.loading && tokens.some(token => tokenBalance(wallet, token).failed)) void refreshWallet(wallet, true); }); }
+  try {
+    await connection.get();
+    if (resumeCancelled && !automatic) wallets.forEach(wallet => {
+      const interrupted = cancelledRefreshes.has(wallet);
+      if (!wallet.loading && (interrupted || tokens.some(token => tokenBalance(wallet, token).failed))) {
+        cancelledRefreshes.delete(wallet);
+        void refreshWallet(wallet, !interrupted);
+      }
+    });
+  }
   catch { state = 'failed'; retries.schedule('connection'); renderConnection(); }
 }
 document.querySelector('#wallet-form')!.addEventListener('submit', event => {
@@ -938,7 +995,7 @@ window.addEventListener('pagehide', () => {
   pageActive = false;
   refreshGeneration++;
   retries.cancel('connection');
-  wallets.forEach(wallet => { retries.cancel(wallet); wallet.queuedRefresh = false; });
+  wallets.forEach(cancelRefresh);
   connection.close();
 });
 window.addEventListener('pageshow', event => { if (event.persisted) { pageActive = true; if (!connection.cancelled) void start(true); } });

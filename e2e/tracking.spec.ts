@@ -1342,8 +1342,8 @@ for(const available of [true,false]) test('proof-window '+(available?'recovery':
       worker.onmessage({data:{type:'done',run}});
     });
     await page.getByRole('button',{name:'Refresh '+a,exact:true}).click();
-    expect(await page.evaluate(()=>(window as any).__verifiers[0].request.rpcHost)).toBe('history.example');
-    await page.evaluate(()=>{const worker=(window as any).__verifiers[0];worker.onmessage({data:{type:'fatal',run:worker.request.id,error:'Test cleanup'}});});
+    expect(await page.evaluate(()=>(window as any).__verifiers.at(-1).request.rpcHost)).toBe('history.example');
+    await page.evaluate(()=>{const worker=(window as any).__verifiers.at(-1);worker.onmessage({data:{type:'fatal',run:worker.request.id,error:'Test cleanup'}});});
   } else {
     await expect(page.locator('.wallet .spinner')).toHaveCount(0);
     await page.getByRole('button',{name:'Explain ETH failure for '+a,exact:true}).click();

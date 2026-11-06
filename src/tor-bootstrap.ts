@@ -1,23 +1,8 @@
+import { readResponseBytes } from './response-body';
 import { withDeadline } from './deadline';
 export const BOOTSTRAP_MAX_BYTES = 8 * 1024 * 1024;
 export const BOOTSTRAP_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-export async function boundedBytes(response: Response, limit: number): Promise<Uint8Array> {
-  if (!response.ok || !response.body || Number(response.headers.get('content-length')) > limit) throw new Error('Bootstrap response unavailable or too large.');
-  const reader = response.body.getReader(), chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > limit) throw new Error('Bootstrap response exceeds size limit.');
-      chunks.push(value);
-    }
-  } finally { await reader.cancel().catch(() => {}); }
-  const bytes = new Uint8Array(size); let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return bytes;
-}
+export const boundedBytes = (response: Response, limit: number) => readResponseBytes(response, limit, 'Bootstrap');
 // Public Tor directory only. A missing/stale mirror is optional; Tor can obtain
 // and verify directory data from its gateways. Arti authenticates the archive.
 export async function loadTorBootstrap(manifestUrl: string, signal: AbortSignal, progress: (message: string) => void,

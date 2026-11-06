@@ -60,7 +60,7 @@ export function prepareActivity(wallet: Wallet, tokens: Token[], onlyFailed = fa
 }
 export async function readBalances(
   wallet: Wallet, worker: PrivateWorker, tokens: Token[] = defaultTokens(), onChange: () => void = () => {}, onlyFailed = false,
-  verifier: typeof verifyWallet = verifyWallet,
+  verifier: typeof verifyWallet = verifyWallet, signal?: AbortSignal,
 ) {
   const selected = tokens.filter(token => !onlyFailed || tokenBalance(wallet, token).failed || !tokenBalance(wallet, token).verifiedBlock);
   prepareActivity(wallet, selected);
@@ -75,7 +75,9 @@ export async function readBalances(
   const earlyPrices = new Map<string, VerificationEvent>();
   let fatal: ReadFailure | undefined;
   try {
+    signal?.throwIfAborted();
     await verifier(wallet, worker, selected, event => {
+      if (signal?.aborted) return;
       if (selected.some(token => token.address === event.asset) && (event.type === 'balance' ? Boolean(event.block && event.amount !== undefined) : ['asset-error','price','price-error'].includes(event.type))) {
         const kind = event.type === 'balance' || event.type === 'asset-error' ? 'balance' : 'price';
         finishedChecks.add(kind + ':' + event.asset);
@@ -120,8 +122,9 @@ export async function readBalances(
         wallet.verificationStatus = tokenBalance(wallet, token).failure!.message;
       }
       onChange();
-    });
-  } catch (error) { fatal = readFailure(error, wallet.verificationStatus); wallet.verificationStatus = fatal.message; appendRetrievalLog(wallet, 'Verification stopped: '+fatal.message, 'error'); }
+    }, undefined, signal);
+  } catch (error) { if (signal?.aborted) return; fatal = readFailure(error, wallet.verificationStatus); wallet.verificationStatus = fatal.message; appendRetrievalLog(wallet, 'Verification stopped: '+fatal.message, 'error'); }
+  if (signal?.aborted) return;
   wallet.queuedForVerifier = false;
   wallet.networkRequests = [];
   for (const token of selected) if (pending.has(token.address)) {

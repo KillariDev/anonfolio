@@ -30,11 +30,18 @@ test('slow startup preserves the same worker and gateway pool, then succeeds aft
   await expect(page.locator('#connection')).toHaveText('Private worker ready');
   await expect(page.getByRole('button',{name:'Cancel connection'})).toHaveCount(0);
 });
-test('cancel ends startup without automatic retries or direct RPC, and manual retry resumes',async({page})=>{
+for (const cached of [false, true]) test('cancel ends startup without automatic retries or direct RPC, and manual retry resumes'+(cached?' for saved balances':''),async({page})=>{
   await page.clock.install();await pausedTor(page);await mockVerification(page);
   const publicPosts:string[]=[];page.on('request',request=>{if(request.method()==='POST')publicPosts.push(request.url());});
+  if (cached) await page.addInitScript(address => {
+    const weth='0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+    const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
+    const balance={amount:'1000000000000000000',updatedAt:Date.now()-30000,failed:false,decimals:18,verifiedBlock:block};
+    localStorage.setItem('anonfolio.portfolio.v2',JSON.stringify({version:3,tokens:[{address:'eth',symbol:'ETH',decimals:18},{address:weth,symbol:'WETH',decimals:18}],wallets:[{address,balances:{eth:balance,[weth]:balance}}]}));
+  },address);
   await page.goto('/');
-  await page.locator('#address').fill(address);await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  if (cached) await page.getByRole('button',{name:'Refresh '+address,exact:true}).click();
+  else { await page.locator('#address').fill(address);await page.getByRole('button',{name:'add address to track',exact:true}).click(); }
   await expect.poll(()=>page.evaluate(()=>(window as any).__torWorkers.length)).toBe(1);
   await page.getByRole('button',{name:'Cancel connection'}).click();
   await expect(page.locator('#connection')).toContainText('Connection cancelled');

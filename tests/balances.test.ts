@@ -205,3 +205,18 @@ test('check counts follow completed balance and price jobs, not variable proof r
   }));
   expect(wallet.checkProgress).toEqual({completed:1,total:2});
 });
+
+test('an aborted read ignores late verifier events and preserves saved balances', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  wallet.eth = { amount: 7n, updatedAt: Date.now(), failed: false, cached: true };
+  const previous = { ...wallet.eth }, controller = new AbortController();
+  let emit: (event: VerificationEvent) => void = () => {};
+  let finish: () => void = () => {};
+  const pending = readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false,
+    async (_wallet, _worker, _tokens, callback) => { emit = callback; await new Promise<void>(resolve => { finish = resolve; }); }, controller.signal);
+  controller.abort();
+  emit({ type: 'balance', asset: 'eth', amount: '99', block });
+  emit({ type: 'asset-error', asset: 'eth', error: 'late failure' });
+  finish(); await pending;
+  expect(wallet.eth).toEqual(previous);
+});

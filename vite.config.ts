@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 
+const torWorkerBytes = readFileSync(new URL('./vendor/tor/anon-rpc-worker.js', import.meta.url));
 const documentation = readFileSync(new URL('./docs/documentation.html', import.meta.url), 'utf8');
 const documentationImage = readFileSync(new URL('./docs/images/portfolio.png', import.meta.url));
 
@@ -16,6 +17,21 @@ export default defineConfig({
   worker: { format: 'es' },
   resolve: { alias: { events: 'events/', buffer: 'buffer/' } },
   plugins: [{
+    name: 'unchanged-tor-worker',
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const url = new URL(request.url || '/', 'http://localhost');
+        // Vite still handles the ?url module import. The resulting asset URL
+        // must return the reviewed bytes without transformation or source maps.
+        if (url.pathname !== '/vendor/tor/anon-rpc-worker.js' || url.searchParams.has('url')) return next();
+        if (request.method !== 'GET' && request.method !== 'HEAD') { response.statusCode = 405; response.end(); return; }
+        response.setHeader('Content-Type', 'text/javascript');
+        response.setHeader('Content-Length', torWorkerBytes.byteLength);
+        response.setHeader('Cache-Control', 'no-cache');
+        response.end(request.method === 'HEAD' ? undefined : torWorkerBytes);
+      });
+    },
+  }, {
     name: 'standalone-documentation',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'docs/documentation.html', source: documentation });

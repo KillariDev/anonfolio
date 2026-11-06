@@ -152,3 +152,49 @@ test('overlapping balance and oracle requests stay on the wallet route and cance
     Object.defineProperty(globalThis,'Worker',{configurable:true,value:OriginalWorker});
   }
 });
+
+test('cancellation removes queued sessions, aborts active RPCs and ignores late messages', async () => {
+  const OriginalWorker = globalThis.Worker;
+  const workers: any[] = [], requests: RequestInit[] = [];
+  class BridgeWorker {
+    sent: any[] = []; onmessage: any; onerror: any; terminated = false;
+    constructor() { workers.push(this); }
+    postMessage(message: any) { this.sent.push(message); }
+    terminate() { this.terminated = true; }
+  }
+  Object.defineProperty(globalThis, 'Worker', { configurable: true, value: BridgeWorker });
+  const privateWorker = { fetch: async (_url: any, init: any) => {
+    requests.push(init);
+    return new Promise<Response>((_resolve, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }));
+  } };
+  const a = makeWallet('0x0000000000000000000000000000000000000001', 'https://execution.example/');
+  const b = makeWallet('0x0000000000000000000000000000000000000002', 'https://execution.example/');
+  const first = new AbortController(), second = new AbortController();
+  let activeResult: Promise<any> | undefined, queuedResult: Promise<any> | undefined;
+  try {
+    activeResult = verifyWallet(a, privateWorker, [ethToken], () => {}, undefined, first.signal).catch(error => error);
+    queuedResult = verifyWallet(b, privateWorker, [ethToken], () => {}, undefined, second.signal).catch(error => error);
+    second.abort();
+    expect((await queuedResult).message).toContain('cancelled');
+    expect(workers[0].terminated).toBe(false);
+    const run = workers[0].sent[0].id;
+    const pendingRpc = workers[0].onmessage({ data: { type: 'rpc', run, id: 1,
+      body: { jsonrpc: '2.0', id: 1, method: 'eth_getProof', params: [a.address, [], { blockHash: '0x' + '11'.repeat(32) }] } } });
+    await Promise.resolve();
+    expect(requests).toHaveLength(1);
+    first.abort();
+    expect((await activeResult).message).toContain('cancelled');
+    await pendingRpc;
+    expect(requests[0]!.signal!.aborted).toBe(true);
+    expect(workers[0].terminated).toBe(true);
+    await workers[0].onmessage({ data: { type: 'done', run } });
+    expect(workers[0].sent.filter((message: any) => message.type === 'refresh')).toHaveLength(1);
+    expect(workers).toHaveLength(1);
+    const cancelled = new AbortController(); cancelled.abort();
+    await expect(verifyWallet(b, privateWorker, [ethToken], () => {}, undefined, cancelled.signal)).rejects.toThrow();
+    expect(workers).toHaveLength(1);
+  } finally {
+    first.abort(); second.abort(); await activeResult; await queuedResult;
+    Object.defineProperty(globalThis, 'Worker', { configurable: true, value: OriginalWorker });
+  }
+});

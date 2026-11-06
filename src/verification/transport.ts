@@ -1,3 +1,4 @@
+import { readResponseJson, readResponseText } from '../response-body';
 import { withDeadline } from '../deadline';
 import { errorMessage } from '../errors';
 import { CONSENSUS_RPC } from './trust';
@@ -6,6 +7,9 @@ export type RpcRequest = { jsonrpc: '2.0'; id: number | string; method: string; 
 export const transportName = (worker: PrivateWorker) => worker.transport === 'https' ? 'Direct HTTPS' : 'Private';
 export const transportRoute = (worker: PrivateWorker) => worker.transport === 'https' ? 'direct HTTPS' : 'Anon-RPC';
 export class ProofHistoryUnavailable extends Error {}
+// Generous enough for block bodies, proof witnesses and beacon updates, but finite.
+export const EXECUTION_RESPONSE_LIMIT = 16 * 1024 * 1024;
+export const CONSENSUS_RESPONSE_LIMIT = 16 * 1024 * 1024;
 const methods = new Set(['eth_getProof', 'eth_getCode', 'eth_getBlockByHash', 'eth_getBlockByNumber']);
 // Execution uses the explicitly selected capability. Tor never falls back to HTTPS.
 export async function privateExecutionRpc(worker: PrivateWorker, wallet: Pick<Wallet, 'rpcUrl' | 'isolationKey'>, request: RpcRequest, signal?: AbortSignal, progress?: (state: 'waiting' | 'reading' | 'received') => void) {
@@ -17,8 +21,8 @@ export async function privateExecutionRpc(worker: PrivateWorker, wallet: Pick<Wa
       throw new Error(label + ' ' + request.method + ' to ' + new URL(wallet.rpcUrl).hostname + ' failed: ' + errorMessage(error));
     });
     progress?.('reading');
-    if (!response.ok) throw new Error(label + ' RPC returned HTTP ' + response.status);
-    const data = await response.json().catch(error => {
+    if (!response.ok) { void response.body?.cancel().catch(() => {}); throw new Error(label + ' RPC returned HTTP ' + response.status); }
+    const data = await readResponseJson(response, EXECUTION_RESPONSE_LIMIT, label + ' RPC', privateSignal).catch(error => {
       throw new Error(label + ' ' + request.method + ' response from ' + new URL(wallet.rpcUrl).hostname + ' could not be read: ' + errorMessage(error));
     });
     progress?.('received');
@@ -51,8 +55,8 @@ export async function privateConsensusGet(worker: PrivateWorker, isolationKey: s
       throw new Error('Consensus GET ' + url.hostname + url.pathname + ' through ' + transportRoute(worker) + ' failed: ' + errorMessage(error));
     });
     progress?.('reading');
-    if (!response.ok) throw new Error('Consensus GET ' + url.hostname + url.pathname + ' returned HTTP ' + response.status);
-    const body = await response.text().catch(error => {
+    if (!response.ok) { void response.body?.cancel().catch(() => {}); throw new Error('Consensus GET ' + url.hostname + url.pathname + ' returned HTTP ' + response.status); }
+    const body = await readResponseText(response, CONSENSUS_RESPONSE_LIMIT, 'Consensus API', privateSignal).catch(error => {
       throw new Error('Consensus GET ' + url.hostname + url.pathname + ' response could not be read: ' + errorMessage(error));
     });
     progress?.('received');
