@@ -14,9 +14,9 @@ Use case: logo-brand. Asset type: one finished application icon for Anonfolio, a
 
 [`docs/images/anonfolio-cover.png`](../../../docs/images/anonfolio-cover.png) is the redesigned README cover, generated with the built-in image-generation tool on November 6, 2026. It replaces the earlier grid-backed banner while retaining the exact wordmark, tagline, forest/mint palette, and folded shield/check identity. The cover adds more deliberate typography, dimensional shield lighting, translucent proof-like layers, and flowing private-routing paths.
 
-The generated 1983 × 793 opaque PNG is copied unchanged into the repository and remains the first image in the README. The prior cover and the original application icon were supplied as visual references. This is brand illustration, not an application screenshot, network diagram, or display of portfolio data. The original cover remains available in Git history.
+The generated 1983 × 793 opaque PNG remains the first image in the README. The initial redesign used the prior cover and original application icon as visual references. A subsequent built-in image edit added a technology strip naming IPFS, Anon-RPC and Tor, using their source artwork as references. The final generated PNG is copied unchanged into the repository. These are generated renditions of third-party marks; sources and credits are recorded in [the technology artwork notes](../technology/README.md). This is brand illustration, not an application screenshot, network diagram, or display of portfolio data. Previous covers remain available in Git history.
 
-### Cover generation prompt
+### Initial cover generation prompt
 
 ```text
 Use case: ads-marketing.
@@ -34,4 +34,21 @@ Text, verbatim, and no other text:
 "Verified in your browser."
 Palette: forest #101510, near-black, pale mint #b8ec8c, muted sage, off-white #eef4e9. Restrained natural tonal gradients, excellent contrast. No purple or neon blue.
 Constraints: exactly one complete opaque full-bleed cover. Preserve spelling and punctuation. No fake application interface, invented balances, charts, wallet addresses, pseudo-code, crypto coins, token logos, padlocks, hooded figures, badges, frames, watermarks, additional text, excessive glow or visual clutter. This is brand illustration, not a screenshot.
+```
+
+### Technology strip edit prompt
+
+Built-in image-generation edit, November 6, 2026. Inputs: previous cover, local IPFS and Tor logos, and the Anon-RPC site favicon. SVG references were rasterized for the tool; original SVG files were preserved.
+
+```text
+Use case: compositing. Asset type: finished wide GitHub README cover, opaque PNG, preserve approximately 2.5:1 aspect ratio.
+Image 1 is the existing cover, the edit target. Images 2, 3, and 4 are supporting logo inserts: official IPFS cube, official Tor wordmark/onion, and Anon-RPC project's site favicon (purple/pink outlined shield and keyhole on dark rounded tile), respectively.
+Edit the existing cover to clearly mention and show all three technologies. Preserve the forest/mint atmosphere, large 'anonfolio.' wordmark, both existing tagline lines, the large dimensional mint folded shield on the right, translucent plinth and flowing paths. Keep overall identity and framing.
+Add one elegant, well-spaced horizontal technology strip under the tagline in the lower left, leaving generous margins and avoiding the right-hand shield. Show three compact logo-and-label groups, each with the correct referenced logo and exact label: 'IPFS', 'Anon-RPC', 'Tor'. Keep the IPFS cube teal, Anon-RPC mark purple/pink, and Tor wordmark purple/green; retain the logos' actual distinctive geometry and proportions. Give logos small light or dark backing tiles only as necessary for contrast. Logos should feel intentional and readable at GitHub display sizes, with labels in crisp off-white typography. Do not use a generic substitute icon for any technology.
+Existing text must remain verbatim:
+'anonfolio.'
+'Private Ethereum portfolios.'
+'Verified in your browser.'
+New text verbatim: 'IPFS', 'Anon-RPC', 'Tor'.
+Use balanced restrained spacing. No other text, no duplicate marks, no portfolio numbers, no interface mockup, no watermark. Exactly one full-bleed finished cover.
 ```
