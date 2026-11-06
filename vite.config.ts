@@ -60,14 +60,18 @@ self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('anonfolio-shell-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET' || !urls.includes(event.request.url)) return;
+  // Navigation requests can retain #slide fragments; they identify a position
+  // within the same cached file, not another resource or an RPC destination.
+  const resource = new URL(event.request.url); resource.hash = '';
+  const key = resource.href;
+  if (event.request.method !== 'GET' || !urls.includes(key)) return;
   event.respondWith(
     event.request.mode === 'navigate'
       ? fetch(event.request).then(response => {
-          if (response.ok) { const copy = response.clone(); event.waitUntil(caches.open(CACHE).then(cache => cache.put(event.request, copy))); }
+          if (response.ok) { const copy = response.clone(); event.waitUntil(caches.open(CACHE).then(cache => cache.put(key, copy))); }
           return response;
-        }).catch(() => caches.match(event.request).then(response => response || Response.error()))
-      : caches.match(event.request).then(response => response || fetch(event.request))
+        }).catch(() => caches.match(key).then(response => response || Response.error()))
+      : caches.match(key).then(response => response || fetch(event.request))
   );
 });
 `,
