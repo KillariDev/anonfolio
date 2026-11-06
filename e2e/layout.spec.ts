@@ -23,6 +23,26 @@ async function setup(page:Page,width:number,count=10) {
 }
 async function emit(page:Page,event:object){await page.evaluate(event=>{const w=(window as any).__verifiers.findLast((worker:any)=>worker.request&&!worker.terminated);w.onmessage({data:{...event,run:w.request.id}});},event);}
 for(const width of [1280,390]) {
+  test(`address details use compact consistent spacing at ${width}px`,async({page})=>{
+    test.skip(!!process.env.BASE_URL);
+    await setup(page,width,2);
+    const content=page.locator('.detail-content').first();
+    const spacing=()=>content.evaluate(node=>{
+      const children=[...node.children].filter(child=>getComputedStyle(child).display!=='none');
+      const boxes=children.map(child=>child.getBoundingClientRect());
+      return {height:node.getBoundingClientRect().height,gaps:boxes.slice(1).map((box,i)=>box.top-boxes[i].bottom)};
+    });
+    expect((await spacing()).gaps.every(gap=>gap>=0&&gap<=8)).toBe(true);
+    expect(await page.locator('.activity > p').first().evaluate(node=>node.getBoundingClientRect().height)).toBe(0);
+    expect((await spacing()).height).toBeLessThan(420);
+    await emit(page,{type:'done'});
+    await expect(page.locator('.verification-panel').first()).toHaveClass(/is-finished/);
+    expect((await spacing()).height).toBeLessThan(230);
+    expect((await spacing()).gaps.every(gap=>gap>=0&&gap<=8)).toBe(true);
+    await page.locator('.history-details > summary').first().click();
+    await expect(page.locator('.read-history').first()).toBeVisible();
+    await page.screenshot({path:'/tmp/anonfolio-compact-details-'+width+'.png',fullPage:true});
+  });
   test(`opened address has one scroll owner, including requests and logs, at ${width}px`,async({page})=>{
     test.skip(!!process.env.BASE_URL);
     await setup(page,width);
@@ -30,6 +50,7 @@ for(const width of [1280,390]) {
     for(let i=0;i<4;i++)await emit(page,{type:'network',request:{...request,requestId:i,method:['eth_getProof','eth_getCode','eth_call','eth_getStorageAt'][i]}});
     await expect(page.locator('.progress-request')).toHaveCount(2);
     await expect(page.locator('.progress-hint').first()).toContainText('+2 more private requests');
+    expect(await page.locator('.progress-hint').first().evaluate(node=>node.getBoundingClientRect().bottom<=node.parentElement!.getBoundingClientRect().bottom)).toBe(true);
     const requestOwners=await page.locator('.progress-request').first().evaluate(node=>{
       const owners:string[]=[];
       for(let p=node.parentElement;p;p=p.parentElement)if(/auto|scroll/.test(getComputedStyle(p).overflowY)&&p.scrollHeight>p.clientHeight+1)owners.push(p.id||p.className);

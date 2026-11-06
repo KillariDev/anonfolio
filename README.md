@@ -67,7 +67,7 @@ For real-provider tests, Windows setup and screenshot regeneration, see the [tes
 Publish the complete `dist/` directory to IPFS, preferably through an HTTPS subdomain gateway. Each release has an immutable CID; a new CID/origin does not automatically carry over saved portfolios.
 
 <!-- ipfs-build -->
-**IPFS build:** [ipfs://bafybeid27ry4lwzkc7mjc66ty3tzxyldscfghu2ura4knxukwz75hm6ddi/](ipfs://bafybeid27ry4lwzkc7mjc66ty3tzxyldscfghu2ura4knxukwz75hm6ddi/)
+**IPFS build:** [ipfs://bafybeig6wynwtacu6ljarm72zrhvfvmmtkmnmgy5j3zzjjncvz7ujvdbx4/](ipfs://bafybeig6wynwtacu6ljarm72zrhvfvmmtkmnmgy5j3zzjjncvz7ujvdbx4/)
 
 Locally validated export; public availability requires pinning.
 <!-- /ipfs-build -->
