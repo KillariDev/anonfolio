@@ -24,6 +24,9 @@ test('live mainnet verified ETH and WETH through explicitly selected HTTPS',asyn
   expect(values.every(value=>value.verifiedBlock?.hash&&value.verifiedBlock.timestamp&&!value.failed)).toBe(true);
   expect(new Set(values.map(value=>value.verifiedBlock.hash)).size).toBe(1);
   expect(methods).toContain('eth_getProof');
+  // The default WETH/factory/pool code is bundled; proofs still come from the provider.
+  expect(methods).not.toContain('eth_getCode');
+  await expect(page.locator('.log-stream')).toContainText('bundled code matches proven account');
   expect(methods).not.toContain('eth_call');
   expect(methods).not.toContain('eth_getBalance');
   await expect(page.locator('iframe')).toHaveCount(0);

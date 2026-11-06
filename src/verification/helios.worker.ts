@@ -3,12 +3,14 @@ import type { VerificationStage } from './progress';
 import initWasm, { EthereumClient } from '../../vendor/helios/index.js';
 import { setHeliosFetch } from '../../vendor/helios/fetch.js';
 import { DEFAULT_CHECKPOINT, validateCheckpoint, assertCheckpointSlot, type Checkpoint, CONSENSUS_RPC, HELIOS_WASM_SHA256, checkCheckpointAge, verifiedBlock, type VerifiedBlock } from './trust';
-import { assertPinnedBlock, verifyAccountResponse, verifyCode } from './proofs';
+import { assertPinnedBlock, verifyAccountResponse } from './proofs';
 import { TwapOracle, V3_FACTORY } from '../pricing';
 import { assertConsensusUrl, type RpcRequest } from './transport';
 import { downloadVerifier } from './download';
 import { RequestPurposes } from './request-purpose';
 import { parallelReads } from './parallel';
+import { VerifiedCodeCache } from './code-cache';
+import { executionCode } from './execution-code';
 
 let activeCheckpoint: Checkpoint = DEFAULT_CHECKPOINT;
 const EXECUTION_URL = 'https://helios-execution.invalid/';
@@ -16,6 +18,7 @@ const scope = self as unknown as DedicatedWorkerGlobalScope;
 let current: { id: string; rpcHost: string; mode?: 'tor'|'https'; purposes: RequestPurposes; block?: VerifiedBlock } | undefined;
 let client: EthereumClient | undefined;
 const oracle = new TwapOracle();
+const codeCache = new VerifiedCodeCache();
 let sequence = 0;
 let executionFailure = '';
 let queue = Promise.resolve();
@@ -68,23 +71,17 @@ async function internalFetch(request: Request): Promise<Response> {
     assertPinnedBlock(body.params.at(-1), current.block);
   } else if (!['eth_getBlockByHash', 'eth_getBlockByNumber'].includes(body.method)) throw new Error('Unreviewed Helios RPC method.');
   const purpose = current!.purposes.describe(body).purpose;
+  if (body.method === 'eth_getCode') {
+    const { code, source } = await executionCode(body, current!.block!, codeHashes, rpc, codeCache);
+    step(purpose + ': ' + (source === 'RPC' ? 'downloaded code' : source) + ' matches proven account; executing locally.');
+    return rpcResponse({ jsonrpc: '2.0', id: body.id, result: code });
+  }
   let data;
   try { data = await rpc(body); } catch (error) { step(purpose + ' failed: ' + String(error)); throw error; }
   if (body.method === 'eth_getProof') {
     step('Verifying ' + purpose + '.');
     const hash = await verifyAccountResponse(body.params[0], body.params[1], current!.block!, data.result);
     codeHashes.set(body.params[0].toLowerCase(), hash);
-  } else if (body.method === 'eth_getCode') {
-    let hash = codeHashes.get(body.params[0].toLowerCase());
-    if (!hash) {
-      // Helios can retain a verified account across refreshes while lazily loading
-      // its code. Reprove the account on this route if the adapter has no witness.
-      const witness = await rpc({ ...body, method: 'eth_getProof', params: [body.params[0], [], body.params[1]] });
-      hash = await verifyAccountResponse(body.params[0], [], current!.block!, witness.result);
-      codeHashes.set(body.params[0].toLowerCase(), hash);
-    }
-    verifyCode(data.result, hash);
-    step(purpose + ' verified; executing locally.');
   }
   return rpcResponse(data);
 }
