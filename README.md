@@ -128,7 +128,7 @@ Tests cover wrong-wallet/block proofs, omitted nonzero storage slots, bytecode t
 
 ## Static HTTPS and IPFS deployment
 
-Upload the complete **`dist/`** directory to a static HTTPS host. No application backend or wallet extension is required. For a subdirectory, build with `bun run build --base=/your-path/`. Serve `sw.js` with revalidation/no-cache so browsers can discover updates.
+Upload the complete **`dist/`** directory to a static HTTPS host. No application backend or wallet extension is required. For a subdirectory, build with `bun run build --base=/your-path/`. Serve `sw.js` with revalidation/no-cache so browsers can discover updates. The service worker installs the small UI shell first; verifier runtimes and documentation are cached when requested. Visited documentation remains available offline. Cached pages return after three seconds if the host is too slow.
 
 Optional IPFS commands:
 

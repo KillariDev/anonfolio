@@ -54,3 +54,10 @@ export async function openWalletDetails(page: Page, label: string) {
   const toggle = page.getByRole('button', { name: 'Details ' + label, exact: true });
   if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
 }
+
+export async function openAdvancedSettings(page: Page, id: 'tor-routing' | 'worker-settings' | 'checkpoint-settings') {
+  const panel=page.locator('#network-settings');
+  if(!await panel.evaluate(node=>(node as HTMLDetailsElement).open)) await page.getByRole('button',{name:'Settings',exact:true}).click();
+  const section=page.locator('#'+id);
+  if(!await section.evaluate(node=>(node as HTMLDetailsElement).open)) await section.locator(':scope > summary').click();
+}

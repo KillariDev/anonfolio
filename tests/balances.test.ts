@@ -83,7 +83,7 @@ test('display uses exact integer rounding, at most two decimals and explicit tin
   expect(formatBalance(123456789n, 6)).toBe('123.46');
   expect(formatBalance(1n)).toBe('<0.01');
   expect(formatBalance(0n)).toBe('0');
-  expect(formatBalance(99999999999999999999999999999n, 18)).toBe('100000000000');
+  expect(formatBalance(99999999999999999999999999999n, 18)).toBe('100,000,000,000');
 });
 
 test('oracle failure keeps proven balances available and marks only the estimate unavailable', async () => {

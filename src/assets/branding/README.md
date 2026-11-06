@@ -2,7 +2,7 @@
 
 `anonfolio-icon.png` is the original 1254 × 1254 RGBA image generated for this project with the built-in image-generation tool on November 6, 2026. It replaces the previous lowercase “a” mark. The folded mint shield and check-shaped opening represent private requests and locally verified balances. Transparent corners and the original alpha channel are preserved.
 
-The application header and favicon use the same local asset. Documentation embeds the bytes so its HTML files remain portable and self-contained. No external icon service is used. Token and third-party technology logos retain their existing artwork and credits.
+The original raster artwork is retained as the master asset. The application header and favicon use `anonfolio-mark.svg`, a small native vector rendition of the same folded shield/check motif, to avoid downloading a 1.4 MB image for a 28px mark. Documentation embeds the vector bytes so its HTML files remain portable and self-contained. No external icon service is used. Token and third-party technology logos retain their existing artwork and credits.
 
 ## Icon generation prompt
 

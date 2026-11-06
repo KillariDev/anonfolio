@@ -34,7 +34,7 @@ for(const width of [1280,768,390,320]) test(`Helios header follows actual verifi
   await setup(page,width);
   const status=page.locator('#helios-status');
   await expect(status.locator('strong')).toHaveText('Helios · idle');
-  await expect(status).toHaveAttribute('title',/starts when you refresh/);
+  await expect(status).toHaveAttribute('data-tooltip',/starts when you refresh/);
   expect(await page.evaluate(()=>(window as any).__heliosWorkers.length)).toBe(0);
   const bounds=await status.boundingBox();const connection=await page.locator('#connection').boundingBox();
   expect(bounds!.x).toBeGreaterThanOrEqual(connection!.x+connection!.width);
@@ -54,13 +54,13 @@ for(const width of [1280,768,390,320]) test(`Helios header follows actual verifi
   const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
   await emit(page,{type:'helios-status',status:{phase:'ready',block}});
   await expect(status.locator('strong')).toHaveText('Helios · ready');
-  await expect(status).toHaveAttribute('title',/Last verified finalized block 256/);
+  await expect(status).toHaveAttribute('data-tooltip',/Last verified finalized block 256/);
   await expect(status.locator('.spinner')).toHaveCount(0);await sample();
   await page.screenshot({path:test.info().outputPath(`helios-ready-${width}.png`)});
   // A worker failure clears readiness and the spinner, even after a good block.
   await page.evaluate(()=>(window as any).__heliosWorkers[0].onerror({message:'Verifier crashed'}));
   await expect(status.locator('strong')).toHaveText('Helios · unavailable');
-  await expect(status).toHaveAttribute('title',/Verifier crashed/);
+  await expect(status).toHaveAttribute('data-tooltip',/Verifier crashed/);
   await expect(status.locator('.spinner')).toHaveCount(0);await sample();
   expect(Math.max(...samples)-Math.min(...samples)).toBeLessThanOrEqual(1);
   // A terminated worker cannot overwrite the new lifecycle with a late reply.

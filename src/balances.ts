@@ -1,6 +1,7 @@
 import { appendRetrievalLog, logVerificationEvent, type RetrievalLog } from './retrieval-log';
 import type { CheckProgress, NetworkProgress, VerificationStage } from './verification/progress';
-import { formatUnits, type Address } from 'viem';
+import { type Address } from 'viem';
+export { formatBalance } from './formatting';
 import { errorMessage, readFailure, type ReadFailure } from './errors';
 import { verifyWallet, type VerificationEvent } from './verification/client';
 import type { VerifiedBlock } from './verification/trust';
@@ -149,11 +150,4 @@ export async function readBalances(
   if (!pending.size && selected.length) wallet.verificationStatus = 'Verification complete: ' + selected.length + ' assets at one verified finalized block.';
   appendRetrievalLog(wallet, fatal ? 'Refresh stopped; already proved balances are retained.' : pending.size ? 'Refresh ended without a proven result for '+pending.size+' assets.' : wallet.verificationStatus || 'Verification finished.', fatal || pending.size ? 'error' : 'success');
   onChange();
-}
-export function formatBalance(amount: bigint, decimals = 18): string {
-  if (amount < 0n) return '-' + formatBalance(-amount, decimals);
-  if (decimals <= 2) return formatUnits(amount, decimals);
-  const divisor = 10n ** BigInt(decimals - 2);
-  if (amount > 0n && amount < divisor) return '<0.01';
-  return formatUnits((amount + divisor / 2n) / divisor, 2);
 }

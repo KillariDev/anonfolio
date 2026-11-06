@@ -51,10 +51,15 @@ export default defineConfig({
         type: 'asset', fileName: 'sw.js',
         source: 'const CACHE = "anonfolio-shell-' + version + '";\nconst PATHS = ' + JSON.stringify(paths) + ';\n' + `
 const urls = PATHS.map(path => new URL(path, self.registration.scope).href);
-// HTTPS mode does not need the large Tor bundle, even for offline startup.
-const eager = new URL(self.location.href).searchParams.get('mode') === 'https' ? urls.filter(url => !url.split('/').at(-1).startsWith('anon-rpc-worker-')) : urls;
+// Saved portfolios need only the UI. Verifier runtimes and documentation are
+// cached when requested, so an optional download cannot block installation.
+const essential = urls.filter(url => {
+  const path = new URL(url).pathname, name = path.split('/').at(-1);
+  return !path.includes('/docs/') && !name.endsWith('.wasm') && !name.endsWith('.pdf')
+    && !name.startsWith('anon-rpc-worker-') && !name.startsWith('helios.worker-');
+});
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(eager)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(essential)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('anonfolio-shell-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
@@ -65,14 +70,25 @@ self.addEventListener('fetch', event => {
   const resource = new URL(event.request.url); resource.hash = '';
   const key = resource.href;
   if (event.request.method !== 'GET' || !urls.includes(key)) return;
-  event.respondWith(
-    event.request.mode === 'navigate'
-      ? fetch(event.request).then(response => {
-          if (response.ok) { const copy = response.clone(); event.waitUntil(caches.open(CACHE).then(cache => cache.put(key, copy))); }
-          return response;
-        }).catch(() => caches.match(key).then(response => response || Response.error()))
-      : caches.match(key).then(response => response || fetch(event.request))
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(key);
+    if (event.request.mode !== 'navigate' && cached) return cached;
+    // A slow or failing host must not hide an already cached page indefinitely.
+    const controller = new AbortController();
+    const timer = cached && event.request.mode === 'navigate' ? setTimeout(() => controller.abort(), 3000) : undefined;
+    try {
+      const response = await fetch(event.request, { signal: controller.signal });
+      if (!response.ok && cached) return cached;
+      // Keep installed app HTML paired with its cached release assets. A new
+      // service-worker installation replaces both together after deployment.
+      const appNavigation = event.request.mode === 'navigate' && !new URL(key).pathname.includes('/docs/');
+      if (response.ok && (!appNavigation || !cached)) event.waitUntil(cache.put(key, response.clone()).catch(() => {}));
+      return response;
+    } catch (error) {
+      return cached || Response.error();
+    } finally { clearTimeout(timer); }
+  })());
 });
 `,
       });

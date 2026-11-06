@@ -56,10 +56,10 @@ export type StatusIcon = keyof typeof statusPaths;
 export function statusIcon(kind: StatusIcon, label: string, explanation = label) {
   const icon = document.createElement('span');
   icon.className = 'status-icon status-' + kind;
-  icon.title = explanation;
+  icon.dataset.tooltip = explanation;
   icon.setAttribute('role', 'img');
   icon.setAttribute('aria-label', explanation);
-  icon.tabIndex = 0;
+  icon.tabIndex = -1;
   icon.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + statusPaths[kind] + '</svg>';
   const text = document.createElement('span'); text.className = 'sr-only'; text.textContent = label;
   icon.append(text);

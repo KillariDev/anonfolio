@@ -35,11 +35,11 @@ for (const width of [1280,390]) test(`technology indicators stay readable throug
   await page.goto('/');
   const logo=page.locator('#connection .technology-tor');
   await expect(logo).toHaveAttribute('alt','Tor via Anon-RPC');
-  await expect(logo).toHaveAttribute('title','Tor via Anon-RPC');
+  await expect(logo).toHaveAttribute('data-tooltip','Tor via Anon-RPC');
   await expect.poll(()=>logo.evaluate(image=>(image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await expect(page.locator('.network .technology-ethereum')).toHaveAttribute('title','Ethereum mainnet');
   await expect(page.locator('#estimated-total .technology-uniswap')).toHaveCount(1);
-  await expect(page.locator('#estimated-total .technology-uniswap').locator('..')).toHaveAttribute('title',/Uniswap v3 TWAP/);
+  await expect(page.locator('#estimated-total .technology-uniswap').locator('..')).toHaveAttribute('data-tooltip',/Uniswap v3 TWAP/);
   await expect(logo).toHaveAttribute('src', /tor-onion/);
   const original=await logo.boundingBox();
   const initialConnection=await page.locator('#connection').boundingBox();

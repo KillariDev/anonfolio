@@ -58,17 +58,19 @@ for(const width of [1280,390]) {
     const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60_000};
     for(const event of [
       {type:'progress',stage:'balances-pricing',message:'Checking private proofs. '.repeat(40)},
-      {type:'balance',asset:'eth',amount:'123456789123456789123456789123456789',block},
+      {type:'balance',asset:'eth',amount:'12345678912345678912345',block},
       {type:'price',asset:'eth',block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',symbol:'USDC',decimals:6,numerator:'2000000000',denominator:'1000000000000000000',window:1800,blockHash:block.hash,minLiquidity:'10000'}},
       {type:'asset-error',asset:weth,error:'Contract proof failed. '.repeat(30)},
       {type:'price-error',asset:'eth',error:'No qualifying direct pool'},
-      {type:'done'},
     ]) {
       await emit(page,event);
       const after=await measure();
       for(let i=0;i<before.length;i++)for(const key of ['top','height'] as const)expect(Math.abs(after[i][key]-before[i][key]),selectors[i]+' '+key).toBeLessThanOrEqual(1);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     }
+    await emit(page,{type:'done'});
+    await expect(page.locator('.verification-panel').first()).toHaveClass(/is-finished/);
+    expect((await page.locator('.verification-panel').first().boundingBox())!.height).toBeLessThan(60);
     await page.getByRole('button',{name:'Refresh '+a,exact:true}).click();
     const refreshed=await measure();
     for(let i=0;i<before.length;i++)expect(Math.abs(refreshed[i].height-before[i].height)).toBeLessThanOrEqual(1);

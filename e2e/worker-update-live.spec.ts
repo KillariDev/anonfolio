@@ -1,3 +1,4 @@
+import { openAdvancedSettings } from './helpers';
 import { expect, test } from '@playwright/test';
 
 test('live Tor worker update downloads and hash-checks the published HTTPS resolver',async({page})=>{
@@ -8,6 +9,7 @@ test('live Tor worker update downloads and hash-checks the published HTTPS resol
   page.on('request',request=>{if(request.url()==='https://ethereum-rpc.publicnode.com/'&&request.method()==='POST')discovery.push(request.postDataJSON());});
   await page.goto('/');
   await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await openAdvancedSettings(page, 'worker-settings');
   await page.getByRole('button',{name:'Update Tor worker from PublicNode',exact:true}).click();
   await expect(page.locator('#tor-worker-status')).toContainText('Update downloaded and hash-checked',{timeout:120_000});
   await expect(page.getByLabel('Tor worker source',{exact:true})).toHaveValue('updated');

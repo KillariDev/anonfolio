@@ -64,7 +64,7 @@ test('static build reopens completely offline with saved wallets, token settings
   expect(cachedUrls.length).toBeGreaterThan(0);
   expect(cachedUrls.every(url => url.startsWith(new URL(page.url()).origin + '/'))).toBe(true);
   expect(cachedUrls.some(url => url.includes('ethereum-rpc'))).toBe(false);
-  expect(cachedUrls.some(url => url.includes('anon-rpc-worker'))).toBe(true);
+  expect(cachedUrls.some(url => url.includes('anon-rpc-worker'))).toBe(false);
   await context.setOffline(true);
   await page.reload();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
@@ -101,11 +101,69 @@ test('static build HTTPS mode caches its offline shell without downloading Tor',
   await expect(page.locator('#connection')).toHaveText('Direct HTTPS · not anonymous');
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise<void>(resolve=>navigator.serviceWorker.addEventListener('controllerchange',()=>resolve(),{once:true}));});
   const cached=await page.evaluate(async()=>{const names=await caches.keys();return (await Promise.all(names.filter(name=>name.startsWith('anonfolio-shell-')).map(async name=>(await (await caches.open(name)).keys()).map(request=>request.url)))).flat();});
-  expect(cached.some(url=>url.includes('index_bg-'))).toBe(true);
+  expect(cached.some(url=>url.includes('index_bg-'))).toBe(false);
   expect(cached.some(url=>url.includes('anon-rpc-worker-'))).toBe(false);
   expect(torFiles).toEqual([]);
   await context.setOffline(true);await page.reload();
   await expect(page.locator('#connection')).toContainText('HTTPS connection unavailable');
   await expect(page.locator('#offline-notice')).toContainText('offline');
   await expect(page.locator('iframe')).toHaveCount(0);
+});
+
+test('static build optional download failures cannot block a small offline shell',async({page,context})=>{
+  test.skip(!process.env.BASE_URL,'Production cache policy.');
+  await page.addInitScript(()=>localStorage.setItem('anonfolio.network.v1',JSON.stringify({mode:'https',rpcUrls:['https://execution.example/'],gateways:['152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ']})));
+  const optional:string[]=[];
+  await context.route('**/docs/**',route=>{optional.push(route.request().url());return route.abort('failed');});
+  await page.goto('/');
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise<void>(resolve=>navigator.serviceWorker.addEventListener('controllerchange',()=>resolve(),{once:true}));});
+  expect(optional).toEqual([]);
+  const entries=await page.evaluate(async()=>{
+    const cache=await caches.open((await caches.keys()).find(name=>name.startsWith('anonfolio-shell-'))!);
+    return await Promise.all((await cache.keys()).map(async request=>({url:request.url,bytes:(await (await cache.match(request))!.arrayBuffer()).byteLength})));
+  });
+  expect(entries.reduce((sum,item)=>sum+item.bytes,0)).toBeLessThan(1_000_000);
+  expect(entries.some(item=>/\/docs\/|\.wasm$|helios\.worker-|anon-rpc-worker-/.test(item.url))).toBe(false);
+  // A visited optional document can fail without damaging the cached app.
+  expect(await page.evaluate(()=>fetch('docs/documentation.html').then(()=>false,()=>true))).toBe(true);
+  await context.setOffline(true);await page.reload();
+  await expect(page.getByRole('heading',{name:'Portfolio',exact:true})).toBeVisible();
+  await expect(page.locator('.brand-mark')).toBeVisible();
+  await context.setOffline(false);
+});
+
+test('static build slow navigation returns the saved shell instead of waiting indefinitely',async({page,context})=>{
+  test.skip(!process.env.BASE_URL,'Production navigation fallback.');
+  await page.addInitScript(()=>localStorage.setItem('anonfolio.network.v1',JSON.stringify({mode:'https',rpcUrls:['https://execution.example/'],gateways:['152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ']})));
+  await page.goto('/');
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise<void>(resolve=>navigator.serviceWorker.addEventListener('controllerchange',()=>resolve(),{once:true}));});
+  await context.serviceWorkers()[0]!.evaluate(()=>{
+    const nativeFetch=globalThis.fetch;
+    globalThis.fetch=((request:RequestInfo|URL,init?:RequestInit)=>request instanceof Request && request.mode==='navigate'
+      ? new Promise<Response>((_resolve,reject)=>init!.signal!.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError'))))
+      :nativeFetch(request,init)) as typeof fetch;
+  });
+  const start=Date.now();await page.reload({waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('heading',{name:'Portfolio',exact:true})).toBeVisible();
+  expect(Date.now()-start).toBeLessThan(6000);
+});
+
+test('static build keeps a coherent offline release when newer HTML appears before an update installs',async({page,context})=>{
+  test.skip(!process.env.BASE_URL,'Production release consistency.');
+  await page.addInitScript(()=>localStorage.setItem('anonfolio.network.v1',JSON.stringify({mode:'https',rpcUrls:['https://execution.example/'],gateways:['152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ']})));
+  await page.goto('/');
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise<void>(resolve=>navigator.serviceWorker.addEventListener('controllerchange',()=>resolve(),{once:true}));});
+  const worker=context.serviceWorkers()[0]!;
+  await worker.evaluate(()=>{
+    const nativeFetch=globalThis.fetch;let offline=false;
+    (self as any).__simulateOffline=()=>{offline=true;};
+    globalThis.fetch=((request:RequestInfo|URL,init?:RequestInit)=>{
+      if(request instanceof Request && request.mode==='navigate')return offline?Promise.reject(new Error('Offline')):Promise.resolve(new Response('<!doctype html><h1>New release awaiting installation</h1>',{headers:{'content-type':'text/html'}}));
+      return nativeFetch(request,init);
+    }) as typeof fetch;
+  });
+  await page.reload();await expect(page.getByRole('heading',{name:'New release awaiting installation'})).toBeVisible();
+  await context.setOffline(true);await worker.evaluate(()=>(self as any).__simulateOffline());
+  await page.reload();await expect(page.getByRole('heading',{name:'Portfolio',exact:true})).toBeVisible();
+  await context.setOffline(false);
 });

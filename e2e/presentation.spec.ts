@@ -90,6 +90,7 @@ test('static build presentation is cached with the application and works offline
   test.skip(!process.env.BASE_URL, 'Production offline shell check.');
   await page.addInitScript(() => localStorage.setItem('anonfolio.network.v1', JSON.stringify({ mode: 'https', rpcUrls: ['https://execution.example/'], gateways: ['152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ'] })));
   await page.goto('/');
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready; if(!navigator.serviceWorker.controller)await new Promise<void>(resolve=>navigator.serviceWorker.addEventListener('controllerchange',()=>resolve(),{once:true})); await fetch('docs/presentation.html'); await fetch('docs/presentation.pdf');});
   await expect.poll(() => page.evaluate(async () => Boolean(await caches.match(new URL('docs/presentation.html', location.href).href)))).toBe(true);
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
   await context.setOffline(true);

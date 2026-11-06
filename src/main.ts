@@ -1,4 +1,8 @@
+import { explain, explanationGroup, installTooltips } from './tooltips';
+import { verificationPanel } from './verification-panel';
+import { pageMarkup } from './page';
 import { heliosStatus, subscribeHeliosStatus } from './verification/status';
+import { exactBalance } from './formatting';
 import { technologyIcon } from './technology-icons';
 import { visibleHoldings } from './holdings';
 import { captureViewport, restoreViewport } from './viewport';
@@ -6,12 +10,12 @@ import { updateChildren } from './dom';
 import { appendRetrievalLog } from './retrieval-log';
 import { logStream } from './log-stream';
 import { readHistory } from './read-history';
-import { checkLabel, stageLabels, progressTime, type VerificationStage } from './verification/progress';
+import { checkLabel, stageLabels, progressTime } from './verification/progress';
 import chevronDown from './assets/chevron-down.svg?raw';
 import { discoverTorWorker, cacheTorWorker } from './worker-update';
 import type { WorkerMetadata } from './worker-metadata';
 import { DEFAULT_CHECKPOINT, checkCheckpointAge } from './verification/trust';
-import appIcon from './assets/branding/anonfolio-icon.png?no-inline';
+import appIcon from './assets/branding/anonfolio-mark.svg?no-inline';
 import { addressDisplay } from './address-display';
 import { parseTrackedAddresses } from './addresses';
 import { config, defaultConfig } from './config';
@@ -27,69 +31,9 @@ import { estimatedTotal, portfolioTotals } from './totals';
 import { readIcon, tokenIcon, statusIcon, type StatusIcon } from './icons';
 import './style.css';
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-<header><a class="brand" href="./" aria-label="Anonfolio home"><img class="brand-mark" src="${appIcon}" width="28" height="28" alt="">anonfolio<span class="brand-dot">.</span></a><div class="header-statuses"><div id="connection" role="status" aria-label="Private connection"></div><div id="helios-status" role="status" aria-label="Helios light client" tabindex="0"></div></div><div class="header-actions"><span class="network"><i></i>Ethereum mainnet</span><details id="network-settings"><summary class="settings-toggle" role="button" aria-label="Settings" title="Settings" aria-controls="settings-panel"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 3-1 3-3 1-2 5 2 5 3 1 1 3h6l1-3 3-1 2-5-2-5-3-1-1-3Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.5"/></svg></summary>
-<section id="settings-panel" class="settings-panel" aria-label="Application settings"><div class="settings-heading"><h2>Settings</h2><button id="close-settings" type="button" aria-label="Close settings" title="Close settings">×</button></div>
-<details class="token-settings"><summary>Tracked tokens <span id="token-count"></span></summary>
-<p class="form-hint">Choose the tokens to track across every address. Token changes save automatically.</p>
-<ul id="token-list" aria-label="Tracked tokens"></ul>
-<form id="token-form" novalidate>
-<label for="token-preset">Token</label><select id="token-preset"><option value="custom">Custom ERC-20 token</option><option value="eth">ETH</option><option value="weth">WETH</option></select>
-<div class="token-inputs">
-<div><label for="token-address">Token contract address</label><input id="token-address" placeholder="0x…" autocomplete="off" spellcheck="false" aria-describedby="token-error"></div>
-<div><label for="token-symbol">Symbol</label><input id="token-symbol" placeholder="USDC" maxlength="16" autocomplete="off" aria-describedby="token-error"></div>
-<div><label for="token-decimals">Decimals</label><input id="token-decimals" type="number" min="0" max="255" step="1" value="18" aria-describedby="token-error"></div></div>
-<label for="token-icon">Icon (optional)</label><input id="token-icon" type="file" accept="image/png,image/jpeg,image/webp"><p class="form-hint">Upload a PNG, JPEG or WebP up to 1 MB. Icons are stored in this browser.</p>
-<p class="form-hint">Use the token's actual symbol and decimals (for example, USDC uses 6). You supply these display settings; balanceOf is executed locally against proven code and storage, with no approvals or transactions.</p>
-<button type="submit">Add token</button><p id="token-error" class="input-error" role="alert"></p></form></details>
-<form id="pricing-form" novalidate>
-<h2>Price estimates</h2>
-<label for="pricing-preset">Quote token</label><select id="pricing-preset"><option value="usdc">USDC (Ethereum mainnet)</option><option value="custom">Custom ERC-20</option></select>
-<div id="pricing-custom"><label for="pricing-address">Quote contract address</label><input id="pricing-address" spellcheck="false" autocomplete="off"><label for="pricing-symbol">Quote symbol</label><input id="pricing-symbol" maxlength="16" autocomplete="off"><label for="pricing-decimals">Quote decimals</label><input id="pricing-decimals" type="number" min="0" max="255"></div>
-<label for="pricing-liquidity">Minimum quote-side liquidity</label><input id="pricing-liquidity" inputmode="decimal" autocomplete="off">
-<p class="form-hint">30-minute Uniswap v3 TWAP from one direct token/quote pool. No multihop. Both current and harmonic virtual quote reserves must meet this amount (default 10,000 USDC). Quote decimals use your configuration. No qualifying pool means no estimate.</p>
-<button type="submit">Save pricing and refresh</button><p id="pricing-error" class="input-error" role="alert"></p></form>
-<form id="settings-form" novalidate>
-<h2>Network connection</h2>
-<label for="settings-mode">Connection mode</label><select id="settings-mode"><option value="tor">Tor via Anon-RPC (default)</option><option value="https">Direct HTTPS (not anonymous)</option></select>
-<p id="mode-hint" class="form-hint">Tor hides your IP from RPC providers. Direct HTTPS sends requests from your browser: providers see your IP and requested addresses. Proof verification remains enabled. There is no automatic switch between modes.</p>
-<label for="settings-gateways">Tor gateways</label><textarea id="settings-gateways" rows="2" spellcheck="false" autocomplete="off" aria-describedby="gateway-hint settings-error"></textarea>
-<p id="gateway-hint" class="form-hint">One ip:port:certhash entry per line. IPv6 addresses use [ipv6]:port:certhash. The default is a development demo gateway.</p>
-<label for="settings-bootstrap-url">Tor directory mirror URL (optional)</label><input id="settings-bootstrap-url" spellcheck="false" autocomplete="off" placeholder="./tor-bootstrap.json"><p class="form-hint">A fresh public directory snapshot can speed up Tor startup. A missing mirror falls back to the gateways.</p>
-<label for="settings-rpcs">Balance RPC endpoints</label><textarea id="settings-rpcs" rows="3" spellcheck="false" autocomplete="off" aria-describedby="rpc-hint settings-error"></textarea>
-<p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses start on separate endpoints where possible. If an endpoint cannot serve finalized-block proofs, another configured endpoint is tried with the same private isolation key. Requests use your selected mode. Defaults include dRPC and PublicNode; no API key is required for their public endpoints.</p>
-<p class="form-hint">The Tor worker is bundled and hash-verified locally. Startup never queries an Ethereum RPC. In Tor mode, consensus, balance and oracle requests all use Anon-RPC. In HTTPS mode, they go directly to the configured services.</p>
-<h2>Tor worker</h2>
-<label for="settings-tor-worker">Tor worker source</label><select id="settings-tor-worker"><option value="bundled">Bundled release worker (default)</option><option value="updated">Saved worker from PublicNode</option></select>
-<p class="form-hint">Update only when you choose: this queries ethereum-rpc.publicnode.com directly for the Tor specifier's hash and download locations, then downloads the worker directly. No tracked addresses are sent. Applying the update trusts PublicNode's worker hash and code. Balance, proof and consensus requests use the selected connection mode.</p>
-<button id="update-tor-worker" type="button">Update Tor worker from PublicNode</button>
-<p id="tor-worker-status" role="status" class="form-hint"></p><pre id="tor-worker-metadata" class="form-hint" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
-<h2 id="checkpoint-settings">Consensus checkpoint</h2>
-<label for="settings-checkpoint-root">Mainnet checkpoint root</label><input id="settings-checkpoint-root" type="text" spellcheck="false" autocomplete="off" aria-describedby="checkpoint-hint settings-error">
-<label for="settings-checkpoint-slot">Checkpoint beacon slot</label><input id="settings-checkpoint-slot" type="number" min="1" step="1" aria-describedby="checkpoint-hint settings-error">
-<p id="checkpoint-hint" class="form-hint">A trusted finalized beacon block root and its matching slot, less than 14 days old. Compare them across independent trusted mainnet sources before saving: this checkpoint is the light client's trust anchor. Saving restarts verification. Restore defaults uses the release-pinned checkpoint.</p>
-<p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and reconnects; use an address’s Refresh button to update saved balances.</p>
-<div class="settings-actions"><button class="primary" type="submit">Save settings and reconnect</button><button id="reset-settings" type="button">Restore defaults</button></div>
-<p id="settings-error" class="input-error" role="alert"></p></form></section></details></div></header>
-<main>
-<div class="page-heading"><h1>Portfolio</h1></div>
-<section class="overview" aria-label="Portfolio token totals">
-<div id="estimated-total" class="portfolio-value" aria-label="Estimated portfolio value" aria-live="polite"></div>
-<div id="totals" class="totals" aria-live="polite"></div></section>
-<p id="offline-notice" role="status"></p><p id="storage-warning" role="status"></p>
-<div class="section-heading"><h2>Addresses <span id="count">0</span></h2></div>
-<section id="wallets" aria-label="Watched wallets"></section>
-<div class="controls">
-<details id="address-panel" class="address-settings"><summary class="address-toggle" role="button" aria-label="Add addresses" title="Add addresses" aria-controls="wallet-form"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
-<form id="wallet-form" novalidate>
-<label for="address-name">Address name (optional, for one address)</label><input id="address-name" maxlength="80" autocomplete="off" placeholder="e.g. Savings" aria-describedby="input-error">
-<label for="address">Ethereum wallet addresses</label>
-<div class="input-row"><textarea id="address" name="address" rows="2" placeholder="0x… Paste one address or a list" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="wallet-hint input-error" required></textarea><button class="primary" type="submit">add address to track <span aria-hidden="true">↗</span></button></div>
-<p class="form-hint" id="wallet-hint">One address per line, or separate addresses with commas. To name a list, use Name | 0x… on each line. Names are saved only in this browser.</p>
-<p id="input-error" class="input-error" role="alert"></p><p id="wallet-notice" class="form-hint" role="status"></p></form></details>
+document.querySelector<HTMLDivElement>('#app')!.innerHTML = pageMarkup(appIcon);
 
-</div>
-</main>`;
+installTooltips();
 
 document.querySelector('.network i')!.replaceWith(technologyIcon('ethereum', true));
 document.querySelector('#pricing-form h2')!.prepend(technologyIcon('uniswap', true));
@@ -225,7 +169,7 @@ function renderHeliosStatus() {
     : status.phase === 'unavailable' ? errorMessage(status.error || 'Helios verification is unavailable. Refresh an address to retry.')
     : status.block ? 'Last verified finalized block ' + BigInt(status.block.number) + ' · ' + new Date(status.block.timestamp).toLocaleString()
     : 'Helios light client is ready.';
-  node.title = description;
+  explain(node, description);
   const busy = status.phase === 'starting' || status.phase === 'syncing';
   const icon = busy ? spinner() : statusIcon(status.phase === 'ready' ? 'verified' : status.phase === 'unavailable' ? 'unavailable' : 'waiting', description);
   // The pill itself is keyboard-focusable and exposes one shared tooltip.
@@ -273,6 +217,7 @@ function renderConnection() {
     heading.append(button);
   }
   updateChildren(node, [heading]);
+  explanationGroup(node, title.title || title.textContent || 'Connection status');
 }
 function failureReport(label: string, failure: ReadFailure, rpcHost?: string, identity = label) {
   const report = document.createElement('section'); report.className = 'read-failure';
@@ -336,7 +281,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   const amount = document.createElement('div');
   amount.className = 'amount';
   amount.textContent = balance.amount === undefined ? '—' : formatBalance(balance.amount, decimals);
-  amount.title = amount.textContent;
+  amount.title = balance.amount === undefined ? 'Balance unavailable' : exactBalance(balance.amount, decimals) + ' ' + symbol;
   if (pending) amount.prepend(spinner());
   const status = document.createElement('small');
   status.className = balance.failed ? 'error' : balance.cached ? 'cached' : balance.verifiedBlock ? 'proven' : '';
@@ -390,7 +335,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
     time.className = 'sr-only';
     time.dateTime = new Date(balance.updatedAt).toISOString();
     time.textContent = new Date(balance.updatedAt).toLocaleString();
-    amount.title = symbol + ': ' + amount.textContent + ' · last successful read ' + time.textContent;
+    amount.title = symbol + ': ' + exactBalance(balance.amount!, decimals) + ' · last successful read ' + time.textContent;
     box.append(time);
   }
   return box;
@@ -465,7 +410,7 @@ function valuationAmount(estimate: ReturnType<typeof estimatedTotal>) {
 }
 function renderTotals() {
   const estimate = estimatedTotal(wallets, tokens, pricing);
-  const summary = document.querySelector('#estimated-total')!;
+  const summary = document.querySelector<HTMLElement>('#estimated-total')!;
   const primary = document.createElement('div');
   const label = document.createElement('div'); label.className = 'portfolio-value-label'; label.textContent = 'Portfolio value';
   const value = document.createElement('div'); value.className = 'portfolio-value-amount';
@@ -478,6 +423,7 @@ function renderTotals() {
   method.querySelector('svg')!.replaceWith(technologyIcon('uniswap', true));
   metadata.append(valuationFlags(estimate), method);
   updateChildren(summary, [primary, metadata]);
+  explanationGroup(summary, value.textContent || 'Portfolio value unavailable');
   const totals = document.createDocumentFragment();
   if (!tokens.length) {
     const empty = document.createElement('p');
@@ -497,7 +443,7 @@ function renderTotals() {
     const amount = document.createElement('div');
     amount.className = 'total-amount';
     amount.textContent = total.amount === undefined ? '—' : formatBalance(total.amount, total.decimals);
-    amount.title = amount.textContent;
+    amount.title = total.amount === undefined ? 'Balance unavailable' : exactBalance(total.amount, total.decimals) + ' ' + total.symbol;
     const coverage = total.known + '/' + total.addresses + ' addresses';
     let provenance = !total.addresses ? 'Add an address to start'
       : total.known < total.addresses ? 'Partial · ' + coverage : coverage;
@@ -515,19 +461,12 @@ function renderTotals() {
     quote.append(subtotal, valuationFlags(valuation));
     const amounts = document.createElement('div'); amounts.className = 'total-balances'; amounts.append(amount, quote);
     card.append(label, amounts);
+    explanationGroup(card, amount.title + '\n' + quote.title);
     totals.append(card);
   }
   updateChildren(document.querySelector('#totals')!, [...totals.childNodes]);
 }
 let progressTimer: ReturnType<typeof setInterval> | undefined;
-function progressClock(startedAt: number, deadline?: number) {
-  const clock = document.createElement('small'); clock.className = 'progress-clock';
-  clock.dataset.progressStart = String(startedAt);
-  if (deadline) clock.dataset.progressDeadline = String(deadline);
-  clock.setAttribute('aria-live', 'off');
-  clock.textContent = progressTime(startedAt, Date.now(), deadline);
-  return clock;
-}
 function syncProgressClock() {
   if (!wallets.some(wallet => wallet.loading && !wallet.queuedForVerifier)) { clearInterval(progressTimer); progressTimer = undefined; return; }
   if (progressTimer) return;
@@ -536,54 +475,6 @@ function syncProgressClock() {
       clock.textContent = progressTime(Number(clock.dataset.progressStart), Date.now(), clock.dataset.progressDeadline ? Number(clock.dataset.progressDeadline) : undefined);
     });
   }, 1000);
-}
-function verificationPanel(wallet: Wallet) {
-  const panel = document.createElement('section'); panel.className = 'verification-panel';
-  panel.setAttribute('aria-label', 'Verification progress');
-  const stage = wallet.verificationStage || 'connection';
-  const phases: VerificationStage[] = ['verifier', 'consensus', 'balances', 'pricing'];
-  const index = !wallet.loading ? 4 : stage === 'queued' ? 0 : stage === 'balances-pricing' ? 2 : phases.indexOf(stage);
-  const steps = document.createElement('ol'); steps.className = 'verification-stages';
-  ['Verifier', 'Consensus', 'Balances', 'Prices'].forEach((label, step) => {
-    const item = document.createElement('li'); item.textContent = label; item.dataset.viewKey = label;
-    item.className = !wallet.loading ? '' : step < index ? 'completed' : (step === index || stage === 'balances-pricing' && step === 3) ? 'current' : '';
-    if (wallet.loading && (step === index || stage === 'balances-pricing' && step === 3)) item.setAttribute('aria-current', 'step');
-    steps.append(item);
-  });
-  const heading = document.createElement('div'); heading.className = 'progress-heading';
-  const title = document.createElement('strong'); title.textContent = wallet.loading ? stage === 'connection' ? 'Verification' : stageLabels[stage] : 'Read attempt finished';
-  if (wallet.checkProgress) title.textContent = checkLabel(wallet.checkProgress) + ' · ' + title.textContent;
-  title.title = title.textContent + ' · Counts balance and price checks, including failed checks. Extra code/storage requests are discovered as contracts execute.';
-  const active = wallet.loading && !wallet.queuedForVerifier && stage !== 'connection';
-  const clock = active ? progressClock(wallet.stageStartedAt || Date.now()) : document.createElement('small');
-  clock.className = 'progress-clock';
-  if (!active) clock.textContent = 'No request running';
-  heading.append(title, clock);
-  panel.append(steps, heading);
-  const requestArea = document.createElement('div'); requestArea.className = 'progress-requests';
-  const requests = wallet.networkRequests || [];
-  if (wallet.loading && requests.length) {
-    for (const request of requests.slice(0, 2)) {
-      const row = document.createElement('div'); row.className = 'progress-request'; row.dataset.viewKey = String(request.requestId);
-      const operation = document.createElement('p'); operation.textContent = (request.purpose || request.method) + ' → ' + request.host;
-      const state = document.createElement('span'); state.textContent = request.state === 'waiting' ? (config.mode === 'https' ? 'Direct HTTPS · waiting for response headers' : 'Submitted to Anon-RPC · waiting for response headers') : 'Response headers received · reading response body';
-      row.append(operation, state, progressClock(request.startedAt, request.deadline));
-      operation.title = operation.textContent + ' · ' + request.method + (request.target ? ' · ' + request.target : '') + ' → ' + request.host; state.title = state.textContent;
-      requestArea.append(row);
-    }
-    const hint = document.createElement('p'); hint.className = 'progress-hint';
-    hint.textContent = requests.length > 2 ? '+' + (requests.length - 2) + ' more private requests' : '';
-    requestArea.append(hint);
-  } else {
-    const operation = document.createElement('p'); operation.className = 'verification-progress';
-    operation.setAttribute('role', 'status');
-    const detail = wallet.verificationStatus || '';
-    operation.textContent = wallet.loading && stage !== 'connection' && stage !== 'queued' && detail !== stageLabels[stage] ? detail : '';
-    operation.title = operation.textContent;
-    requestArea.append(operation);
-  }
-  panel.append(requestArea);
-  return panel;
 }
 function detailDisclosure(className: string, label: string, content: Node) {
   const details = document.createElement('details'); details.className = 'detail-disclosure ' + className;
@@ -612,12 +503,13 @@ function walletDetails(wallet: Wallet, logOpen=false) {
   }
   if (wallet.activity.length) {
     const activity = document.createElement('div');
-    activity.className = 'activity';
+    activity.className = 'activity' + (wallet.loading ? '' : ' is-finished');
     const summary = document.createElement('p');
     summary.textContent = '';
     const retry = retryMessage(wallet);
     if (retry) summary.textContent += ' ' + retry;
     summary.title = summary.textContent;
+    activity.hidden = !wallet.loading && !retry;
     activity.append(summary);
     wallet.activity.filter(item => tokens.some(token => token.address === item.asset)).forEach(item => {
       const line = document.createElement('div');
@@ -717,6 +609,7 @@ function render() {
     value.textContent = valuationAmount(valuation) + ' ' + pricing.quote.symbol;
     addressValue.title = value.textContent + ' · ' + valuation.known + '/' + valuation.count + ' holdings priced';
     addressValue.append(value, valuationFlags(valuation));
+    explanationGroup(addressValue, addressValue.title);
     addressLine.append(address, addressValue, refresh);
     identity.append(addressLine);
     {
@@ -738,6 +631,7 @@ function render() {
     const visible = visibleHoldings(wallet, assets);
     const holding = (token: Token) => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address);
     holdings.append(...visible.map(holding));
+    explanationGroup(holdings, visible.map(token => { const balance = tokenBalance(wallet, token); return token.symbol + ': ' + (balance.amount === undefined ? 'unavailable' : exactBalance(balance.amount, token.decimals)); }).join('\n'));
     holdingsContent.append(holdings);
     if (!assets.length) {
       const empty = document.createElement('p'); empty.className = 'form-hint'; empty.textContent = 'No tokens tracked.';
@@ -757,9 +651,12 @@ function render() {
     toggle.setAttribute('aria-expanded', String(expanded));
     toggle.setAttribute('aria-controls', 'details-' + wallet.address);
     toggle.onclick = () => {
+      const oldTop = walletList.querySelector<HTMLElement>('.wallet[data-address="' + wallet.address + '"] > .balances')!.getBoundingClientRect().top;
       if (expandedAddresses.has(wallet.address)) expandedAddresses.delete(wallet.address);
       else expandedAddresses.add(wallet.address);
       render();
+      const newTop = walletList.querySelector<HTMLElement>('.wallet[data-address="' + wallet.address + '"] > .balances')!.getBoundingClientRect().top;
+      walletList.scrollTop += newTop - oldTop;
     };
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -977,6 +874,11 @@ function renderWorkerMetadata() {
   const option = document.querySelector<HTMLOptionElement>('#settings-tor-worker option[value="updated"]')!;
   option.disabled = !stagedWorker;
 }
+function syncNetworkFields() {
+  const tor = document.querySelector<HTMLSelectElement>('#settings-mode')!.value === 'tor';
+  document.querySelectorAll<HTMLElement>('[data-tor-only]').forEach(section => { section.hidden = !tor; });
+}
+document.querySelector('#settings-mode')!.addEventListener('change', syncNetworkFields);
 function showSettings(settings: NetworkSettings) {
   stagedWorker = settings.torWorker;
   settingsField('tor-worker').value = stagedWorker ? 'updated' : 'bundled';
@@ -988,6 +890,7 @@ function showSettings(settings: NetworkSettings) {
   const checkpoint = settings.checkpoint || DEFAULT_CHECKPOINT;
   settingsField('checkpoint-root').value = checkpoint.root;
   settingsField('checkpoint-slot').value = String(checkpoint.slot);
+  syncNetworkFields();
 }
 showSettings(config);
 document.querySelector('#update-tor-worker')!.addEventListener('click', async () => {
@@ -1024,7 +927,15 @@ document.querySelector('#settings-form')!.addEventListener('submit', event => {
       checkpoint: { root: settingsField('checkpoint-root').value, slot: Number(settingsField('checkpoint-slot').value) } });
     checkCheckpointAge(Date.now(), settings.checkpoint);
     applySettings(settings);
-  } catch (cause) { document.querySelector('#settings-error')!.textContent = (cause as Error).message; }
+  } catch (cause) {
+    const message = (cause as Error).message;
+    document.querySelector('#settings-error')!.textContent = message;
+    const section = /checkpoint/i.test(message) ? '#checkpoint-settings' : /gateway|directory|mirror/i.test(message) ? '#tor-routing' : undefined;
+    if (section) {
+      const details = document.querySelector<HTMLDetailsElement>(section)!;
+      details.hidden = false; details.open = true;
+    }
+  }
 });
 document.querySelector('#reset-settings')!.addEventListener('click', () => {
   showSettings(defaultConfig);

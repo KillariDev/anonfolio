@@ -63,6 +63,7 @@ test('static build documentation and image reopen offline from the application s
   test.skip(!process.env.BASE_URL,'Build and run bun run test:static.');
   await page.addInitScript(()=>localStorage.setItem('anonfolio.network.v1',JSON.stringify({mode:'https',rpcUrls:['https://execution.example/'],gateways:['152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ']})));
   await page.goto('/');
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready; if(!navigator.serviceWorker.controller)await new Promise<void>(resolve=>navigator.serviceWorker.addEventListener('controllerchange',()=>resolve(),{once:true})); await fetch('docs/documentation.html'); await fetch('docs/images/portfolio.png');});
   await expect.poll(()=>page.evaluate(async()=>Boolean(await caches.match(new URL('docs/documentation.html',location.href).href)))).toBe(true);
   await expect.poll(()=>page.evaluate(async()=>Boolean(await caches.match(new URL('docs/images/portfolio.png',location.href).href)))).toBe(true);
   await page.evaluate(()=>navigator.serviceWorker.ready);

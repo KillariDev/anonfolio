@@ -88,6 +88,9 @@ test('published screenshots show verified public mainnet holdings and custom ERC
   }
   await expect.poll(()=>page.locator('img').evaluateAll(images=>images.every(image=>image.naturalWidth>0))).toBe(true);
   await page.evaluate(()=>document.fonts.ready);
+  await page.mouse.move(0,0);
+  await page.evaluate(()=>(document.activeElement as HTMLElement)?.blur());
+  await expect(page.getByRole('tooltip')).toBeHidden();
   const readme=test.info().outputPath('readme-portfolio.png');
   await page.screenshot({path:readme,animations:'disabled',fullPage:true});
   if(update)await copyFile(readme,new URL('../docs/images/readme-portfolio.png',import.meta.url));
