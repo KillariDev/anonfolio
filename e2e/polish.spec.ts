@@ -30,6 +30,25 @@ for(const width of [320,390,768,1440])test(`saved portfolio remains compact, rea
   const refresh=await page.locator('.refresh-icon').first().boundingBox();expect(refresh!.height).toBeGreaterThanOrEqual(width<720?36:28);
   await page.screenshot({path:test.info().outputPath(`polished-portfolio-${width}.png`),fullPage:true});
 });
+for(const width of [320,390,1440])test(`Uniswap tooltip stays by its icon and ignores adjacent empty space at ${width}px`,async({page})=>{
+  test.skip(!!process.env.BASE_URL || !!process.env.IPFS_GATEWAY_URL);
+  await setup(page,width);
+  const method=page.locator('#estimated-total .technology-uniswap').locator('..');
+  const tooltip=page.getByRole('tooltip');
+  await method.hover();
+  await expect(tooltip).toContainText('30-minute Uniswap v3 TWAPs');
+  const icon=(await method.boundingBox())!, bubble=(await tooltip.boundingBox())!;
+  expect(bubble.x+bubble.width).toBeGreaterThanOrEqual(icon.x);
+  expect(bubble.x).toBeLessThanOrEqual(icon.x+icon.width);
+  expect(Math.abs(bubble.y-icon.y-icon.height)).toBeLessThan(12);
+  const flags=(await page.locator('#estimated-total > .portfolio-value-meta > .valuation-flags').boundingBox())!;
+  await page.mouse.move((flags.x+flags.width+icon.x)/2,icon.y+icon.height/2);
+  await expect(tooltip).toBeHidden();
+  await page.locator('.portfolio-value-number').focus();
+  await expect(tooltip).toContainText('30-minute Uniswap v3 TWAPs');
+  await page.keyboard.press('Escape');
+  await expect(tooltip).toBeHidden();
+});
 test('touch exposes and dismisses status explanations without changing saved balances',async({browser})=>{
   test.skip(!!process.env.BASE_URL || !!process.env.IPFS_GATEWAY_URL);
   const context=await browser.newContext({hasTouch:true,viewport:{width:390,height:844}});

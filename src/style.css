@@ -144,13 +144,14 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .actions .details-toggle { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #a8bd9b; }
 .actions .details-toggle:hover { background: #2b3926; color: #d1e4c5; }
 .details-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
-.detail-actions { display: flex; justify-content: flex-end; margin-top: 14px; padding-top: 10px; border-top: 1px solid #2d3829; }
+.detail-actions { display: flex; justify-content: flex-end; margin-top: 8px; padding-top: 8px; border-top: 1px solid #2d3829; }
 .detail-actions .remove-address { padding: 6px 10px; border: 1px solid #514036; background: transparent; color: #c7a592; font-size: 11px; }
 .detail-actions .remove-address:hover { border-color: #8b5a47; background: #302219; color: #edc5af; }
 .wallet-details[hidden] { display: none; }
 .wallet-details > td { background: #121b11; border-bottom: 1px solid #35422f; padding: 0; }
-.detail-inner { padding: 13px 16px; width: min(1100px, 100cqi); position: sticky; left: 0; }
-.detail-content { min-width: 0; }
+.detail-inner { padding: 10px 14px; width: min(1100px, 100cqi); position: sticky; left: 0; }
+.detail-content { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.detail-content > .verification-panel, .detail-content > .detail-disclosure, .detail-content > .retrieval-log { margin: 0; }
 .detail-content:focus-visible { outline: 2px solid #b8ec8c; outline-offset: 2px; }
 .full-address { font: 12px ui-monospace, monospace; color: #c1d6b5; overflow-wrap: anywhere; }
 .read-history { display: grid; gap: 10px; margin: 3px 0 12px; }
@@ -168,15 +169,15 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .history-token .token-icon { width: 17px; height: 17px; flex-basis: 17px; font-size: 8px; }
 .read-times time { font-variant-numeric: tabular-nums; }
 @media (max-width: 720px) { .snapshot-time { flex-basis: 100%; margin-left: 0; } }
-.activity { font-size: 11px; color: #9fb492; border-top: 1px solid #2d3829; margin-top: 10px; padding-top: 9px; }
-.activity > p { height: 36px; overflow: hidden; margin: 0 0 8px; line-height: 1.6; }
-.activity-item { display: flex; align-items: center; gap: 8px; height: 52px; margin-top: 8px; line-height: 1.6; }
+.activity { font-size: 11px; color: #9fb492; border-top: 1px solid #2d3829; padding-top: 4px; }
+.activity > p { height: 18px; overflow: hidden; margin: 0; line-height: 1.6; }
+.activity > p:empty { height: 0; }
+.activity-item { display: flex; align-items: center; gap: 8px; height: 40px; line-height: 1.6; }
 .activity-indicator { flex: 0 0 12px; width: 12px; }
 .activity-item > div { min-width: 0; flex: 1; }
 .activity-item > .spinner { margin-top: 3px; }
 .activity-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500; display: block; }
 .activity-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; font: 10px/1.7 ui-monospace, monospace; color: #7c9370; overflow-wrap: anywhere; }
-.activity-item.received strong { color: #b3d29d; }
 .activity-item.failed strong { color: #eeb69b; }
 .empty { padding: 28px 18px; text-align: center; }
 .empty h3 { font-size: 14px; font-weight: 500; margin: 0 0 8px; }
@@ -205,7 +206,7 @@ input::placeholder, textarea::placeholder { color: #687462; }
   .scroll-hint { display: block; color: #819777; font-size: 10px; margin: 0 0 7px; }
   .balances > th, .balances > td { padding: 6px 11px; }
   .address-value { font-size: 10px; }
-  .detail-inner { padding: 12px; }
+.detail-inner { padding: 10px; }
 }
 
 .token-icon { display: inline-flex; flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; overflow: hidden; background: #32422a; color: #c9dfb9; align-items: center; justify-content: center; font: 9px ui-monospace, monospace; letter-spacing: 0; }
@@ -319,7 +320,7 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .verification-panel.is-finished { padding: 9px 12px; }
 .verification-panel.is-finished .verification-stages, .verification-panel.is-finished .progress-clock, .verification-panel.is-finished .progress-requests { display: none; }
 .activity.is-finished { margin-top: 0; padding-top: 0; border: 0; }
-.activity.is-finished > p { height: auto; margin: 8px 0; }
+.activity.is-finished > p { height: auto; margin: 0; }
 .activity.is-finished .activity-item { display: none; }
 .verification-panel { margin: 12px 0; padding: 10px 12px; border: 1px solid #3b4b31; border-radius: 9px; background: #182116; }
 .verification-stages { height: 18px; align-content: start; display: flex; flex-wrap: wrap; gap: 4px 8px; list-style: none; margin: 0 0 8px; padding: 0; color: #718168; font-size: 9px; line-height: 12px; }
@@ -329,8 +330,8 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .progress-heading { display: grid; gap: 4px; }
 .progress-heading strong { height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d2e5c5; font-size: 12px; font-weight: 550; }
 .progress-clock { height: 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block; color: #a4b596; font: 10px/1.6 ui-monospace, monospace; }
-.progress-requests { height: 104px; overflow: clip; margin-top: 8px; }
-.progress-request { height: 38px; margin-top: 4px; padding: 2px 8px; border-radius: 6px; background: #111a10; }
+.progress-requests { display: flow-root; height: 96px; overflow: clip; margin-top: 4px; }
+.progress-request { height: 38px; margin-top: 2px; padding: 2px 8px; border-radius: 6px; background: #111a10; }
 .progress-request p { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 0; font: 10px/12px ui-monospace, monospace; color: #c8d9bc; overflow-wrap: anywhere; }
 .progress-request span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: block; font-size: 9px; line-height: 10px; color: #97ab89; margin-bottom: 0; }
 .verification-panel .verification-progress, .progress-hint { margin: 8px 0 0; color: #92a786; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
@@ -362,11 +363,11 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 @media (max-width: 720px) { .log-stream li { grid-template-columns: 1fr; gap: 2px; } }
 
 .detail-disclosure { margin: 10px 0; border: 1px solid #35452d; border-radius: 7px; }
-.detail-disclosure > summary { height: 36px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail-disclosure > summary { height: 32px; padding-top: 7px; padding-bottom: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .disclosure-body { padding: 0 12px; display: flow-root; }
 
 .progress-request .progress-clock { font-size: 9px; line-height: 12px; height: 12px; }
-.progress-requests > .progress-hint { font-size: 9px; line-height: 12px; margin: 8px 0 0; }
+.progress-requests > .progress-hint { font-size: 9px; line-height: 12px; margin: 4px 0 0; }
 
 .connection-heading strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connection-heading button { flex: 0 0 auto; }
