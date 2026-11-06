@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="How Anonfolio works: illustrated guide to Anon-RPC, Tor and direct HTTPS, Helios finalized-state verification, Uniswap TWAP pricing, storage and static deployment."><meta name="referrer" content="no-referrer"><title>How Anonfolio works · System guide</title><style>
+:root{color-scheme:dark;--paper:#101610;--panel:#182218;--line:#344332;--ink:#e7eddf;--dim:#a7b49f;--green:#c2ea9d;--blue:#9ccbd1;--warm:#e2bf85;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-synthesis:none}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:28px}body{margin:0;background:var(--paper);color:var(--ink);line-height:1.75;font-size:16px}a{color:var(--green);text-decoration-thickness:1px;text-underline-offset:4px;overflow-wrap:anywhere}a:hover{color:#fff}button{font:inherit;color:inherit;cursor:pointer}a:focus-visible,button:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--green);outline-offset:4px}.skip{position:absolute;top:-100px;left:20px;background:var(--paper);padding:12px;z-index:10}.skip:focus{top:10px}.masthead{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line);padding:20px max(24px,calc((100% - 1240px)/2));font-size:12px}.brand{white-space:nowrap;display:flex;align-items:center;gap:8px;text-decoration:none;font-size:20px;font-weight:650;color:var(--ink)}.brand svg{width:27px;height:27px}.masthead-actions a{white-space:nowrap}.masthead-actions{display:flex;gap:20px;align-items:center}.print{border:1px solid var(--line);background:transparent;padding:5px 10px;border-radius:6px}.layout{display:grid;grid-template-columns:218px minmax(0,920px);gap:54px;max-width:1240px;margin:auto;padding:44px 24px 80px}.contents{position:sticky;top:24px;align-self:start;font-size:12px;line-height:1.55}.contents summary{font-weight:600;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);cursor:pointer;margin-bottom:14px}.contents ol{list-style:none;padding:0;margin:0;counter-reset:toc}.contents li{counter-increment:toc;margin:0}.contents a{display:flex;gap:10px;color:var(--dim);text-decoration:none;border-left:1px solid var(--line);padding:7px 10px}.contents a:before{flex:0 0 18px;white-space:nowrap;content:counter(toc,decimal-leading-zero);color:#7e9570;font:10px/1.9 ui-monospace,monospace}.contents a:hover{color:var(--green);border-color:var(--green)}main{min-width:0}.eyebrow{text-transform:uppercase;letter-spacing:2px;font:11px/1.6 ui-monospace,monospace;color:var(--green)}h1{font-size:clamp(32px,4.5vw,54px);line-height:1.12;letter-spacing:-1.6px;margin:14px 0 18px;font-weight:600}.lead{font-size:19px;line-height:1.65;color:#c0cfb5;max-width:720px}.meta{display:flex;gap:8px;flex-wrap:wrap;font:11px/1.5 ui-monospace,monospace;color:var(--dim);margin:24px 0 8px}.meta span{border:1px solid var(--line);padding:5px 9px;border-radius:4px}.chapter{border-top:1px solid var(--line);padding-top:26px;margin-top:42px;scroll-margin-top:24px}h2{display:flex;align-items:baseline;gap:12px;line-height:1.35;font-weight:550;font-size:25px;letter-spacing:-.5px;margin:0 0 24px}.chapter-number{flex-shrink:0;color:#91ae7c;font:12px ui-monospace,monospace}h3{font-size:18px;line-height:1.5;font-weight:550;margin:30px 0 12px;color:#d4e2c8}h4{font-size:15px;font-weight:550;margin:0 0 14px}p{margin:14px 0;color:#b9c6af}strong{color:var(--ink);font-weight:600}li{color:#b9c6af;padding-left:3px;margin:8px 0}ul,ol{padding-left:24px}code{background:#1e2a1d;color:#c9e3b4;border-radius:4px;padding:2px 5px;font:12px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}pre{padding:18px 20px;background:#0b110b;border:1px solid var(--line);border-radius:8px;overflow:auto;font-size:12px;line-height:1.75;margin:22px 0;tab-size:2}pre code{padding:0;background:transparent;color:#bed6b2;overflow-wrap:normal;font-size:inherit}.table-wrap{overflow:auto;max-width:100%;margin:22px 0;border:1px solid var(--line);border-radius:8px}table{border-collapse:collapse;width:100%;font-size:12px;line-height:1.7;text-align:left}th,td{border-bottom:1px solid #2d3a2a;padding:12px 14px;vertical-align:top;min-width:135px}th{color:#d1dfc6;font-weight:550;background:#1b281a}td{color:var(--dim)}tbody tr:last-child>*{border-bottom:0}caption{caption-side:top;text-align:left;padding:12px 14px;color:#d1dfc6;background:#172016;font-weight:550}figure{margin:24px 0}.source-reference{margin:20px 0;border:1px solid var(--line);border-radius:8px;padding:12px 16px}.source-reference>summary{cursor:pointer;color:var(--green);font-size:13px}.source-reference .table-wrap{border:0;margin-bottom:0}figcaption{font-size:11px;color:#92a387;line-height:1.65;padding-top:10px;max-width:80ch}.flow{display:grid;grid-template-columns:repeat(var(--flow-count,4),minmax(0,1fr));gap:18px;padding:22px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.flow:has(>.flow-node:nth-child(5)){grid-template-columns:repeat(5,minmax(0,1fr))}.flow-node{position:relative;font-size:12px;line-height:1.65;min-width:0}.flow-node:not(:last-child):after{content:'→';position:absolute;right:-16px;top:0;color:var(--green)}.flow-node .step{display:block;color:#89a379;font:10px ui-monospace,monospace;margin-bottom:10px}.flow-node strong{display:block;color:#def0d1;margin-bottom:8px;font-size:13px;font-weight:550}.flow-node>span:last-child{display:block;color:var(--dim);overflow-wrap:anywhere}.principles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:24px 0}.principles>div{border-top:2px solid #728f5d;padding:16px;background:#152014;border-radius:0 0 8px 8px}.principles span{font:10px ui-monospace,monospace;color:#97b380;display:block;margin-bottom:12px}.principles strong{font-size:15px}.principles p{font-size:12px;line-height:1.7;margin-bottom:0}.visual{padding:22px;border:1px solid var(--line);border-radius:10px;background:#141e13;margin:24px 0}.visual-head h3{margin:0 0 8px}.visual-head p{font-size:12px;color:var(--dim);margin:0 0 18px}.visual .flow{padding:18px;background:#192518}.network-flow{grid-template-columns:repeat(5,minmax(0,1fr))}.mode-tabs{gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:20px}.interactive{display:none}.js .interactive{display:flex}.mode-tabs button{font-size:12px;padding:8px 12px;border:1px solid var(--line);border-radius:5px;background:#10190f;color:var(--dim)}.mode-tabs [aria-selected=true]{background:#c2ea9d;color:#182411;border-color:#c2ea9d}.route-panel[hidden]{display:none}.route-note{font-size:12px;color:#aabda0}.callout{padding:18px 20px;border-left:3px solid var(--warm);background:#262418;border-radius:0 7px 7px 0;font-size:13px;color:#d5cba9}.decision-flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.decision{padding:18px 20px;background:var(--panel);border:1px solid var(--line);border-radius:8px;font-size:13px;color:#dbe9d0}.decision:before{content:'↓';display:inline-block;color:var(--green);margin-right:8px}.decision span{display:block;font-size:12px;color:var(--dim);margin-top:9px}.chart-figure{max-width:100%;overflow-x:auto}.chart{display:block;width:100%;min-width:620px;height:auto;overflow:visible}.svg-panel{fill:#172217;stroke:#344332}.chart text{fill:#b9c6af;font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px}.chart .svg-label{font-family:ui-monospace,monospace;font-size:12px;fill:#c3d7b4}.chart .svg-small{font-size:14px}.svg-balance{fill:#a8ca83}.svg-price{fill:#82b5bf}.axis{fill:none;stroke:#5c7254;stroke-width:1.5}.price-line{fill:none;stroke:#a7cb84;stroke-width:3;stroke-linejoin:round}.mean-line{fill:none;stroke:#91bfc8;stroke-width:2;stroke-dasharray:6 5}.screenshot{display:block;max-width:100%;height:auto;border:1px solid var(--line);border-radius:10px}.guide-footer{border-top:1px solid var(--line);padding-top:24px;margin-top:42px;font-size:12px;color:var(--dim)}.guide-footer a{margin-right:16px}.no-js-note{font-size:12px}
+@media(max-width:1000px){.layout{grid-template-columns:170px minmax(0,1fr);gap:28px}.flow,.flow:has(>.flow-node:nth-child(5)),.network-flow{grid-template-columns:1fr;gap:24px}.flow-node{padding-left:36px}.flow-node .step{position:absolute;left:0;top:2px}.flow-node:not(:last-child):after{content:'↓';left:0;right:auto;top:auto;bottom:-22px}.flow-node strong{margin-bottom:3px}.principles{grid-template-columns:1fr}.principles>div{padding:14px 18px}.principles p{margin-top:8px}}
+@media(max-width:720px){body{font-size:15px}.masthead{padding:16px;gap:12px}.masthead-actions{gap:12px;font-size:11px}.layout{display:block;padding:24px 16px 48px}.contents{position:static;margin:0 0 28px;padding-bottom:14px;border-bottom:1px solid var(--line)}.contents ol{columns:2;column-gap:12px}.contents li{break-inside:avoid}.contents a{font-size:11px;padding:6px}.contents summary{margin-bottom:8px}h1{letter-spacing:-1px}.lead{font-size:17px}h2{font-size:22px}.visual{padding:16px}.decision-flow{grid-template-columns:1fr}.chart .svg-small{font-size:15px}pre{padding:14px}.table-wrap{margin:18px 0}th,td{padding:10px 12px}.meta{font-size:10px}.chapter{margin-top:32px}.js .print{display:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{:root{color-scheme:light;--paper:white;--panel:#f4f6f1;--line:#bac4b3;--ink:#172014;--dim:#34472e;--green:#375b21}.masthead,.contents,.mode-tabs,.skip{display:none!important}.layout{display:block;padding:0;max-width:none}body{background:white;color:#172014;font-size:11pt}.route-panel[hidden]{display:block}.visual,.flow,.principles>div,.decision{background:#f4f6f1}.flow-node strong,h3,h4{color:#172014}.lead,.eyebrow,.meta,.flow-node>span:last-child,figcaption{color:#34472e}p,li{color:#34472e}pre,code{background:#edf1e8;color:#172014}figure,.flow,.decision-flow{break-inside:avoid}.chapter{break-before:auto}a{color:#284d1b}.svg-panel{fill:#f4f6f1}.chart text,.chart .svg-label{fill:#172014}.callout{background:#f3efe5;color:#463d2b}}
+</style></head><body><a class="skip" href="#guide">Skip to guide</a>
+<header class="masthead"><a class="brand" href="../" aria-label="Open Anonfolio portfolio"><svg viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#c2ea9d"/><text x="14" y="21" text-anchor="middle" fill="#172411" font-family="system-ui,sans-serif" font-size="27" font-weight="700">a</text></svg>anonfolio.</a>
+<div class="masthead-actions"><a href="../">Open portfolio ↗</a><button class="print interactive" type="button">Print / save PDF</button>
+</div>
+</header>
+<div class="layout">
+<nav class="contents" aria-label="Guide contents"><details open><summary>In this guide</summary>
+<ol>
+<li><a href="#overall-explanation">Overall explanation</a>
+</li>
+<li><a href="#architecture-and-source-map">Architecture and source map</a>
+</li>
+<li><a href="#startup-and-the-refresh-lifecycle">Startup and the refresh lifecycle</a>
+</li>
+<li><a href="#addresses-tokens-and-the-interface">Addresses, tokens, and the interface</a>
+</li>
+<li><a href="#connection-modes-and-execution-transport">Connection modes and execution transport</a>
+</li>
+<li><a href="#consensus-and-balance-verification">Consensus and balance verification</a>
+</li>
+<li><a href="#direct-pool-twap-estimates">Direct-pool TWAP estimates</a>
+</li>
+<li><a href="#totals-and-number-formatting">Totals and number formatting</a>
+</li>
+<li><a href="#persistence-offline-use-and-retries">Persistence, offline use, and retries</a>
+</li>
+<li><a href="#configuration-builds-and-publishing">Configuration, builds, and publishing</a>
+</li>
+<li><a href="#testing-and-maintenance">Testing and maintenance</a>
+</li>
+</ol></details>
+</nav>
+<main id="guide">
+<div class="eyebrow">System guide / Ethereum mainnet
+</div>
+<h1>How Anonfolio works
+</h1>
+<p class="lead">From a pasted address to a verified balance: follow the data, the network route and the checks that connect them.
+</p>
+<div class="meta"><span>Static browser application</span><span>Tor by default</span><span>Verified finalized state</span><span>Implementation checked · 6 Nov 2026</span>
+</div><noscript>
+<p class="no-js-note">All explanations and diagrams remain readable without JavaScript. Both network modes are shown below.
+</p></noscript>
+<section class="chapter" id="overall-explanation" aria-labelledby="heading-overall-explanation">
+<h2 id="heading-overall-explanation"><span class="chapter-number">01</span>Overall explanation
+</h2>
+<div class="principles">
+<div><span>01 / Read</span><strong>Local watchlist</strong>
+<p>No wallet connection or analytics. Names and saved lists stay in this browser.
+</p>
+</div>
+<div><span>02 / Route</span><strong>Tor by default</strong>
+<p>Anon-RPC separates address routes. Direct HTTPS is an explicit alternative.
+</p>
+</div>
+<div><span>03 / Verify</span><strong>Proof before trust</strong>
+<p>Finalized headers, state witnesses and local EVM execution establish balances.
+</p>
+</div>
+</div>
+<p>Anonfolio is a static, browser-based Ethereum mainnet portfolio reader. A user adds addresses to a watchlist, chooses which assets to track, and sees their balances, per-token totals, and estimated portfolio value. ETH and WETH are included initially, and other ERC-20 tokens can be added in Settings. Addresses can have names and locally generated blockie icons. The application never asks the user to connect a wallet or sign a transaction.
+</p>
+<p>The application combines two separate protections. <strong>Anon-RPC and Tor provide a private network route</strong> in the default Tor mode. Settings also offers explicit <strong>Direct HTTPS (not anonymous)</strong>: providers then see the browser’s IP and requested addresses; this mode never starts Tor. <strong>Helios verifies Ethereum state in the browser</strong> so an RPC response alone cannot establish a balance. Each refresh uses one verified finalized Ethereum block, and its price estimates use that same block. Finalized state can lag the chain head; displayed results are not reads of the latest unfinalized block.
+</p>
+<p>Price estimates use a 30-minute Uniswap v3 time-weighted average price (TWAP) from one qualifying direct token/quote pool. USDC is the default quote token. A custom ERC-20 quote token can be configured. Missing prices leave the corresponding assets unpriced and make the estimated portfolio total partial.
+</p>
+<p>The browser keeps the watchlist, settings, icons, and previously retrieved values in local storage. A production service worker caches the application files, allowing an already visited page to reopen offline. Cached balances and estimates remain historical until a successful refresh replaces them.
+</p>
+<p>There is no application backend or portfolio database. Bun runs development tools and an optional static server; Vite builds the HTML, JavaScript, CSS, images, and WebAssembly files for an HTTPS host or IPFS gateway.
+</p>
+</section>
+<section class="chapter" id="architecture-and-source-map" aria-labelledby="heading-architecture-and-source-map">
+<h2 id="heading-architecture-and-source-map"><span class="chapter-number">02</span>Architecture and source map
+</h2>
+<figure>
+<div class="flow " style="--flow-count:4" role="list">
+<div class="flow-node" role="listitem"><span class="step">01</span><strong>Browser UI</strong><span>Named addresses, tokens, historical values and controls.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">02</span><strong>Helios verifier</strong><span>Consensus signatures, finalized state and local EVM.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">03</span><strong>Transport bridge</strong><span>Restricted messages become allowed network requests.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">04</span><strong>RPC / beacon providers</strong><span>Supply witnesses and headers; never decide what is trusted.</span>
+</div>
+</div>
+<figcaption>01 / Architecture. The browser verifies provider data before a balance becomes trusted. The network route is selected separately.
+</figcaption>
+</figure>
+<p>The main browser thread owns application state and rendering. In Tor mode it communicates with two different workers: the Anon-RPC worker supplies private networking, while the Helios worker performs consensus verification and local contract execution.
+</p>
+<p>In Tor mode, both consensus and execution traffic use Anon-RPC. Consensus has its own isolation key and carries no watched wallet addresses. Ordinary browser HTTP loads local application assets, including the pinned Tor bundle and Helios WASM; it does not query Ethereum execution or beacon endpoints in Tor mode. HTTPS mode deliberately uses ordinary browser fetch for these endpoints, with credentials omitted, no referrer, no redirects, no request caching, and the same method/destination restrictions. Tor failure never selects HTTPS automatically.
+</p>
+<details class="source-reference"><summary>Source map · implementation files</summary>
+<div class="table-wrap" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">File or directory</th><th scope="col">Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/main.ts"><code>src/main.ts</code></a></td><td>Page construction, application state, event handlers, refresh orchestration, and rendering.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/dom.ts"><code>src/dom.ts</code></a></td><td>In-place reconciliation with stable request, phase, block and error identities.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/viewport.ts"><code>src/viewport.ts</code></a></td><td>Portfolio scroll anchoring, visible-log-tail following and open-disclosure height retention.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/addresses.ts"><code>src/addresses.ts</code></a>, <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/address-display.ts"><code>src/address-display.ts</code></a></td><td>Address/name validation and the reusable address/blockie component.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/tokens.ts"><code>src/tokens.ts</code></a>, <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/icons.ts"><code>src/icons.ts</code></a></td><td>Token definitions, validation, presets, and local icon handling.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/connection.ts"><code>src/connection.ts</code></a></td><td>Selected connection mode, bounded Tor lifecycle, slow notice, cancellation and startup diagnostics.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/https-transport.ts"><code>src/https-transport.ts</code></a></td><td>Explicit, non-anonymous HTTPS capability for configured RPCs and approved consensus URLs.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/tor-bootstrap.ts"><code>src/tor-bootstrap.ts</code></a>, <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/scripts/update-tor-bootstrap.ts"><code>scripts/update-tor-bootstrap.ts</code></a></td><td>Bounded public-directory mirror loading and atomic publication.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/bootstrap.ts"><code>src/bootstrap.ts</code></a>, <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/vendor/tor/README.md"><code>vendor/tor</code></a></td><td>Local specifier metadata and unchanged hash-pinned Tor bundle.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/config.ts"><code>src/config.ts</code></a>, <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/settings.ts"><code>src/settings.ts</code></a></td><td>Deployment defaults, runtime network settings, and the Tor worker digest pin.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/balances.ts"><code>src/balances.ts</code></a></td><td>Wallet/balance models, verification events, and amount formatting.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/verification/client.ts"><code>src/verification/client.ts</code></a></td><td>Main-thread sessions and messages to/from the Helios worker.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/verification/helios.worker.ts"><code>src/verification/helios.worker.ts</code></a></td><td>Shared consensus client, serialized refreshes, verified balance and oracle execution.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/verification/transport.ts"><code>src/verification/transport.ts</code></a></td><td>The execution RPC capability that uses the explicitly selected transport.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/verification/proofs.ts"><code>src/verification/proofs.ts</code></a>, <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/verification/trust.ts"><code>src/verification/trust.ts</code></a></td><td>Proof/code checks, block binding, checkpoint policy, and WASM pin.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/pricing.ts"><code>src/pricing.ts</code></a></td><td>Direct-pool discovery, qualification, TWAP calculations, quote caches, and pricing settings.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/holdings.ts"><code>src/holdings.ts</code></a></td><td>Separate current proven zeroes from visible holdings without hiding unavailable or stale reads.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/totals.ts"><code>src/totals.ts</code></a></td><td>Token totals and rational estimated portfolio totals.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/errors.ts"><code>src/errors.ts</code></a></td><td>Bounded/redacted failure messages and cause-specific recovery guidance.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/storage.ts"><code>src/storage.ts</code></a>, <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/src/retries.ts"><code>src/retries.ts</code></a></td><td>Persistent snapshots, migrations, and retry scheduling.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/vendor/helios/README.md"><code>vendor/helios</code></a></td><td>Reviewed Helios WASM, adapted JavaScript HTTP bridge, license, and review evidence.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/vite.config.ts"><code>vite.config.ts</code></a>, <a href="https://github.com/KillariDev/anonfolio/tree/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/scripts"><code>scripts</code></a></td><td>Build configuration, offline shell generation, static serving, and IPFS publishing/checks.</td>
+</tr>
+<tr><td><a href="https://github.com/KillariDev/anonfolio/tree/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/tests"><code>tests</code></a>, <a href="https://github.com/KillariDev/anonfolio/tree/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/e2e"><code>e2e</code></a></td><td>Unit/adversarial tests and browser integration tests.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</details>
+</section>
+<section class="chapter" id="startup-and-the-refresh-lifecycle" aria-labelledby="heading-startup-and-the-refresh-lifecycle">
+<h2 id="heading-startup-and-the-refresh-lifecycle"><span class="chapter-number">03</span>Startup and the refresh lifecycle
+</h2>
+<figure>
+<div class="flow " style="--flow-count:5" role="list">
+<div class="flow-node" role="listitem"><span class="step">01</span><strong>Restore / request</strong><span>Show historical values immediately. Refresh only the selected address.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">02</span><strong>Wait / queue</strong><span>Prepare transport; wait for the shared verifier to release the previous address.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">03</span><strong>Freeze a block</strong><span>Validate consensus and pin hash, state root, number and timestamp.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">04</span><strong>Prove + price</strong><span>Concurrent balance and oracle jobs use the same address route and block.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">05</span><strong>Commit / recover</strong><span>Save individual results, join matching quotes, clear spinners and retry failed reads.</span>
+</div>
+</div>
+<figcaption>02 / Refresh flow. A successful price cannot turn an unverified balance into a holding value.
+</figcaption>
+</figure>
+<figure class="chart-figure" tabindex="0"><svg class="chart" role="img" aria-labelledby="parallel-reads-isolated-addresses-title parallel-reads-isolated-addresses-desc" viewBox="0 0 720 258" xmlns="http://www.w3.org/2000/svg"><title id="parallel-reads-isolated-addresses-title">Parallel reads, isolated addresses</title><desc id="parallel-reads-isolated-addresses-desc">Two balance jobs and two price jobs can overlap inside one wallet session. Different addresses remain serialized. Bars show permitted overlap, not observed durations.</desc><rect x="10" y="12" width="700" height="232" rx="12" class="svg-panel"/><text x="30" y="42" class="svg-label" text-anchor="start">ONE ACTIVE ADDRESS · one frozen block</text><text x="30" y="81" class="svg-small" text-anchor="start">Balance lane · up to 2 jobs</text><rect x="275" y="66" width="265" height="17" rx="4" class="svg-balance"/><rect x="275" y="89" width="265" height="17" rx="4" class="svg-balance"/><text x="30" y="139" class="svg-small" text-anchor="start">Price lane · up to 2 jobs</text><rect x="275" y="124" width="265" height="17" rx="4" class="svg-price"/><rect x="275" y="147" width="265" height="17" rx="4" class="svg-price"/><text x="30" y="204" class="svg-small" text-anchor="start">Join each quote with a proven balance from that same block.</text><text x="30" y="228" class="svg-small" text-anchor="start">Next address starts after this route is released.</text></svg>
+<figcaption>03 / Concurrency schematic, not a speed measurement. Each price job also bounds fee-tier and pool reads to two at a time; ETH/WETH share their in-flight pool selection. On narrow screens, scroll the chart sideways.
+</figcaption>
+</figure>
+<p>When the page opens, <code>main.ts</code> loads network configuration, pricing settings, and the saved portfolio. Saved values can render immediately. The application starts the selected connection mode, and each restored address requests a refresh. The Helios worker is created lazily when verification is first requested.
+</p>
+<p>A refresh follows this sequence:
+</p>
+<ol>
+<li>Prepare activity for the selected address. An already-running refresh records one follow-up request rather than starting a second copy.
+</li>
+<li>Wait for the selected transport, then queue the address in the shared verifier. Queued time does not consume its active-session timeout.
+</li>
+<li>Initialize the pinned Helios binary and synchronize shared consensus if needed. Freeze one verified finalized block hash, state root and timestamp.
+</li>
+<li>Start balance checks and direct-pool oracle work concurrently at that frozen block. Network witnesses are verified before local execution can use them.
+</li>
+<li>Save each proven amount immediately. Attach an early quote only after a successful balance proof with the same block hash; unavailable prices do not invalidate proven balances.
+</li>
+<li>Finish the address attempt, clear active spinners and release the next queued address. Retain historical amounts on failure and schedule bounded recovery.
+</li>
+</ol>
+<p>Addresses have independent UI state and retry schedules, but execution in Helios is <strong>serialized across addresses</strong>. This keeps one shared consensus client and ensures every execution request has an unambiguous wallet route. A large watchlist therefore queues work rather than executing all wallets&#x27; contracts simultaneously.
+</p>
+</section>
+<section class="chapter" id="addresses-tokens-and-the-interface" aria-labelledby="heading-addresses-tokens-and-the-interface">
+<h2 id="heading-addresses-tokens-and-the-interface"><span class="chapter-number">04</span>Addresses, tokens, and the interface
+</h2>
+<figure><a class="screenshot-link" href="images/portfolio.png" target="_blank" rel="noreferrer" aria-label="Open the application image at full size"><img class="screenshot" src="images/portfolio.png" width="1440" height="1000" loading="lazy" decoding="async" alt="Anonfolio desktop fixture: per-token totals above ten tracked addresses, each showing ETH and USDC holdings without zero-balance entries."></a>
+<figcaption>Application image / deterministic browser-test fixture, not a live portfolio. Test addresses and amounts are illustrative; unpriced values deliberately show unavailable estimates. Select the image to open it at full size.
+</figcaption>
+</figure>
+<p>Address validation happens locally before the watchlist changes. Plain lists accept whitespace, commas, or semicolons. Named lists accept <code>Name | 0x…</code>, one entry per line. Invalid input rejects the addition as a whole; valid addresses are normalized and duplicates are removed. A single-address name field is also available. Names are trimmed, limited to 80 characters, and rejected if they contain control characters.
+</p>
+<p><code>addressDisplay()</code> renders a blockie, an optional name, and the address. The blockie is an address-seeded, mirrored 8×8 SVG grid generated without a library or network lookup. Full address text stays in the DOM and wraps when necessary. The component is used in table rows; expanded details do not repeat the address. Per-token activity does not repeat the address already displayed above it.
+</p>
+<p>A compact + button below the tracked-address table opens the address form; it supports keyboard activation, announces its expanded state, and retains bulk/named address entry. The form is open on an empty watchlist.
+</p>
+<p>The watchlist shows compact address rows with a blockie/name/address, estimated address value, refresh button and details control. Instead of repeating every tracked token in every address column, each address has a list of its relevant holdings: token icon/symbol, amount, quote estimate and status icon. Successful, verified, uncached zero balances are omitted from address holdings without a zero-count disclosure. Unknown, failed, legacy and cached balances remain visible, including stale nonzero amounts and failed refreshes of earlier zeroes. All-zero addresses retain their identity, estimate and controls without an empty-token list. Tracking, queries and totals still include every configured token; omitting zeroes affects display only.
+</p>
+<p>Desktop rows keep the address and holdings side by side. On phones, holdings wrap below the address without horizontal token scrolling. Financial values are never ellipsized; exceptionally long amounts wrap within their holding. Token-total cards and the overall portfolio value remain above the address list. Ordinary loading updates preserve reserved space. A local SVG chevron opens or closes each address pane. Remove address is at the bottom of expanded details and requires a confirmation showing its name and full address. Confirming removes the address and saved snapshot, cancels scheduled retries and updates totals. It does not undo an already submitted network request.
+</p>
+<p>The tracked-token list applies to every address. Native ETH is represented internally by the identifier <code>eth</code>; ERC-20 assets use their contract addresses. ETH and WETH use the same settings controls as custom tokens and can be removed and re-added. Removing all tokens preserves the address list while stopping balance reads.
+</p>
+<p>Custom token configuration includes a contract address, display symbol, decimals, and optional icon. Token identity is based on the address, so two contracts with the same symbol remain distinct. The symbol is user-supplied display metadata; it is not an authenticated token name.
+</p>
+<p>Icons use bundled assets or local raster uploads. Uploaded PNG, JPEG, and WebP files are limited to 1 MB, decoded in the browser, fitted into a 64×64 canvas, and saved as PNG data URLs. Missing images use a symbol badge. Remote icon URLs and uploaded SVGs are rejected. The application icon is a bundled SVG shared by the header and browser tab.
+</p>
+<p>Settings open behind the top-right gear. The panel contains tracked tokens, price estimates, and network configuration, and closes with Escape, its close button, or interaction outside the panel.
+</p>
+</section>
+<section class="chapter" id="connection-modes-and-execution-transport" aria-labelledby="heading-connection-modes-and-execution-transport">
+<h2 id="heading-connection-modes-and-execution-transport"><span class="chapter-number">05</span>Connection modes and execution transport
+</h2>
+<div class="visual network-visual">
+<div class="visual-head">
+<h3>Follow the network route
+</h3>
+<p>Interactive illustration only. These controls do not make requests or change app settings.
+</p>
+</div>
+<div class="mode-tabs interactive" role="tablist" aria-label="Network route illustration"><button id="tor-tab" role="tab" aria-controls="tor-route" aria-selected="true">Tor · default</button><button id="https-tab" role="tab" aria-controls="https-route" aria-selected="false" tabindex="-1">Direct HTTPS · explicit</button>
+</div>
+<section id="tor-route" class="route-panel" role="tabpanel" aria-labelledby="tor-tab">
+<h4>Tor route
+</h4>
+<div class="flow network-flow" style="--flow-count:5" role="list">
+<div class="flow-node" role="listitem"><span class="step">01</span><strong>Your browser</strong><span>Helios requests data. The main-thread bridge calls worker.fetch.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">02</span><strong>Anon-RPC sandbox</strong><span>Pinned tor-js runs Arti in WASM. A wallet isolation key selects a separate circuit context.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">03</span><strong>KPS gateway</strong><span>WebRTC/UDP bridge to Tor relays. Gateway identity is pinned by its certificate hash.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">04</span><strong>Tor circuit</strong><span>Guard → middle → exit. Circuits are built by the browser-side Tor client.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">05</span><strong>HTTPS provider</strong><span>RPC or beacon endpoint. HTTPS payload stays encrypted through the gateway and Tor exit.</span>
+</div>
+</div>
+<p class="route-note">The KPS gateway is a relay-connection bridge, not an Ethereum RPC proxy and not necessarily a Tor exit. A gateway IP such as <code>152.236.3.22:12298</code> and an execution URL such as <code>https://eth.drpc.org</code> serve different roles.
+</p>
+</section>
+<section id="https-route" class="route-panel" role="tabpanel" aria-labelledby="https-tab">
+<h4>Direct HTTPS route
+</h4>
+<div class="flow " style="--flow-count:3" role="list">
+<div class="flow-node" role="listitem"><span class="step">01</span><strong>Your browser</strong><span>User explicitly selects Direct HTTPS in Settings.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">02</span><strong>Restricted fetch</strong><span>Only configured execution URLs and approved beacon GETs. No credentials, referrer, redirects or request cache.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">03</span><strong>HTTPS provider</strong><span>Sees the browser IP plus the requests it serves. No Tor worker or KPS gateway is started.</span>
+</div>
+</div>
+<p class="route-note">The same Helios verification runs in both modes. A Tor outage never activates direct HTTPS automatically.
+</p>
+</section>
+</div>
+<p>The <a href="https://github.com/ethereum/tor-js/blob/d9d9612d10d3775ff100b70e96a291718191d856/README.md#circuit-isolation">pinned tor-js documentation</a> describes isolation: different keys do not share circuits, but may choose the same exit. Its <a href="https://github.com/ethereum/tor-js/blob/d9d9612d10d3775ff100b70e96a291718191d856/crates/tor-js-gateway/README.md">gateway implementation guide</a> describes the WebRTC/KPS relay bridge. Route separation reduces linkage; it does not guarantee distinct exit IPs or prevent timing correlation.
+</p>
+<p>In Tor mode, one Anon-RPC worker serves the application. Each watched address gets its own random isolation key; consensus uses a different shared key. Keys select circuit contexts locally, not RPC headers or identifiers sent to providers. The app prefers different execution operators for different addresses when available; a larger watchlist can reuse operators. Direct HTTPS strips isolation metadata before ordinary fetch.</p>
+<div class="table-wrap"><table><caption>Release defaults and their roles</caption><thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">Role</th></tr></thead><tbody>
+<tr><th scope="row">Tor gateway</th><td><code>152.236.3.22:12298</code> plus its pinned certificate hash</td><td>Development KPS bridge; configurable. A plain RPC URL cannot replace it.</td></tr>
+<tr><th scope="row">Execution operators</th><td><code>eth.drpc.org</code>, <code>ethereum-rpc.publicnode.com</code>, <code>rpc.ankr.com/eth</code></td><td>Configured proof/code/block endpoints, in default order; configurable.</td></tr>
+<tr><th scope="row">Consensus provider</th><td><code>ethereum-beacon-api.publicnode.com</code></td><td>Beacon light-client data; origin/path allowlist pinned in source.</td></tr>
+<tr><th scope="row">Directory mirror</th><td><code>./tor-bootstrap.json</code></td><td>Optional same-origin public bootstrap snapshot; a missing default file is allowed. Settings can choose an HTTPS mirror.</td></tr>
+</tbody></table></div>
+<div class="table-wrap">
+<table>
+<caption>Who can observe what?
+</caption>
+<thead>
+<tr><th>Party</th><th>Tor mode</th><th>Direct HTTPS mode</th>
+</tr>
+</thead>
+<tbody>
+<tr><th>App / IPFS host</th><td>Browser IP and fetched application files. Hosting traffic is ordinary HTTPS.</td><td>Same hosting visibility.</td>
+</tr>
+<tr><th>KPS gateway</th><td>Client IP, encrypted traffic, timing and relay connection targets; not the HTTPS RPC body.</td><td>Not used.</td>
+</tr>
+<tr><th>Tor exit</th><td>Destination connection metadata; HTTPS protects the RPC request body.</td><td>Not used.</td>
+</tr>
+<tr><th>Execution RPC</th><td>Exit IP; requested account/contract addresses, storage slots and block identifiers.</td><td>Browser IP and the same requested execution data.</td>
+</tr>
+<tr><th>Beacon API</th><td>Exit IP and consensus queries on a separate shared route; no watched-wallet list.</td><td>Browser IP and consensus queries.</td>
+</tr>
+<tr><th>Mirror / worker-download host</th><td>Browser IP when the public directory mirror is fetched, or a manual worker update is requested.</td><td>Same for an explicitly requested worker update; no Tor bootstrap is needed for HTTPS reads.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="table-wrap">
+<table>
+<caption>Request inventory: which fetch goes where?
+</caption>
+<thead>
+<tr><th>Request</th><th>Tor mode</th><th>Data / condition</th>
+</tr>
+</thead>
+<tbody>
+<tr><th>App, images, Helios WASM, bundled Tor worker</th><td>Ordinary browser asset requests</td><td>Static files; no watchlist payload. Digests checked before verifier/worker execution.</td>
+</tr>
+<tr><th>Public directory manifest / archive</th><td>Ordinary fetch to app origin or configured HTTPS mirror</td><td>Public bootstrap data; freshness, size, SHA-256 and Tor directory signatures checked.</td>
+</tr>
+<tr><th>Beacon consensus GETs</th><td>Anon-RPC, shared consensus isolation key</td><td>Approved beacon paths only; no wallet-address payload.</td>
+</tr>
+<tr><th>Proof, code and execution-block JSON-RPC</th><td>Anon-RPC, active address isolation key</td><td>Account or contract, requested slots and pinned block. No mixed-address batches.</td>
+</tr>
+<tr><th>Token and pricing contract calls</th><td>Local EVM; witnesses use the address route</td><td>No remote balanceOf/observe eth_call. Decimals and symbols are supplied in Settings.</td>
+</tr>
+<tr><th>Update Tor worker from PublicNode</th><td>Explicit, direct HTTPS exception</td><td>User action only: reads specifier metadata at one block, downloads HTTPS mirrors and verifies the discovered hash. No watched addresses are sent.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="callout">The last row is a recovery action with a different trust decision. Applying its result trusts PublicNode’s supplied Tor-worker digest/code. Ordinary startup uses bundled local metadata and never discovers a worker over Ethereum RPC.
+</p>
+<p>Tor is the default for fresh installs and legacy saved settings. Direct HTTPS requires an explicit Settings selection, is persisted, and is labeled “not anonymous” in the header. Saving reloads the page so an old Tor/HTTPS capability cannot continue sending requests under a newly selected mode. Both modes retain local Helios consensus/proof/code/storage verification. Direct HTTPS is a networking alternative, never an unverified balance fallback. The configured endpoints are shared between modes; the first default is <a href="https://drpc.org/docs/ethereum-api">dRPC’s public HTTPS endpoint</a>, with PublicNode also configured. Execution providers must support finalized-block proofs and EIP-1898 block hashes; Direct HTTPS additionally requires browser CORS support.
+</p>
+<h3 id="tor-startup-and-directory-mirrors">Tor startup and directory mirrors
+</h3>
+<p>The entire configured gateway pool is passed to one worker. Tor-js performs its own gateway distribution/backoff; the application does not race workers or rotate wallet isolation keys. One public development demo is available by default. No additional production gateway is claimed to be provisioned. Follow <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/deploy/tor-gateways/README.md">gateway deployment</a> to run hosts on separate providers and ship their pinned addresses with <code>VITE_ANON_GATEWAYS</code>. Merely adding ordinary Tor relay IPs cannot replace KPS gateways.
+</p>
+<p>Cold startup has a 30-second soft notice and a five-minute readiness deadline. The same pending worker survives the notice, preserving bootstrap and guard-backoff progress. Cancel aborts startup, closes the worker, clears automatic connection/wallet retries and leaves saved values available. Retry connection explicitly resumes after cancellation. Timeout/error still closes the old worker and ignores late readiness. Header stages are derived only from corresponding directory/gateway/guard/circuit diagnostics; logs retain the underlying warnings. Circuit percentages and live gateway reachability are not invented.
+</p>
+<p>Before creating Tor, the app optionally loads <code>./tor-bootstrap.json</code> relative to its application base (including an IPFS path), or the configured HTTPS mirror. A six-hour manifest-age limit, an eight-second combined timeout, bounded manifest/archive sizes (4 KiB / 8 MiB), same-origin archive URLs, and SHA-256 checks reject missing/stale/oversized/corrupted mirrors. Requests omit credentials and referrers. Valid bytes enter the existing pinned worker as <code>config.bootstrap</code>; Arti still authenticates directory signatures. Failure falls back to the saved directory or gateways, without direct Ethereum requests. The public-directory request itself contains no wallet data.
+</p>
+<p><code>bun run bootstrap:update /path/to/gateway/data/bootstrap.zip.zst [output-directory=public]</code> publishes content-addressed bytes and atomically updates the manifest. It refuses source files older than six hours. Refresh hourly beside the gateway and publish to the static document root, or include the files in a new build/IPFS release. An immutable IPFS snapshot expires and then uses ordinary Tor bootstrap unless a maintained HTTPS mirror is configured. No scheduled hosting service is created by the app.
+</p>
+<h3 id="pinned-tor-worker">Pinned Tor worker
+</h3>
+<p><code>Connection.get()</code> shares one pending startup promise and one long-lived <code>AnonRpcWorker</code>. The application bundles unchanged Tor worker bytes with its source-pinned hash. A local metadata provider answers only <code>workerHash()</code> and <code>workerResolvers()</code> for the expected specifier identity; unsupported requests are rejected rather than forwarded to an RPC. By default the only resolver is the same-origin bundled asset. The harness verifies its bytes before starting its sandbox. Startup has no chain lookup or remote resolver fallback. An unavailable or tampered bundle fails closed.
+</p>
+<p>Settings → Tor worker provides an explicit public recovery path in <code>worker-update.ts</code>. <strong>Update Tor worker from PublicNode</strong> uses ordinary fetch to <code>https://ethereum-rpc.publicnode.com/</code>: first <code>eth_blockNumber</code>, then <code>eth_call</code> for <code>workerHash()</code> and <code>workerResolvers()</code> at that same block on the fixed Tor specifier. It cannot submit arbitrary methods or watched addresses. The on-chain resolver list may mix HTTPS and KPS transports. The manual updater selects HTTPS locations, reports skipped KPS/unsupported entries, and gives a specific error if no HTTPS location remains. Selected HTTPS locations must be free of credentials/fragments. The action downloads a worker directly, verifies its Keccak-256 against the discovered digest, and stores the bytes in the separate <code>anonfolio-user-tor-worker-v1</code> CacheStorage cache. It displays the hash, block, and URLs before the user saves. Download/discovery failures keep the previous selection and settings.
+</p>
+<p>Saving the updated worker records its hash/resolvers/block in the network settings and reloads. Startup rechecks the cached bytes, creates a local blob URL, and supplies the selected hash and blob resolver to the harness; it performs no public lookup or remote download. Missing/corrupt cache data fails closed and points to Settings, without falling back to remote discovery. Select the bundled worker or Restore defaults to revert. Applying an update explicitly trusts PublicNode&#x27;s supplied worker digest and code; it does not receive the independent review attached to the release pin. The Helios pin and consensus checkpoint are unchanged. Cached worker bytes can be evicted by the browser; update again or revert if unavailable.
+</p>
+<p>Every wallet receives a random <code>crypto.randomUUID()</code> isolation key and an execution RPC endpoint. New addresses prefer an endpoint not already assigned to another address, then reuse configured endpoints when necessary. Restored addresses receive endpoint assignments from the configured list and fresh isolation keys.
+</p>
+<p>Helios execution traffic is redirected to a synthetic internal URL. It never sends HTTP to that URL. Instead, the Helios worker posts an RPC message to the main thread, which sends an execution request of this shape (the surrounding hard-deadline wrapper enforces the full operation, including the response body):
+</p>
+<pre tabindex="0"><code class="language-ts">worker.fetch(wallet.rpcUrl, {
+  method: &#x27;POST&#x27;,
+  headers: { &#x27;content-type&#x27;: &#x27;application/json&#x27; },
+  body: JSON.stringify(request),
+  signal: AbortSignal.timeout(90_000),
+  anonOptions: { isolationKey: wallet.isolationKey },
+});</code>
+</pre>
+<p>The transport allows only <code>eth_getProof</code>, <code>eth_getCode</code>, <code>eth_getBlockByHash</code>, and <code>eth_getBlockByNumber</code>. It rejects batches and other execution methods, checks HTTP/JSON-RPC success and response IDs, and reports provider rejection codes/messages. The worker separately requires proof and code requests to reference the pinned block hash.
+</p>
+<p>Contract calls execute locally rather than using remote <code>eth_call</code>. Requests for remote access-list hints receive a synthetic unsupported-method response, allowing Helios to demand-load proven dependencies instead. Retries retain the wallet&#x27;s isolation key and finalized block. Explicit proof-history rejection can select another configured operator as described below. There is no automatic switch to ordinary browser fetch when a private read fails.
+</p>
+<p>The RPC operator still receives the account, code, and storage queries it serves. Isolation keys separate Tor circuits/TLS sessions, but do not promise different exit nodes. In Tor mode the beacon provider receives consensus requests through Tor on a separate shared isolation key. Consensus can continue syncing outside an active wallet session using that route. It is never sent with a wallet’s isolation key. Only explicitly selected HTTPS mode sends it through ordinary browser fetch. Wallet names stay local, and the app adds no analytics or wallet-address URL parameters.
+</p>
+</section>
+<section class="chapter" id="consensus-and-balance-verification" aria-labelledby="heading-consensus-and-balance-verification">
+<h2 id="heading-consensus-and-balance-verification"><span class="chapter-number">06</span>Consensus and balance verification
+</h2>
+<figure>
+<div class="flow " style="--flow-count:5" role="list">
+<div class="flow-node" role="listitem"><span class="step">01</span><strong>Checkpoint</strong><span>Trusted mainnet beacon root + matching slot. Age policy is checked.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">02</span><strong>Finalized header</strong><span>Helios verifies consensus signatures and authenticates the execution block.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">03</span><strong>State root</strong><span>Requested accounts and all requested storage slots must match trie proofs.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">04</span><strong>Code + EVM</strong><span>Bytecode must match its proven hash. Execute token/proxy dependencies locally.</span>
+</div>
+<div class="flow-node" role="listitem"><span class="step">05</span><strong>Proven result</strong><span>Store the amount with its block hash and timestamp. Invalid witnesses fail closed.</span>
+</div>
+</div>
+<figcaption>04 / Trust flows from the checkpoint to a finalized state root, then to account/storage/code witnesses. Transport privacy is a separate property.
+</figcaption>
+</figure>
+<h3 id="establishing-a-trusted-finalized-block">Establishing a trusted finalized block
+</h3>
+<p>The verifier vendors Helios <code>0.12.0</code>, including the requested-address and requested-slot checks described in its <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/vendor/helios/README.md">review documentation</a>. Before initializing WASM, the application downloads the bundled binary and checks its SHA-256 against the source pin.
+</p>
+<p>One consensus light client starts from the independently reviewed release-pinned mainnet checkpoint by default. Settings → Consensus checkpoint can replace it with a user-trusted finalized beacon block root and matching slot. Helios verifies sync committee signatures and finalized headers. The HTTP adapter permits consensus GET requests only to the source-configured beacon origin and an allowed set of beacon/configuration paths. The worker posts them to the main-thread bridge, which uses Anon-RPC with the consensus isolation key and returns the response to Helios. This bridge handles background requests even when there is no active wallet session.
+</p>
+<p>The release default root, slot, and timestamp live in <code>verification/trust.ts</code>. A custom root and slot are validated and saved with browser network settings; older saved settings without a checkpoint keep the release default. Save settings and reconnect reloads the page and creates a fresh shared verifier, so an old consensus session cannot survive a checkpoint change. The UI rejects malformed roots, invalid slots, and checkpoints older than 14 days or more than one minute in the future. The verifier independently repeats those checks on each refresh. Age is computed from the mainnet beacon slot. The bootstrap response must contain the selected slot, and Helios verifies that header against the selected root, preventing an old root from being relabelled with a recent slot. A custom root is a user-chosen trust anchor: compare root and slot across independent trusted mainnet sources; the application does not discover or authenticate the choice for you. Each selected execution block must have valid hash/root fields and a timestamp no more than one hour old or more than one minute in the future. Restore defaults returns to the release-pinned checkpoint, which can itself expire. Binary pins still require a reviewed source update; see the vendored review for release checkpoint evidence and binary hashes.
+</p>
+<p>Each refresh freezes the resulting block hash, number, state root, and timestamp. Different wallets or later refreshes can use different finalized blocks, which is why aggregate displays explicitly identify mixed-block data.
+</p>
+<h3 id="eth-account-balances">ETH account balances
+</h3>
+<p>For native ETH, Helios retrieves the account proof and verifies the account against the finalized state root. The adapter also checks that the proof belongs to the requested address and that its account fields match the proven trie value. A genuine exclusion proof can establish an absent, zero-balance account; a missing or invalid response cannot establish zero.
+</p>
+<h3 id="erc-20-balances-and-decimals">ERC-20 balances and decimals
+</h3>
+<p>For WETH and custom ERC-20 tokens, Helios runs <code>balanceOf(wallet)</code> in its local EVM at the pinned block. It loads contract bytecode and required storage as execution discovers them. Bytecode hashes must match proven account code hashes, and storage values must match Merkle proofs under the corresponding storage root.
+</p>
+<p>This approach does not assume a token&#x27;s balance mapping lives at a particular slot. Proxy implementation code and storage dependencies follow the same verified execution path. Every requested storage slot must be present in the proof response, preventing an omitted nonzero slot from being interpreted as zero.
+</p>
+<p>Token and quote decimals are always configured display metadata. The verifier executes only <code>balanceOf(wallet)</code> for token balances; it never calls <code>decimals()</code>, and pricing does not make metadata calls either. Built-in ETH/WETH default to 18 decimals and the USDC quote defaults to 6. Configured decimals control display and token totals even when a legacy cache contains different on-chain decimal metadata. Balance authenticity still comes from the finalized account/storage proofs and local EVM execution; decimal precision comes from the user&#x27;s settings. Cached price estimates are eligible only when their quote precision matches the current configuration.
+</p>
+<h3 id="result-and-error-messages">Result and error messages
+</h3>
+<p><code>verification/client.ts</code> assigns session IDs and relays progress, asset starts, balances, prices, and failures. Parallel execution requests are labelled by their actual RPC method and destination rather than attributing shared WASM transport events to whichever token started most recently. <code>balances.ts</code> applies these events to wallet state. A successful balance stores its raw bigint amount, retrieval time, verified block metadata, and configured decimals.
+</p>
+<p>Each failed asset retains its own error message, failed step, and attempt timestamp, so later progress or another asset&#x27;s error cannot replace its cause. A short explanation next to the balance opens Details with a styled error card: a clear title, recovery guidance, and compact endpoint/time metadata. Raw errors and distinct failed steps are tucked behind Technical details; repeated transport error text is omitted from the stage. There are no settings shortcut buttons in these cards. Wallet progress text appears only while verification is active, so completed failures do not retain a misleading consensus status above the cards. These failure records survive reloads, including failed first reads with no amount, and clear when that asset is successfully verified. Errors that echo endpoint URLs have credentials, paths, and query strings redacted before display/storage. If an older snapshot has no recorded reason, the UI says so and asks for a refresh to capture one.
+</p>
+<p>Transport errors retain context both while opening the request and while consuming the response body. An interrupted JSON/beacon stream identifies the method and destination instead of surfacing a bare <code>Failed to fetch</code>; local WASM download failures identify the application host. Error cards label consensus, execution RPC, and application destinations separately, and omit an endpoint for legacy generic fetch failures whose destination is unknown. Active progress above historical failures is labelled as a retry so it cannot be mistaken for the recorded failed step.
+</p>
+<p>Tor startup retains the two most recent warning/error messages in memory, with URL credentials and paths redacted and each message bounded to 350 characters. Bootstrap failures and timeouts include those diagnostics on separate lines; the compact header shows only the connection state and a retry action on failure. Failure causes and retry scheduling are available on hover, while detailed progress and Tor diagnostics stay in each address’s retrieval log and failure reports. The header has no worker-log text or Details dropdown; gateway addresses remain available in Settings → Network connection. Structured worker error records preserve nested causes and error codes. Private request failures identify the requested method and endpoint hostname; they never trigger a direct-network fallback. Successful reconnection clears connection errors, while each asset keeps its last failure until its next successful verification.
+</p>
+<p>The Tor <code>tor_memquota</code> warning about unavailable total memory means system-memory detection failed and Tor selected a fallback quota. In a browser/WASM environment this is expected when the underlying OS query is unavailable. The quota controls when tracked data is reclaimed; it is not an immediate allocation, a minimum RAM requirement, or a measurement of the whole application’s memory use. See the <a href="https://tpo.pages.torproject.net/core/doc/rust/private/src/tor_memquota/config.rs.html">Tor quota implementation</a>.
+</p>
+<p>Compact balance statuses sit inline with the amount and price estimate, using local SVG icons with native hover tooltips and accessible labels. The shield/check means verified finalized state (proven zeroes are omitted from the holdings list); saved/stale, unavailable/unverified, and missing-price states use distinct icons. Error-detail icons still open the full failure report. Counts, retry times, numeric prices and detailed progress/errors retain text.
+</p>
+<p>An address’s Refresh button starts reads only for that address, retaining its RPC route and isolation key. Other addresses keep their balances, timestamps, logs and loading state. Loading indicators stay with the selected address; aggregate token cards retain their previous amounts without showing a portfolio-wide loading state, then recompute as verified results arrive. Automatic retries remain independent per address.
+</p>
+<p>The UI distinguishes a proven zero, an unavailable first read, an unverified legacy value, and a stale value retained after failure. Failed verification never creates a new trusted amount. Fatal worker failures terminate the shared worker and reject the active session, while queued addresses remain available for the next verifier. The main thread queues sessions and starts only one at a time. Queued addresses show Queued without a spinner or active timeout. Each active session has a five-minute deadline; time waiting in the queue does not consume it. Network reads and local WASM downloads have separate hard 90-second deadlines covering headers and the entire response body, even if the underlying transport ignores abort. Transport failure or an active-session timeout ends that attempt, terminates the affected verifier, cancels outstanding bridge requests and releases the next queued address. Late events from an obsolete worker are ignored. A completed failure clears wallet/token spinners and re-enables refresh; scheduled retries show a retry status without spinning. Successful results remain available if later asset reads fail.
+</p>
+<p>After selecting a verified finalized block, the worker starts two bounded lanes in parallel: up to two balance proofs/local balanceOf calls and two token oracle jobs at a time. Each oracle checks up to two fee tiers concurrently; pool identity reads and liquidity/history reads also run in groups of two, after their dependencies are verified. Concurrent ETH/WETH estimates share one in-flight direct-pool selection, keyed by pair, window, finalized block hash and liquidity floor. Failed selections are not cached. Active reads drain before a lane releases its wallet route. Distinct wallets remain serialized because the shared Helios client has one active private route. Both lanes use the same wallet isolation key and frozen block. Pricing does not need the holding amount; it can finish before that balance proof. Early quotes remain in memory until a successful balance result with the same block hash arrives. Failed balance proofs never gain a holding value from an early quote, and quotes from another block are discarded. Normal oracle failures do not block the balance lane. A rejected private transport, proof, or code witness fails the shared attempt closed and cancels both lanes; amounts already proved remain available. The progress panel marks Balances and Prices active together, then shows whichever lane is still running.
+</p>
+<p>Each address also has a collapsed Retrieval log. It records application connection messages, verifier/consensus progress, private request submission and response-header/body stages, block selection, balance/price results, failures and retry scheduling. Every entry has a local timestamp with milliseconds and an exact ISO datetime; the time tooltip includes the date and timezone. The stream keeps chronological history across refresh attempts in the current browser session, independently of the latest status line. Multiline failure messages are split into separate timestamped entries, so each retained Tor diagnostic has its own row. Logs are not persisted or sent to analytics. Up to 1,000 entries per address are retained, with an explicit omitted-entry count when older entries are pruned. URL credentials and paths are redacted; request bodies and isolation keys are never serialized into log entries. Rows are created only when the disclosure is open. The log uses the portfolio’s scrollbar, with no separate fixed-height scrolling box. New entries follow only when its latest row was visible in both the portfolio and the browser viewport; reading earlier rows preserves that row’s on-screen position. Open/scroll/focus state survives progress rendering.
+</p>
+<p>The Read history disclosure groups tokens by their verified finalized block hash. Each compact block card shows the finalized block number/time once and a table of per-token last successful read times. Block hashes are retained internally for verification and grouping, without a separate hash display. Different blocks have separate cards; legacy unverified saves and tokens without a successful read have distinct groups. Timestamp elements retain exact ISO datetimes and local time-zone tooltips.
+</p>
+<p>The portfolio owns vertical scrolling. Address details, request previews and log entries flow inside it without creating additional vertical scroll containers. The detail pane and wrapping holdings use the portfolio’s container width. Scrollbar gutters are reserved on the document and portfolio to prevent width changes when scrollbars become necessary, following the <a href="https://www.w3.org/TR/css-overflow/">CSS Overflow specification</a>.
+</p>
+<p>The progress summary stays mounted and keeps its dimensions after completion, failure and automatic retry. It shows no active timer or current stage when no request is running. At most two active requests are previewed in fixed-size rows; additional requests and full status text remain available in Retrieval log, with hover text on shortened previews. Per-token activity rows reserve their indicator slot and text height. Read errors and Read history use collapsed disclosures, so newly arriving proofs or errors do not insert large blocks above the current progress. A balance’s error icon opens its report directly. An open disclosure retains its measured height until closed to prevent collapsing beneath the reader when an error clears.
+</p>
+<p>Progress rendering reconciles existing DOM nodes by semantic identity: address, token, request ID, verification step, finalized block hash, error asset/kind and log sequence. The viewport restores the visible record rather than merely restoring an old scrollTop; content added above an older log entry therefore does not move that entry on screen. Token-history anchors also follow the same wallet/asset when a newly proved balance moves into another finalized-block card. Existing keyboard focus and open disclosures remain intact. Ordinary balances and status icons share a line; exceptionally large values wrap without losing digits. Token-history anchoring prefers a fully visible token over a clipped preceding token in the same address.
+</p>
+<p>The layout regression suite reproduces and covers these causes:
+</p>
+<div class="table-wrap" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Cause</th><th scope="col">Correction</th>
+</tr>
+</thead>
+<tbody>
+<tr><td>Portfolio, details, request preview and log each constrained their own overflow</td><td>One portfolio scroll owner; no nested detail/log scrollbars.</td>
+</tr>
+<tr><td>New block groups/errors appeared before the progress panel</td><td>Stable progress/activity placement; history and errors expand on user action.</td>
+</tr>
+<tr><td>Completion removed the whole progress panel</td><td>A stable idle/failed summary replaces active content in the same slot.</td>
+</tr>
+<tr><td>Retry button changed the header height by 3–10 pixels</td><td>Reserve connection-header height for every state.</td>
+</tr>
+<tr><td>Long numbers and status text wrapped</td><td>Reserved space for ordinary values, wrapping for exceptionally large amounts, and bounded request previews with full hover/log text.</td>
+</tr>
+<tr><td>Matching same-class cards reused the wrong error/block nodes</td><td>Explicit semantic keys retain each report, snapshot and request, including tokens with matching symbols.</td>
+</tr>
+<tr><td>Restoring pixel scrollTop or following an off-screen log tail moved the reader after updates</td><td>Restore the same visible record; follow only a visible log tail.</td>
+</tr>
+<tr><td>Scrollbar appearance and viewport-based detail width changed available space</td><td>Stable gutters and portfolio-relative container sizing.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Progress uses a completed/total count of planned balance and price checks (two per selected token), including checks that finish with errors. Retries start a fresh count; duplicate completion events are ignored, and unfinished checks are not marked complete on transport failure. This is not a prediction of RPC request count: the EVM discovers bytecode and storage dependencies as it executes. Short request/log labels identify the actual account, token, factory, pool or unknown contract address, with storage-slot counts where available. Pool names are registered by address before local oracle calls, so concurrent balance/pricing requests cannot borrow each other’s current-token label. Full method, target address and endpoint remain in request tooltips.
+</p>
+<p>Shared private-connection status appears only in the application header. Each address’s progress panel follows verifier initialization, consensus sync, balance verification, and price estimates. The compact address-row preview is blank while its details are expanded, so the current request appears in one place. Per-token activity shows token-specific phases and payloads without repeating the connection stage or endpoint on every line. Retry scheduling appears once in the activity summary. A single actionable balance-status icon conveys failures and opens the error report; saved estimates share the balance’s saved/stale indicator and retain their own tooltip. Timestamped Retrieval logs intentionally preserve historical events, including connection messages. Network identity is shown in the header, without a repeated footer. Queued addresses have a separate waiting state. Tokens awaiting their turn are marked Pending; the request preview distinguishes actual submissions and response states from each token’s planned proof operation. Actual private requests show their method, endpoint hostname, elapsed time, and remaining time before the 90-second request timeout. Response headers and body completion are separate transport events; after a response, worker messages describe signature, proof/code checks and local EVM execution. Elapsed clocks measure waiting, not completion percentages. A pending Anon-RPC fetch does not reveal whether time is spent building its route, waiting at the operator, or transporting a response, so the UI does not invent those substeps. Background consensus traffic after block selection does not replace the active wallet’s balance/pricing progress. Worker readiness means the private worker started; the harness does not expose live Tor circuit-building progress or guarantee that an individual endpoint is reachable.
+</p>
+</section>
+<section class="chapter" id="direct-pool-twap-estimates" aria-labelledby="heading-direct-pool-twap-estimates">
+<h2 id="heading-direct-pool-twap-estimates"><span class="chapter-number">07</span>Direct-pool TWAP estimates
+</h2>
+<figure>
+<div class="decision-flow">
+<div class="decision">Holding is the quote token?<span>Yes → ratio 1, in its own units</span>
+</div>
+<div class="decision">Find a direct TOKEN / quote pool<span>ETH uses WETH; default ETH/WETH pair is the canonical 0.05% WETH/USDC pool</span>
+</div>
+<div class="decision">Canonical factory, tokens and fee match?<span>No → reject candidate</span>
+</div>
+<div class="decision">Active liquidity + 30-minute history + liquidity floor?<span>No → reject candidate</span>
+</div>
+<div class="decision">Select deepest qualifying direct pool<span>No candidate → Unpriced; portfolio estimate becomes partial</span>
+</div>
+<div class="decision">Use its mean tick at the balance block<span>Compute raw-unit bigint ratio → holding value → aggregate → display rounding</span>
+</div>
+</div>
+<figcaption>05 / Pricing decision flow. A WETH-only route does not qualify a token for a USDC quote. No multihop or spot-price fallback.
+</figcaption>
+</figure>
+<figure class="chart-figure" tabindex="0"><svg class="chart" role="img" aria-labelledby="thirty-minute-oracle-window-title thirty-minute-oracle-window-desc" viewBox="0 0 720 234" xmlns="http://www.w3.org/2000/svg"><title id="thirty-minute-oracle-window-title">Thirty-minute oracle window</title><desc id="thirty-minute-oracle-window-desc">Illustration only, not real market data. The oracle compares cumulative ticks thirty minutes apart at the selected finalized block; the mean tick becomes a geometric price ratio.</desc><rect x="0" y="0" width="720" height="230" rx="12" class="svg-panel"/><path d="M65 35V175H675" class="axis"/><path d="M65 125 115 105 165 110 215 85 265 100 315 75 365 80 415 65 465 90 515 75 565 65 615 70 675 48" class="price-line"/><path d="M65 95H675" class="mean-line"/><text x="80" y="52" class="svg-small" text-anchor="start">Illustrative tick movement</text><text x="480" y="120" class="svg-small" text-anchor="start">mean tick → geometric price</text><text x="65" y="198" class="svg-small" text-anchor="start">finalized time − 30 min</text><text x="675" y="198" class="svg-small" text-anchor="end">finalized block time</text><text x="65" y="220" class="svg-small" text-anchor="start">observe([1800, 0]) compares cumulative ticks at these endpoints.</text></svg>
+<figcaption>06 / Window illustration only; not market data or an arithmetic average of displayed spot prices. The window ends at the verified finalized block, not the browser’s wall clock. On narrow screens, scroll the chart sideways.
+</figcaption>
+</figure>
+<h3 id="quote-token-and-pool-selection">Quote token and pool selection
+</h3>
+<p>The default quote is canonical mainnet USDC, <code>0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48</code>. Settings can select a custom ERC-20 quote contract and liquidity floor. Quote-token holdings are denominated at par in their own units without a pool conversion; internally this uses a ratio of one and the zero address as the pool marker.
+</p>
+<p>Every other estimate uses exactly one direct Uniswap v3 pool. ETH uses WETH as its pricing asset. With USDC selected, both ETH and WETH exclusively use the 0.05% WETH/USDC pool, <code>0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640</code>.
+</p>
+<p>For other pairs, <code>TwapOracle</code> checks fee tiers 100, 500, 3000, and 10000, corresponding to 0.01%, 0.05%, 0.3%, and 1%. It executes <code>getPool(base, quote, fee)</code> against the canonical factory, <code>0x1F98431c8aD98523631AE4a59f267346ea31F984</code>, and checks the pool&#x27;s factory, token identities, fee, active liquidity, and slot state.
+</p>
+<p>The selected pool must support <code>observe([1800, 0])</code>. A canonical pool reverts if it lacks the requested history. The application derives harmonic mean liquidity over that window and requires both current and harmonic virtual quote reserves to reach the configured floor, initially 10,000 USDC. When changing quote tokens, the floor is interpreted in the new quote token&#x27;s units.
+</p>
+<p>Among qualifying candidates, the pool with the greatest harmonic quote-side reserve wins; its address breaks ties. Candidate prices are not blended. A token with a WETH pool but no qualifying direct USDC pool stays unpriced when USDC is selected. Changing the quote token changes the required direct pair rather than introducing a multihop route.
+</p>
+<h3 id="oracle-arithmetic-and-holding-values">Oracle arithmetic and holding values
+</h3>
+<p>The mean tick is calculated from the signed cumulative tick difference divided by 1,800 seconds, rounding negative non-integral results down. The implementation handles the oracle accumulators&#x27; wrapping widths. The tick represents a geometric average price, rather than an arithmetic average of spot prices.
+</p>
+<p><code>tickRatio()</code> computes the raw token1/token0 ratio corresponding to <code>1.0001^meanTick</code> using bigint exponentiation with 512 fractional bits. Token ordering determines whether the ratio or its inverse converts the base asset into the quote asset. Pool ratios describe raw token units, so multiplying a raw balance by the ratio handles differing base/quote decimals without first converting balances to floating-point numbers.
+</p>
+<p>Holding values remain bigint fractions:
+</p>
+<pre tabindex="0"><code class="language-text">holding value in raw quote units = raw balance × numerator / denominator</code>
+</pre>
+<p>The portfolio adds these fractions and reduces them before display conversion. The overview presents a prominent portfolio value with separate priced-holding coverage and tooltip icons for partial, stale and mixed-block results. Each token card also computes its own quote-currency subtotal across addresses using the same rational aggregation. Address coverage and balance provenance are available by hovering the token amount rather than in repeated footer text. It adds each holding’s value at its own verified block/quote rather than applying one address’s price to the aggregate token quantity. A token with no usable quotes shows an unavailable amount; incomplete per-token pricing is explicitly marked partial. The selected quote token and its configured decimals apply to the portfolio and all subtotals. The 30-minute TWAP explanation is available through a methodology icon rather than a long summary sentence. Display rounding of an individual holding never feeds back into the aggregate. The virtual reserve checks use in-range liquidity and square-root prices; they are liquidity filters, not measurements of total TVL or guarantees of proceeds from selling the holding. Estimates exclude swap fees, price impact, and slippage.
+</p>
+<h3 id="cache-and-failure-behavior">Cache and failure behavior
+</h3>
+<p>Oracle execution runs alongside the balance loop through the same local EVM, pinned block, and wallet transport. No external price API or public execution shortcut is involved.
+</p>
+<p><code>TwapOracle</code> keeps two bounded in-memory maps, each limited to 128 entries: pool data keyed by pool/window/block hash, and selected pools keyed by base/quote/window/block/liquidity floor. Cached raw liquidity is normalized again when quoting a pool in reverse. Successful estimates are also stored with their balances for historical display. Qualification failures are not cached as quotes.
+</p>
+<p>An estimate can be displayed only when its quote address, block hash, window, and liquidity setting match the active settings and balance. Changing pricing settings clears stored estimates and refreshes wallets. A missing pool, short history, insufficient liquidity, or failed private request leaves the holding <strong>Unpriced</strong> without invalidating its proven balance. Oracle-only failures currently require a manual refresh; the balance retry scheduler is driven by balance failures.
+</p>
+</section>
+<section class="chapter" id="totals-and-number-formatting" aria-labelledby="heading-totals-and-number-formatting">
+<h2 id="heading-totals-and-number-formatting"><span class="chapter-number">08</span>Totals and number formatting
+</h2>
+<p><code>portfolioTotals()</code> sums raw bigint balances separately for each token contract/native identifier. It records coverage, stale values, loading state, block hashes, and configured decimals. Unknown balances are excluded and make coverage partial. Cached or failed historical values can be included with stale indicators.
+</p>
+<p><code>estimatedTotal()</code> sums usable holding-value fractions in the configured quote token. It reports the number of priced holdings, marks missing prices as partial, labels mixed finalized blocks and stale values, and suppresses the displayed amount if quote decimals conflict across snapshots.
+</p>
+<p><code>formatBalance()</code> formats values with at most two decimal places using integer arithmetic. It removes trailing zeros and shows a positive amount below 0.01 as <code>&lt;0.01</code>. Native token amounts keep their full precision in storage. Estimated values are converted from their rational representation only on the display path, using additional fractional precision before formatting.
+</p>
+</section>
+<section class="chapter" id="persistence-offline-use-and-retries" aria-labelledby="heading-persistence-offline-use-and-retries">
+<h2 id="heading-persistence-offline-use-and-retries"><span class="chapter-number">09</span>Persistence, offline use, and retries
+</h2>
+<figure class="chart-figure" tabindex="0"><svg class="chart" role="img" aria-labelledby="scheduled-balance-retry-delays-title scheduled-balance-retry-delays-desc" viewBox="0 0 720 228" xmlns="http://www.w3.org/2000/svg"><title id="scheduled-balance-retry-delays-title">Scheduled balance retry delays</title><desc id="scheduled-balance-retry-delays-desc">Retry delays are two, four, eight, sixteen, thirty-two and sixty seconds, then capped at sixty seconds. This chart describes app scheduling, not Tor guard backoff.</desc><rect x="0" y="0" width="720" height="224" rx="12" class="svg-panel"/><text x="22" y="32" class="svg-label" text-anchor="start">BALANCE RETRY BACKOFF · seconds per scheduled attempt</text><rect x="48" y="169.8" width="66" height="4.2" rx="4" class="svg-balance"/><text x="81" y="159.8" class="svg-small" text-anchor="middle">2s</text><text x="81" y="199" class="svg-small" text-anchor="middle">1</text><rect x="158" y="165.6" width="66" height="8.4" rx="4" class="svg-balance"/><text x="191" y="155.6" class="svg-small" text-anchor="middle">4s</text><text x="191" y="199" class="svg-small" text-anchor="middle">2</text><rect x="268" y="157.2" width="66" height="16.8" rx="4" class="svg-balance"/><text x="301" y="147.2" class="svg-small" text-anchor="middle">8s</text><text x="301" y="199" class="svg-small" text-anchor="middle">3</text><rect x="378" y="140.4" width="66" height="33.6" rx="4" class="svg-balance"/><text x="411" y="130.4" class="svg-small" text-anchor="middle">16s</text><text x="411" y="199" class="svg-small" text-anchor="middle">4</text><rect x="488" y="106.8" width="66" height="67.2" rx="4" class="svg-balance"/><text x="521" y="96.8" class="svg-small" text-anchor="middle">32s</text><text x="521" y="199" class="svg-small" text-anchor="middle">5</text><rect x="598" y="48.0" width="66" height="126.0" rx="4" class="svg-balance"/><text x="631" y="38.0" class="svg-small" text-anchor="middle">60s</text><text x="631" y="199" class="svg-small" text-anchor="middle">6</text><text x="22" y="220" class="svg-small" text-anchor="start">Attempts 6+ cap at 60s. Offline pauses scheduling; manual refresh resets backoff.</text></svg>
+<figcaption>07 / Configured app behavior, not observed latency. Worker reconnect delays cap at 10 seconds. Tor’s internal guard backoff is separate. On narrow screens, scroll the chart sideways.
+</figcaption>
+</figure>
+<div class="table-wrap" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Storage key</th><th scope="col">Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr><td><code>anonfolio.portfolio.v2</code></td><td>Current version-3 portfolio snapshot: token definitions/icons, named addresses, balances, finalized provenance, and successful estimates.</td>
+</tr>
+<tr><td><code>anonfolio.wallets.v1</code></td><td>Legacy address-only watchlist, consulted when migrating an installation without a current snapshot.</td>
+</tr>
+<tr><td><code>anonfolio.network.v1</code></td><td>Browser-local network overrides, including complete configured endpoint URLs.</td>
+</tr>
+<tr><td><code>anonfolio.pricing.v1</code></td><td>Quote-token configuration and minimum quote-side liquidity.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The portfolio storage key retains its older name for migration. Bigint amounts are serialized as decimal strings. Loading validates addresses, token definitions, amounts, timestamps, block metadata, and estimate fields; malformed entries are ignored. Older portfolio formats migrate to the current token/balance structure, and explicitly removed defaults remain removed.
+</p>
+<p>Isolation keys and request payloads are not persisted. Saved values are restored as cached, and legacy entries lacking block provenance require verification. Successful results and watchlist edits save immediately. A blocked or full localStorage leaves the current in-memory session usable and displays a storage warning. The stored portfolio and any credentials in network-setting URLs are accessible to someone with access to that browser origin&#x27;s storage.
+</p>
+<p>The bundled Tor worker is cached as a local application asset, and is still hash-checked by the harness when loaded. The production service worker is generated by <code>vite.config.ts</code>. It caches an explicit list of built application files, including the WASM binary (HTTPS mode omits the unused Tor bundle from precaching), and removes older application-shell caches on activation. Navigation tries the network and falls back to cached HTML; other shell assets use the cache first. Requests outside that exact asset list, including RPC and worker/gateway traffic, are not intercepted. The first visit still requires a connection, and offline startup cannot retrieve new balances.
+</p>
+<p><code>RetryQueue</code> maintains one scheduled attempt per address or connection key. Failed balance rounds use delays of 2, 4, 8, 16, 32, then at most 60 seconds. Private-worker reconnects use 2, 4, 8, then at most 10 seconds between attempts. Automatic recovery selects failed or not-yet-verified balances, keeping successful results. Going offline pauses timers; coming online resumes pending work. Manual refresh resets the backoff, and removing an address cancels its scheduled retries. Leaving the page pauses retries and closes the private connection.
+</p>
+<p>An execution HTTP attempt has a 90-second timeout, Tor worker readiness has a 30-second soft notice and a five-minute timeout, and a verification session has a five-minute timeout. After a startup timeout, the app closes that worker before retrying and ignores late readiness from old attempts. The pinned Tor worker’s internal per-guard backoff (such as 2m 30s) is separate and is not configurable through the exposed harness API; reconnecting retains its persisted guard selection and other Tor state. These bounds keep unavailable routes from waiting indefinitely, although queued work and retries can still make a large refresh take time.
+</p>
+</section>
+<section class="chapter" id="configuration-builds-and-publishing" aria-labelledby="heading-configuration-builds-and-publishing">
+<h2 id="heading-configuration-builds-and-publishing"><span class="chapter-number">10</span>Configuration, builds, and publishing
+</h2>
+<p>Deployment defaults come from <code>VITE_ANON_GATEWAYS</code>, <code>VITE_TOR_BOOTSTRAP_URL</code> and <code>VITE_RPC_URLS</code>, with source defaults in <code>config.ts</code>. Browser network settings override those defaults after local validation. The default balance endpoint order starts with dRPC, followed by PublicNode and Ankr. The old <code>bootstrapRpc</code> storage property and <code>VITE_BOOTSTRAP_RPC</code> variable are ignored; saving settings removes that obsolete field while preserving gateway/RPC choices.
+</p>
+<p>Saving network settings closes the old Anon-RPC worker and reloads the page, replacing wallet routes together. Restoring network defaults removes that override rather than clearing the portfolio or pricing configuration. Saving pricing settings instead updates the pricing configuration and refreshes the current wallets without a page reload.
+</p>
+<p>An RPC must support proofs and code queries at the selected finalized block, including EIP-1898 block-hash parameters. A provider whose historical proof window is too short can reject valid requests. An explicit eth_getProof JSON-RPC history/window/pruned-state rejection triggers a bounded switch among the configured execution endpoints. The exact request, pinned finalized block and wallet isolation key remain unchanged, and every attempt still uses worker.fetch. The active session shares its rejected-endpoint set between concurrent balance and pricing reads, so they converge on a usable operator without loops. Later execution requests and refreshes prefer the replacement operator within the browser session. The UI request destination, worker progress and retrieval log identify the switch. No alternate endpoint is tried for a timeout, malformed response, generic RPC error or invalid proof; those failures still stop verification. If the configured endpoints cannot provide the required proofs, the application fails closed, retains unavailable/stale states and asks the user to configure a historical-proof-capable RPC. It never changes to latest/unfinalized state to satisfy a provider’s shorter window. Tor/WebRTC gateway connectivity is required in Tor mode; HTTPS mode needs browser HTTPS/CORS access instead. The shipped Tor gateway is a development demo, and a deployment can configure its own gateway. The checkpoint can be overridden in Settings using a trusted root and matching slot. The Helios WASM pin remains source-controlled. Tor uses the release pin by default; the explicit Settings updater can apply a PublicNode-supplied digest and downloaded worker.
+</p>
+<p>Use the repository&#x27;s Bun 1.3.14 baseline for dependency changes and its compatible committed lockfile:
+</p>
+<pre tabindex="0"><code class="language-sh">bun install --frozen-lockfile
+bun run dev
+bun run build
+bun run serve</code>
+</pre>
+<p>The production build type-checks TypeScript and emits <code>dist/</code>. <code>bun run serve</code> serves that directory at port 4173 by default, with <code>HOST</code> and <code>PORT</code> overrides. It accepts GET/HEAD, rejects path traversal and writes, and supplies no RPC proxy. Vite&#x27;s dependency configuration also supplies an empty browser environment for the trie library&#x27;s debug check and prebundles the worker dependency, avoiding a Node <code>process</code> reference during development.
+</p>
+<p>Relative asset URLs allow the same build to load beneath an IPFS path or a subdomain gateway. The Docker publisher builds the site, computes a directory CIDv1, publishes/pins the directory to a configured Kubo API, and rejects a returned CID that differs from the build CID. The export script similarly checks the CID before writing a complete CAR and CID text file. <code>bun run ui:docker</code> invokes this flow; it requires an existing Docker engine and reachable Kubo API. It does not select a remote pinning service.
+</p>
+<p>An <a href="https://github.com/KillariDev/anonfolio/blob/2dd441f6d18bfe3dd1f3cb372a412499501c9f97/.github-workflows/ipfs-deploy.yml">IPFS release workflow template</a> is supplied separately from active workflows. A subdomain gateway gives each CID a separate browser origin; path gateways can share an origin with other applications. Consequently, localStorage and service-worker behavior depend on the chosen gateway origin, and moving to another CID/subdomain does not automatically migrate saved settings or wallets.
+</p>
+</section>
+<section class="chapter" id="testing-and-maintenance" aria-labelledby="heading-testing-and-maintenance">
+<h2 id="heading-testing-and-maintenance"><span class="chapter-number">11</span>Testing and maintenance
+</h2>
+<p>The tests cover separate boundaries rather than treating mocked UI results as evidence of real proof verification:
+</p>
+<div class="table-wrap" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Command</th><th scope="col">What it checks</th>
+</tr>
+</thead>
+<tbody>
+<tr><td><code>bun run test</code></td><td>Unit tests for parsing, storage, retries, totals, pricing, static serving, and adversarial proof/transport behavior.</td>
+</tr>
+<tr><td><code>bun run typecheck</code></td><td>TypeScript checking.</td>
+</tr>
+<tr><td><code>bun run check</code></td><td>Unit tests, type checking, and the production build.</td>
+</tr>
+<tr><td><code>bun run test:browser</code></td><td>Deterministic Chromium UI scenarios and a real browser-worker proof regression. UI fixtures replace connection/verifier boundaries where appropriate.</td>
+</tr>
+<tr><td><code>bun run test:static</code></td><td>Production page loading and offline recovery, after building.</td>
+</tr>
+<tr><td><code>bun run test:all</code></td><td>Unit tests, build, deterministic browser scenarios, and production/offline checks.</td>
+</tr>
+<tr><td><code>BASE_URL=http://127.0.0.1:4173 bun run test:live</code></td><td>Opt-in real Tor/Helios mainnet balances and TWAPs against a built page. The runner starts the static server if needed.</td>
+</tr>
+<tr><td><code>bun run test:live:https</code></td><td>Real mainnet ETH/WETH proof verification through explicitly selected HTTPS.</td>
+</tr>
+<tr><td><code>bun run bootstrap:update SOURCE [DESTINATION]</code></td><td>Publish a fresh public Tor directory mirror.</td>
+</tr>
+<tr><td><code>bun run test:ipfs</code></td><td>Real local Kubo publishing, CID/CAR checks, and path/subdomain gateway browser scenarios. <code>LIVE_RPC=1</code> also enables the live mainnet case.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Install Chromium with <code>bunx playwright install chromium</code> before browser tests. <code>LIVE_BALANCE_RPC</code> can select a specific execution endpoint for the live smoke test. Live checks depend on external gateway/RPC availability and remain separate from deterministic CI checks.
+</p>
+<p>Adversarial tests use generated trie proofs to reject a valid proof for the wrong wallet/block, omitted nonzero storage slots, forged storage values, and tampered bytecode. Transport tests reject public execution fallbacks and verify wallet isolation keys. Pricing tests cover ordering, decimals, ETH/WETH equivalence, history and liquidity failures, direct-only pool selection, reverse cache use, and unpriced WETH-only assets. Browser tests cover persistence, confirmation/cancellation, settings changes, partial estimates, failure recovery, and compact/mobile layouts.
+</p>
+<p>The active GitHub Actions workflow runs the deterministic suite on Bun 1.3.14 and 1.4.3 and retains browser failure artifacts. Before changing Helios, review proof binding, local execution, transport, and background-task behavior, then update the binary pins and review evidence and rerun adversarial/live checks. Checkpoint renewal requires an independently checked root and matching slot, supplied in Settings or through a reviewed release; changing an RPC endpoint cannot renew an expired trust anchor.
+</p>
+</section>
+<footer class="guide-footer">
+<p>This guide describes the checked-in application. It is not an independent security audit. Checkpoint freshness, gateway reachability, RPC history and HTTPS/CORS support remain deployment requirements.
+</p><a href="https://github.com/KillariDev/anonfolio">Repository</a><a href="https://github.com/KillariDev/anonfolio/pull/1">Implementation review</a><a href="#guide">Back to top ↑</a>
+</footer>
+</main>
+</div><script>document.documentElement.classList.add('js');
+const tabs=[...document.querySelectorAll('[role="tab"]')];
+function select(tab){for(const item of tabs){const active=item===tab;item.setAttribute('aria-selected',String(active));item.tabIndex=active?0:-1;document.getElementById(item.getAttribute('aria-controls')).hidden=!active;}}
+for(const [index,tab] of tabs.entries()){tab.addEventListener('click',()=>select(tab));tab.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs[(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length];select(next);next.focus();});}
+select(tabs[0]);
+const contents=document.querySelector('.contents details');
+if(window.innerWidth<=720)contents.open=false;
+contents.addEventListener('click',event=>{if(window.innerWidth<=720&&event.target.closest('a'))contents.open=false;});
+document.querySelector('.print').addEventListener('click',()=>window.print());</script></body></html>

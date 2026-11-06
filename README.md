@@ -2,7 +2,7 @@
 
 A standalone Bun, Vite and TypeScript Ethereum mainnet portfolio reader. Track wallet addresses and ERC-20 balances without connecting a wallet. Tor is the default, with an Anon-RPC isolation key per address. Settings also offers explicit **Direct HTTPS (not anonymous)**, keeping browser-side proof verification while exposing your IP and requested addresses to providers. Tor failures never switch modes automatically.
 
-Read [how the application works](docs/documentation.md) for an overview followed by detailed explanations of the architecture, verification, pricing, storage, interface, and deployment.
+Read [how the application works](docs/documentation.html) for the illustrated HTML guide to the architecture, networking, verification, pricing, storage, interface and deployment. Open the file directly, or visit `/docs/documentation.html` on the development or production server. The production build includes the guide and its local image, with no diagram CDN or external fonts.
 
 ## Run
 

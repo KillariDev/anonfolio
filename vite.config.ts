@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
+
+const documentation = readFileSync(new URL('./docs/documentation.html', import.meta.url), 'utf8');
+const documentationImage = readFileSync(new URL('./docs/images/portfolio.png', import.meta.url));
 
 // Cache only built application files, never RPC or worker/gateway traffic.
 export default defineConfig({
@@ -12,11 +16,17 @@ export default defineConfig({
   worker: { format: 'es' },
   resolve: { alias: { events: 'events/', buffer: 'buffer/' } },
   plugins: [{
+    name: 'standalone-documentation',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'docs/documentation.html', source: documentation });
+      this.emitFile({ type: 'asset', fileName: 'docs/images/portfolio.png', source: documentationImage });
+    },
+  }, {
     name: 'offline-application-shell',
     enforce: 'post',
     generateBundle(_, bundle) {
       const paths = [...Object.keys(bundle).filter(path => /\.(html|js|css|png|jpg|jpeg|svg|webp|wasm)$/.test(path)), './'];
-      const version = createHash('sha256').update(JSON.stringify(paths)).digest('hex').slice(0, 16);
+      const version = createHash('sha256').update(JSON.stringify(paths)).update(documentation).update(documentationImage).digest('hex').slice(0, 16);
       this.emitFile({
         type: 'asset', fileName: 'sw.js',
         source: 'const CACHE = "anonfolio-shell-' + version + '";\nconst PATHS = ' + JSON.stringify(paths) + ';\n' + `
