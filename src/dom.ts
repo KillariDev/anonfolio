@@ -2,6 +2,7 @@
 // reload images, or detach the reader's focused/scrolling elements.
 function key(node: Node): string {
   if (!(node instanceof Element)) return String(node.nodeType);
+  if (node.hasAttribute('data-view-key')) return [node.namespaceURI, node.tagName, node.getAttribute('data-view-key')].join('|');
   return [node.namespaceURI, node.tagName, node.id, node.getAttribute('data-address'),
     node.getAttribute('data-asset'), node.getAttribute('data-block'), node.getAttribute('data-log-id'),
     node.classList[0], node instanceof HTMLImageElement ? node.getAttribute('src') : ''].join('|');

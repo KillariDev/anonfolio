@@ -971,7 +971,8 @@ test('verification progress distinguishes consensus, actual private requests and
   await page.setViewportSize({width:390,height:844});
   await page.screenshot({path:'/tmp/anonfolio-progress-mobile.png',fullPage:true});
   await emit({type:'fatal',error:'Private eth_getProof failed: Tor route unavailable'});
-  await expect(panel).toHaveCount(0);
+  await expect(panel).toContainText('No request running');
+  await expect(panel.locator('[data-progress-start], [aria-current="step"]')).toHaveCount(0);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
 });
 
@@ -1017,7 +1018,6 @@ for (const viewport of [{width:1280,height:800},{width:390,height:844}]) test(`o
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
   await openWalletDetails(page,a);
   const samples: {height:number; top:number; next:number; row:number; page:number; table:number}[]=[];
-  let readerScroll: number | undefined;
   async function sample(event?:object) {
     if(event) await page.evaluate(event=>{
       const worker=(window as any).__verifiers[0];
@@ -1030,10 +1030,6 @@ for (const viewport of [{width:1280,height:800},{width:390,height:844}]) test(`o
         row:document.querySelector('.balances')!.getBoundingClientRect().height,
         page:window.scrollY,table:document.querySelector('#wallets')!.scrollTop};
     }));
-    if(readerScroll !== undefined) {
-      await expect(page.locator('.detail-scroll').first()).toBeFocused();
-      expect(await page.locator('.detail-scroll').first().evaluate(node=>node.scrollTop)).toBe(readerScroll);
-    }
   }
   // Put the reader part-way down the portfolio, where anchoring can amplify shifts.
   await page.evaluate(()=>window.scrollTo(0,150));
@@ -1050,22 +1046,21 @@ for (const viewport of [{width:1280,height:800},{width:390,height:844}]) test(`o
   await sample({type:'progress',stage:'balances-pricing',message:'Checking account and requested storage proofs against the verified finalized state root, while the independent oracle lane executes balance-independent pricing calls locally. '.repeat(6)});
   await sample({type:'network',request:{...request,requestId:3}});
   await sample({type:'network',request:{...request,requestId:4}});
-  await page.locator('.detail-scroll').first().evaluate(node=>node.focus({preventScroll:true}));
-  readerScroll = await page.locator('.detail-scroll').first().evaluate(node=>{node.scrollTop=48;return node.scrollTop;});
-  expect(readerScroll).toBeGreaterThan(0);
   const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60_000};
   await sample({type:'balance',asset:'eth',amount:'1000000000000000000',block});
   await sample({type:'asset-error',asset:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',error:'Contract balance proof failed'});
-  const technical=page.getByRole('region',{name:'WETH balance failure',exact:true}).locator('.failure-technical');
-  await technical.evaluate(node=>(node as HTMLDetailsElement).open=true);
   await sample({type:'price-error',asset:'eth',error:'No direct pool qualifies'});
   await sample({type:'done'});
-  await expect(technical).toHaveJSProperty('open',true);
   await page.screenshot({path:'/tmp/anonfolio-stable-details-'+viewport.width+'.png',fullPage:true});
   for(const key of ['height','top','next','row','page','table'] as const) {
     const values=samples.map(sample=>sample[key]);
     expect(Math.max(...values)-Math.min(...values),key+' changed across progress events: '+JSON.stringify(values)).toBeLessThanOrEqual(1);
   }
+  await page.getByRole('button',{name:'Explain WETH failure for '+a,exact:true}).click();
+  const technical=page.getByRole('region',{name:'WETH balance failure',exact:true}).locator('.failure-technical');
+  await technical.evaluate(node=>(node as HTMLDetailsElement).open=true);
+  await page.evaluate(()=>{const worker=(window as any).__verifiers[0];worker.onmessage({data:{type:'progress',run:worker.request.id,message:'An unrelated progress update'}});});
+  await expect(technical).toHaveJSProperty('open',true);
 });
 
 test('compact status icons explain verification, proven zero, missing prices and saved or failed reads', async ({page}) => {
@@ -1174,6 +1169,7 @@ test('read history groups shared blocks and keeps per-token read times and full 
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
   await expect(page.locator('.amount')).toHaveText(['1','0']);
   await openWalletDetails(page,a);
+  await page.locator('.history-details > summary').first().click();
   const history=page.getByRole('region',{name:'Balance read history',exact:true});
   await expect(history.locator('.read-snapshot')).toHaveCount(1);
   await expect(history.locator('tbody th')).toHaveText(['ETH','WETH']);
@@ -1205,6 +1201,7 @@ test('read history groups shared blocks and keeps per-token read times and full 
   await mockConnection(page,true);
   await page.reload();
   await openWalletDetails(page,a);
+  await page.locator('.history-details > summary').first().click();
   await expect(history.locator('.read-snapshot')).toHaveCount(2);
   await expect(history.locator('.read-snapshot').nth(0).locator('tbody th')).toContainText('ETH');
   await expect(history.locator('.read-snapshot').nth(1).locator('tbody th')).toContainText('WETH');
@@ -1220,6 +1217,7 @@ test('read history keeps legacy saved values separate from tokens with no succes
   },{address:a,weth:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',timestamp});
   await page.goto('/');
   await openWalletDetails(page,a);
+  await page.locator('.history-details > summary').first().click();
   const history=page.getByRole('region',{name:'Balance read history',exact:true});
   const legacy=history.getByRole('article',{name:'Unverified saved values',exact:true});
   const pending=history.getByRole('article',{name:'Awaiting first read',exact:true});
@@ -1258,11 +1256,12 @@ test('expandable timestamped retrieval stream keeps history, follows new entries
     const worker=(window as any).__verifiers[0];
     for(let i=0;i<65;i++) worker.onmessage({data:{type:'progress',run:worker.request.id,message:'Proof step '+i+': verifying account and requested storage witnesses.'}});
   });
-  expect(await stream.evaluate(node=>node.scrollHeight-node.clientHeight-node.scrollTop)).toBeLessThanOrEqual(1);
-  await stream.evaluate(node=>{node.focus({preventScroll:true});node.scrollTop=0;});
+  expect(await stream.evaluate(node=>node.lastElementChild!.getBoundingClientRect().bottom-document.querySelector('#wallets')!.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1);
+  await stream.evaluate(node=>{node.focus({preventScroll:true});const root=document.querySelector('#wallets')!;root.scrollTop+=node.firstElementChild!.getBoundingClientRect().top-root.getBoundingClientRect().top-44;});
+  const scrollback=await page.locator('#wallets').evaluate(node=>node.scrollTop);
   await emit({type:'progress',message:'A newer message while reading earlier entries'});
   await expect(stream).toBeFocused();
-  expect(await stream.evaluate(node=>node.scrollTop)).toBe(0);
+  expect(await page.locator('#wallets').evaluate(node=>node.scrollTop)).toBeCloseTo(scrollback,0);
   await log.locator('summary').click();
   await emit({type:'progress',message:'Message received while the stream is collapsed'});
   await log.locator('summary').click();
@@ -1342,6 +1341,7 @@ for(const available of [true,false]) test('proof-window '+(available?'recovery':
     await page.evaluate(()=>{const worker=(window as any).__verifiers[0];worker.onmessage({data:{type:'fatal',run:worker.request.id,error:'Test cleanup'}});});
   } else {
     await expect(page.locator('.wallet .spinner')).toHaveCount(0);
+    await page.getByRole('button',{name:'Explain ETH failure for '+a,exact:true}).click();
     await expect(page.getByRole('region',{name:'ETH balance failure',exact:true})).toContainText('RPC cannot prove this finalized block');
     await expect(page.getByRole('region',{name:'ETH balance failure',exact:true}).locator('.failure-action')).toContainText('historical eth_getProof support');
   }
@@ -1360,7 +1360,7 @@ for (const width of [1280, 390]) test(`balance updates keep mounted rows, icons 
   await page.locator('.retrieval-log > summary').first().click();
   await expect(page.locator('.log-stream li').first()).toHaveAttribute('data-log-id', /\d+/);
   await page.evaluate(() => {
-    const nodes = ['.wallet-table', '.wallet', '.blockie', '.refresh-icon .spinner', '.balance .amount', '.total', '.total .spinner', '.detail-scroll', '.log-stream', '.log-stream li'];
+    const nodes = ['.wallet-table', '.wallet', '.blockie', '.refresh-icon .spinner', '.balance .amount', '.total', '.total .spinner', '.detail-content', '.log-stream', '.log-stream li'];
     (window as any).__stableNodes = nodes.map(selector => ({ selector, node: document.querySelector(selector) }));
     (window as any).__panelHeight = document.querySelector('.verification-panel')!.getBoundingClientRect().height;
     (window as any).__columnWidths = [...document.querySelectorAll('.wallet-table > thead > tr > th')].map(node => node.getBoundingClientRect().width);

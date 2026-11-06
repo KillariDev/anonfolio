@@ -22,7 +22,7 @@ export function readHistory(wallet: Wallet, tokens: Token[]) {
     groups.get(key)!.rows.push({token,balance});
   }
   for (const [key, group] of groups) {
-    const card = document.createElement('article'); card.className = 'read-snapshot';
+    const card = document.createElement('article'); card.className = 'read-snapshot'; card.dataset.viewKey = key;
     const header = document.createElement('div'); header.className = 'snapshot-heading';
     const heading = document.createElement('strong');
     const blockName = group.block ? 'Finalized block #' + BigInt(group.block.number).toLocaleString() : key === 'legacy' ? 'Unverified saved values' : 'Awaiting first read';

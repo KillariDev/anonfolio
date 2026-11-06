@@ -27,7 +27,14 @@ export function logStream(wallet:Wallet,open=false) {
   if(open) fill(details);
   details.ontoggle=event=>{
     const target=event.currentTarget as HTMLDetailsElement;
-    if(target.open) {fill(target);const stream=target.querySelector('.log-stream')!;stream.scrollTop=stream.scrollHeight;}
+    if(target.open) {
+      fill(target);
+      const end=target.querySelector('.log-stream > li:last-child'), root=target.closest<HTMLElement>('#wallets');
+      if(end && root) {
+        root.scrollIntoView({block:'nearest',inline:'nearest'});
+        root.scrollTop+=Math.max(0,end.getBoundingClientRect().bottom-Math.min(root.getBoundingClientRect().bottom,window.innerHeight)+8);
+      }
+    }
   };
   return details;
 }
