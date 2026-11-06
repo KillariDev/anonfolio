@@ -514,6 +514,13 @@ function walletDetails(wallet: Wallet, logOpen=false) {
     wallet.activity.filter(item => tokens.some(token => token.address === item.asset)).forEach(item => {
       const line = document.createElement('div');
       line.className = 'activity-item ' + item.phase; line.dataset.asset = item.asset;
+      // Retain the row's height until the refresh finishes, without repeating
+      // successful balances already displayed in the holdings above.
+      if (item.phase === 'received') {
+        line.setAttribute('aria-hidden', 'true');
+        activity.append(line);
+        return;
+      }
       const indicator = document.createElement('span'); indicator.className = 'activity-indicator';
       if (wallet.loading && item.phase === 'requesting') indicator.append(spinner());
       line.append(indicator);
@@ -521,9 +528,9 @@ function walletDetails(wallet: Wallet, logOpen=false) {
       const title = document.createElement('strong');
       title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? 'Pending'
         : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' on the same ' + (config.mode === 'https' ? 'HTTPS route' : 'private route') + '; verifying finalized state' : config.mode === 'https' ? 'Verifying locally; fetching HTTPS proofs as needed' : 'Verifying locally; fetching private proofs as needed')
-        : item.phase === 'received' ? 'Balance received' : 'Read failed; previous amount kept if available');
+        : 'Read failed; previous amount kept if available');
       const payload = document.createElement('small');
-      payload.textContent = item.phase === 'waiting' || item.phase === 'received' || item.phase === 'failed' ? '' : item.description;
+      payload.textContent = item.phase === 'waiting' || item.phase === 'failed' ? '' : item.description;
       title.title = title.textContent; payload.title = payload.textContent;
       detail.append(title, payload);
       line.append(detail);
