@@ -9,6 +9,12 @@ A browser-verified Ethereum mainnet portfolio tracker, built for IPFS. Track nam
 <!-- portfolio-screenshot -->
 ![Anonfolio tracking vitalik.eth, the Ethereum Foundation and Uniswap treasury with real ETH, WETH, USDC and UNI holdings.](docs/images/readme-portfolio.png)
 
+<details><summary>Light theme</summary>
+
+![Anonfolio tracking vitalik.eth, the Ethereum Foundation and Uniswap treasury with real ETH, WETH, USDC and UNI holdings. Light theme.](docs/images/readme-portfolio-light.png)
+
+</details>
+
 <!-- /portfolio-screenshot -->
 
 [More screenshots](screenshots/README.md)
@@ -33,7 +39,7 @@ Open **http://localhost:4173**.
 
 ## Use
 
-- Click **+** to add one or more addresses. Manage tokens, icons, pricing and network settings with the top-right gear.
+- Click **Add address** to add one or more addresses. Manage tokens, icons, pricing and network settings with the top-right gear.
 - Refresh each address independently. Saved balances reopen without automatic refresh; failed reads retain previous values with stale indicators.
 - View token totals and 30-minute Uniswap v3 TWAP estimates in USDC or a custom quote token. Assets without a qualifying direct pool stay unpriced, and totals are marked partial.
 
@@ -67,7 +73,7 @@ For real-provider tests, Windows setup and screenshot regeneration, see the [tes
 Publish the complete `dist/` directory to IPFS, preferably through an HTTPS subdomain gateway. Each release has an immutable CID; a new CID/origin does not automatically carry over saved portfolios.
 
 <!-- ipfs-build -->
-**IPFS build:** [ipfs://bafybeigacij32w7ngsvhnm4tmvrkltcp2ert73rfn2zxdahzviskpclxvm/](ipfs://bafybeigacij32w7ngsvhnm4tmvrkltcp2ert73rfn2zxdahzviskpclxvm/)
+**IPFS build:** [ipfs://bafybeigmjrcjm5semyaszcu6oe4k5wipxl34vajmjt6zs2cbky3gjjsvsm/](ipfs://bafybeigmjrcjm5semyaszcu6oe4k5wipxl34vajmjt6zs2cbky3gjjsvsm/)
 
 Locally validated export; public availability requires pinning.
 <!-- /ipfs-build -->

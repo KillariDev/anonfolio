@@ -9,6 +9,7 @@ The screenshots show a historical snapshot, not an automatically updating portfo
 ## Files
 
 - `readme-portfolio.png`: the compact portfolio overview used in the README and embedded in the presentation.
+- `readme-portfolio-light.png`: the same overview with the light theme selected, shown in the README's collapsible light-theme section. The app defaults to dark.
 - `portfolio.png`: the same public-address snapshot with custom-token settings open, used in the HTML guide.
 - `portfolio-snapshot.json`: exact capture timestamp, RPC operators, token definitions, raw balances, verified block hashes/state roots/timestamps, and bigint price fractions returned by the application. This is a reproducible data snapshot, not a collection of the full proof witnesses.
 

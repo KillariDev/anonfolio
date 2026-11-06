@@ -94,6 +94,15 @@ test('published screenshots show verified public mainnet holdings and custom ERC
   const readme=test.info().outputPath('readme-portfolio.png');
   await page.screenshot({path:readme,animations:'disabled',fullPage:true});
   if(update)await copyFile(readme,new URL('../docs/images/readme-portfolio.png',import.meta.url));
+  await page.getByRole('button',{name:'Switch to light theme',exact:true}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await page.mouse.move(0,0);
+  await page.evaluate(()=>(document.activeElement as HTMLElement)?.blur());
+  const readmeLight=test.info().outputPath('readme-portfolio-light.png');
+  await page.screenshot({path:readmeLight,animations:'disabled',fullPage:true});
+  if(update)await copyFile(readmeLight,new URL('../docs/images/readme-portfolio-light.png',import.meta.url));
+  await page.getByRole('button',{name:'Switch to dark theme',exact:true}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
   await page.setViewportSize({width:1440,height:900});
   await openTokenSettings(page);
   await expect(page.locator('#token-list')).toContainText('USDC');

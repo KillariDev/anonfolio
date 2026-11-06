@@ -1097,8 +1097,10 @@ test('compact status icons explain verification, proven zero, missing prices and
   await expect(proven).toHaveAttribute('data-tooltip','Verified finalized');
   await expect(weth).toHaveCount(0);
   await expect(custom.locator('.price-estimate').getByRole('img')).toHaveAttribute('data-tooltip',/Unpriced: No direct pool qualifies/);
-  await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toHaveCount(0);
-  await expect(page.locator('.row-status')).toHaveCount(0);
+  // One row-level status summarises the address; verified holdings reveal their icon on hover.
+  await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toHaveCount(1);
+  await expect(page.locator('.row-status')).toHaveCount(1);
+  await expect(page.locator('.row-status')).toHaveAttribute('data-state','verified');
   for(const node of await page.locator('.status-icon').all()) {
     await expect(node).toHaveAttribute('data-tooltip',/.+/);
     await expect(node).toHaveAttribute('aria-label',/.+/);
@@ -1373,9 +1375,9 @@ for (const width of [1280, 390]) test(`balance updates keep mounted rows, icons 
   await page.goto('/');
   await page.locator('#address').fill(a + '\n' + b);
   await page.getByRole('button', { name: 'add address to track', exact: true }).click();
-  await expect(page.locator('.wallet-table > thead > tr > th')).toHaveCount(3);
-  await expect(page.locator('.balances').first().locator(':scope > th, :scope > td')).toHaveCount(3);
-  await expect(page.locator('.wallet-details > td').first()).toHaveAttribute('colspan', '3');
+  await expect(page.locator('.wallet-table > thead > tr > th')).toHaveCount(5);
+  await expect(page.locator('.balances').first().locator(':scope > th, :scope > td')).toHaveCount(5);
+  await expect(page.locator('.wallet-details > td').first()).toHaveAttribute('colspan', '5');
   await openWalletDetails(page, a);
   await page.locator('.retrieval-log > summary').first().click();
   await expect(page.locator('.log-stream li').first()).toHaveAttribute('data-log-id', /\d+/);
@@ -1436,7 +1438,7 @@ for (const width of [1280, 390]) test(`balance values and verification icons sha
   expect(geometry.right).toBeLessThanOrEqual(geometry.cellRight);
 });
 
-for (const width of [1280, 390]) test(`add-address plus button sits below tracked rows and toggles the form at ${width}px`, async ({ page }) => {
+for (const width of [1280, 390]) test(`add-address button sits in the Addresses heading above the rows and toggles the form at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   await mockConnection(page);
   await page.goto('/');
@@ -1445,10 +1447,13 @@ for (const width of [1280, 390]) test(`add-address plus button sits below tracke
   const toggle = page.getByRole('button', { name: 'Add addresses', exact: true });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(toggle.locator('svg')).toBeVisible();
-  await expect(toggle).toHaveText('');
+  await expect(toggle).toHaveText('Add address');
   await expect(page.locator('#wallet-form')).not.toBeVisible();
-  const below = await page.evaluate(() => document.querySelector('#address-panel')!.getBoundingClientRect().top >= document.querySelector('#wallets')!.getBoundingClientRect().bottom);
-  expect(below).toBe(true);
+  const placement = await page.evaluate(() => {
+    const toggle = document.querySelector('.address-toggle')!.getBoundingClientRect(), heading = document.querySelector('.section-heading h2')!.getBoundingClientRect(), wallets = document.querySelector('#wallets')!.getBoundingClientRect();
+    return { aboveRows: toggle.bottom <= wallets.top, sameRow: Math.abs((toggle.top + toggle.height / 2) - (heading.top + heading.height / 2)) <= 2 };
+  });
+  expect(placement).toEqual({ aboveRows: true, sameRow: true });
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#address')).toBeFocused();

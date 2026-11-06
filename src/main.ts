@@ -1,4 +1,4 @@
-import { explain, explanationGroup, installTooltips } from './tooltips';
+import { explain, explanationGroup, flash, installTooltips } from './tooltips';
 import { verificationPanel } from './verification-panel';
 import { pageMarkup } from './page';
 import { heliosStatus, subscribeHeliosStatus } from './verification/status';
@@ -29,11 +29,36 @@ import { RetryQueue, retryDelay } from './retries';
 import { loadPricing, savePricing, validatePricing, defaultPricing, usableEstimate, valueFraction, displayValue, retryPrice, pricingSettingsKey, PRICING_KEY, type PricingSettings } from './pricing';
 import { estimatedTotal, portfolioTotals } from './totals';
 import { readIcon, tokenIcon, statusIcon, type StatusIcon } from './icons';
+import { applyTheme, loadTheme, otherTheme, saveTheme, THEME_KEY } from './theme';
 import './style.css';
 
+let theme = loadTheme();
+applyTheme(theme);
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = pageMarkup(appIcon);
+const themeToggle = document.querySelector<HTMLButtonElement>('#theme-toggle')!;
+function renderThemeToggle() {
+  const label = 'Switch to ' + otherTheme(theme) + ' theme';
+  themeToggle.setAttribute('aria-label', label);
+  themeToggle.title = label;
+  themeToggle.dataset.theme = theme;
+}
+themeToggle.addEventListener('click', () => {
+  theme = otherTheme(theme);
+  applyTheme(theme); saveTheme(theme); renderThemeToggle();
+});
+renderThemeToggle();
 
 installTooltips();
+
+// The settings sheet keeps every section in one scroll; the nav only jumps.
+const settingsNav = [...document.querySelectorAll<HTMLButtonElement>('.settings-nav button')];
+for (const button of settingsNav) button.addEventListener('click', () => {
+  const section = document.getElementById(button.dataset.section!);
+  if (!section) return;
+  if (section instanceof HTMLDetailsElement) section.open = true;
+  for (const other of settingsNav) other.setAttribute('aria-current', other === button ? 'true' : 'false');
+  section.scrollIntoView({ block: 'start' });
+});
 
 document.querySelector('.network i')!.replaceWith(technologyIcon('ethereum', true));
 document.querySelector('#pricing-form h2')!.prepend(technologyIcon('uniswap', true));
@@ -61,6 +86,15 @@ function closeSettings(restoreFocus = false) {
 }
 document.querySelector('#close-settings')!.addEventListener('click', () => closeSettings(true));
 settingsPanel.addEventListener('toggle', () => settingsToggle.setAttribute('aria-expanded', String(settingsPanel.open)));
+// The settings sheet starts below the header while the header is in view, so the gear stays reachable.
+const settingsSheet = document.querySelector<HTMLElement>('#settings-panel')!;
+function placeSettingsSheet() {
+  if (!settingsPanel.open) return;
+  settingsSheet.style.top = Math.max(0, document.querySelector('header')!.getBoundingClientRect().bottom) + 'px';
+}
+settingsPanel.addEventListener('toggle', placeSettingsSheet);
+window.addEventListener('scroll', placeSettingsSheet, { passive: true });
+window.addEventListener('resize', placeSettingsSheet);
 document.addEventListener('pointerdown', event => {
   if (settingsPanel.open && !settingsPanel.contains(event.target as Node)) closeSettings();
 });
@@ -139,6 +173,7 @@ function persist(edit?: () => void) {
 }
 window.addEventListener('storage', event => {
   if (event.storageArea !== localStorage) return;
+  if (event.key === THEME_KEY || event.key === null) { theme = loadTheme(); applyTheme(theme); renderThemeToggle(); }
   if (event.key === PRICING_KEY || event.key === null) {
     adoptPricing(loadPricing());
     showPricingSettings();
@@ -183,11 +218,18 @@ function renderHeliosStatus() {
   icon.setAttribute('aria-hidden', 'true');
   const label = document.createElement('strong');
   label.textContent = 'Helios · ' + labels[status.phase];
-  updateChildren(node, [icon, label]);
+  const children: Node[] = [icon, label];
+  if (status.phase === 'ready' && status.block) {
+    const block = document.createElement('span'); block.className = 'helios-block';
+    block.textContent = 'block ' + BigInt(status.block.number).toLocaleString();
+    children.push(block);
+  }
+  updateChildren(node, children);
 }
 function renderConnection() {
   const node = document.querySelector<HTMLElement>('#connection')!;
   node.className = 'connection ' + state;
+  node.dataset.mode = config.mode === 'https' ? 'https' : 'tor';
   node.setAttribute('aria-label', config.mode === 'https' ? 'HTTPS connection' : 'Private connection');
   const heading = document.createElement('div');
   heading.className = 'connection-heading';
@@ -405,12 +447,29 @@ function renderTokens() {
     list.append(item);
   }
 }
-function valuationFlags(estimate: ReturnType<typeof estimatedTotal>) {
+function valuationFlags(estimate: ReturnType<typeof estimatedTotal>, labelled = false) {
   const flags = document.createElement('span'); flags.className = 'valuation-flags';
-  if (estimate.known < estimate.count || estimate.decimalsMismatch) flags.append(statusIcon('partial', 'Partial', 'Partial value: only ' + estimate.known + ' of ' + estimate.count + ' holdings have a usable price. Unpriced holdings are excluded.'));
-  if (estimate.stale) flags.append(statusIcon('stale', 'Stale', 'Includes ' + estimate.stale + ' saved or stale holding values.'));
-  if (estimate.mixedBlocks) flags.append(statusIcon('unverified', 'Mixed finalized blocks', 'Holding values come from different verified finalized blocks.'));
+  const flag = (icon: HTMLElement, label: string, kind: StatusIcon) => {
+    if (!labelled) return icon;
+    const pill = document.createElement('span'); pill.className = 'flag-pill pill-' + kind;
+    const text = document.createElement('span'); text.className = 'flag-text'; text.setAttribute('aria-hidden', 'true'); text.textContent = label;
+    pill.append(icon, text);
+    return pill;
+  };
+  if (estimate.known < estimate.count || estimate.decimalsMismatch) flags.append(flag(statusIcon('partial', 'Partial', 'Partial value: only ' + estimate.known + ' of ' + estimate.count + ' holdings have a usable price. Unpriced holdings are excluded.'), 'Partial', 'partial'));
+  if (estimate.stale) flags.append(flag(statusIcon('stale', 'Stale', 'Includes ' + estimate.stale + ' saved or stale holding values.'), 'Stale', 'stale'));
+  if (estimate.mixedBlocks) flags.append(flag(statusIcon('unverified', 'Mixed finalized blocks', 'Holding values come from different verified finalized blocks.'), 'Mixed blocks', 'unverified'));
   return flags;
+}
+function shortTime(timestamp: number) {
+  return new Date(timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+// Allocation swatches cycle by token position; they carry no meaning beyond telling rows apart.
+const allocationPalette = ['#7fb0ff', '#f06bc4', '#5fd0e0', '#c9a8ff', '#f0a35e', '#8fe39a', '#e0c060', '#5a8ae0'];
+function formatShare(value: bigint, total: bigint) {
+  if (value === 0n) return '0%';
+  const basisPoints = Number(value * 10000n / total);
+  return basisPoints < 10 ? '<0.1%' : (basisPoints / 100).toFixed(1) + '%';
 }
 function valuationAmount(estimate: ReturnType<typeof estimatedTotal>) {
   return estimate.known && !estimate.decimalsMismatch ? '≈ ' + formatBalance(displayValue(estimate.value), estimate.decimals + 18) : '—';
@@ -424,11 +483,30 @@ function renderTotals() {
   const number = document.createElement('strong'); number.className = 'portfolio-value-number'; number.textContent = valuationAmount(estimate); number.title = number.textContent;
   const currency = document.createElement('span'); currency.className = 'portfolio-value-currency'; currency.textContent = pricing.quote.symbol;
   value.append(number, document.createTextNode(' '), currency);
-  primary.append(label, value);
+  const context = document.createElement('div'); context.className = 'portfolio-value-sub';
+  {
+    const parts = [wallets.length + (wallets.length === 1 ? ' address' : ' addresses'), tokens.length + (tokens.length === 1 ? ' token' : ' tokens')];
+    let latestBlock: bigint | undefined, latestRead = 0;
+    const blocks = new Set<string>();
+    for (const wallet of wallets) for (const token of tokens) {
+      const balance = tokenBalance(wallet, token);
+      if (balance.verifiedBlock) {
+        const block = BigInt(balance.verifiedBlock.number);
+        if (latestBlock === undefined || block > latestBlock) latestBlock = block;
+        blocks.add(balance.verifiedBlock.hash);
+      }
+      if (balance.updatedAt && balance.updatedAt > latestRead) latestRead = balance.updatedAt;
+    }
+    if (latestBlock !== undefined) parts.push((blocks.size > 1 ? 'Finalized blocks up to #' : 'Finalized block #') + latestBlock.toLocaleString());
+    if (latestRead) parts.push('Last read ' + shortTime(latestRead));
+    context.textContent = parts.join(' · ');
+    context.title = context.textContent;
+  }
+  primary.append(label, value, context);
   const metadata = document.createElement('div'); metadata.className = 'portfolio-value-meta';
   const method = statusIcon('waiting', 'Price methodology', 'Estimated using 30-minute Uniswap v3 TWAPs from direct token/' + pricing.quote.symbol + ' pools at verified finalized blocks. Not a live trading quote.');
   method.querySelector('svg')!.replaceWith(technologyIcon('uniswap', true));
-  metadata.append(valuationFlags(estimate), method);
+  metadata.append(valuationFlags(estimate, true), method);
   updateChildren(summary, [primary, metadata]);
   // Keep the aggregate explanation on the value itself. The full-width row
   // includes empty space beside the pricing icon and is a misleading anchor.
@@ -441,10 +519,27 @@ function renderTotals() {
     empty.textContent = 'No tokens tracked. Add a token to show balances and totals.';
     totals.append(empty);
   }
-  for (const total of portfolioTotals(wallets, tokens)) {
+  const rows = portfolioTotals(wallets, tokens).map((total, index) => ({ total, index, valuation: estimatedTotal(wallets, [total], pricing) }));
+  const portfolioValue = estimate.known && !estimate.decimalsMismatch ? displayValue(estimate.value) : 0n;
+  const priced = (row: typeof rows[number]) => row.valuation.known > 0 && !row.valuation.decimalsMismatch && portfolioValue > 0n;
+  if (tokens.length) {
+    // The bar and header always occupy the same space, so arriving prices never move the rows.
+    const bar = document.createElement('div'); bar.className = 'allocation-bar'; bar.setAttribute('aria-hidden', 'true');
+    for (const row of rows.filter(priced)) {
+      const segment = document.createElement('span');
+      segment.style.width = (Number(displayValue(row.valuation.value) * 10000n / portfolioValue) / 100) + '%';
+      segment.style.background = allocationPalette[row.index % allocationPalette.length]!;
+      bar.append(segment);
+    }
+    const head = document.createElement('div'); head.className = 'totals-head'; head.setAttribute('aria-hidden', 'true');
+    for (const column of ['Token', 'Amount', 'Value', 'Share']) { const cell = document.createElement('span'); cell.textContent = column; head.append(cell); }
+    totals.append(bar, head);
+  }
+  for (const { total, index, valuation } of rows) {
     const card = document.createElement('article');
     card.className = 'total';
     card.dataset.asset = total.id;
+    card.style.setProperty('--swatch', allocationPalette[index % allocationPalette.length]!);
     card.setAttribute('aria-label', total.symbol + ' total' + (total.address !== 'eth' ? ' · ' + total.address : ''));
     const label = document.createElement('div');
     label.className = 'total-label';
@@ -460,17 +555,19 @@ function renderTotals() {
     if (total.mixedBlocks) provenance += ' · mixed finalized blocks';
     if (total.stale) provenance += ' · ' + total.stale + ' stale';
     amount.title += ' · ' + provenance;
-    const valuation = estimatedTotal(wallets, [total], pricing);
     const quote = document.createElement('div'); quote.className = 'token-value';
     quote.dataset.state = !valuation.known || valuation.decimalsMismatch ? 'unavailable' : valuation.known < valuation.count ? 'partial' : 'complete';
     quote.setAttribute('aria-label', total.symbol + ' estimated value in ' + pricing.quote.symbol);
     quote.title = valuation.known + ' of ' + valuation.count + ' addresses priced; 30-minute direct-pool TWAP.';
     const subtotal = document.createElement('span'); subtotal.className = 'token-value-amount';
-    subtotal.textContent = valuationAmount(valuation) + ' ' + pricing.quote.symbol;
+    subtotal.textContent = valuation.known ? valuationAmount(valuation) + ' ' + pricing.quote.symbol : 'Unpriced';
     quote.title = subtotal.textContent + ' · ' + quote.title;
     quote.append(subtotal, valuationFlags(valuation));
     const amounts = document.createElement('div'); amounts.className = 'total-balances'; amounts.append(amount, quote);
-    card.append(label, amounts);
+    const share = document.createElement('div'); share.className = 'total-share';
+    share.textContent = priced({ total, index, valuation }) ? formatShare(displayValue(valuation.value), portfolioValue) : '—';
+    share.setAttribute('aria-label', total.symbol + ' share of portfolio value');
+    card.append(label, amounts, share);
     explanationGroup(card, amount.title + '\n' + quote.title);
     totals.append(card);
   }
@@ -554,6 +651,53 @@ function walletDetails(wallet: Wallet, logOpen=false) {
   frame.append(content);
   return frame;
 }
+// One row-level status replaces per-holding badges in the happy path: verified rows stay quiet,
+// and only saved, stale, failed or unread states draw attention.
+function rowStatus(wallet: Wallet) {
+  const status = document.createElement('div'); status.className = 'row-status';
+  const balances = tokens.map(token => tokenBalance(wallet, token));
+  const failed = balances.filter(balance => balance.failed).length;
+  const latest = Math.max(0, ...balances.map(balance => balance.updatedAt || 0));
+  let kind: StatusIcon, text: string, explanation: string;
+  if (wallet.loading) { kind = 'waiting'; text = wallet.queuedForVerifier ? 'Queued' : 'Reading'; explanation = wallet.queuedForVerifier ? 'Waiting for the verifier to free up.' : 'Verifying balances against finalized Ethereum state.'; }
+  else if (!tokens.length) { kind = 'waiting'; text = 'No tokens'; explanation = 'Add a token to read balances.'; }
+  else if (failed) { kind = balances.some(balance => balance.failed && balance.amount === undefined) ? 'unavailable' : 'stale'; text = failed + (failed === 1 ? ' read error' : ' read errors'); explanation = kind === 'stale' ? 'The last refresh failed; previous amounts are shown.' : 'The last refresh failed and some amounts are unavailable.'; }
+  else if (balances.some(balance => balance.amount !== undefined && !balance.verifiedBlock)) { kind = 'unverified'; text = 'Unverified'; explanation = 'Saved values were never verified; refresh to verify.'; }
+  else if (balances.every(balance => balance.amount === undefined)) { kind = 'waiting'; text = 'Not read yet'; explanation = 'Refresh to read and verify balances.'; }
+  else if (balances.some(balance => balance.cached)) { kind = 'saved'; text = 'Saved'; explanation = 'Saved verified balances; refresh to check for updates.'; }
+  else { kind = 'verified'; text = 'Verified'; explanation = 'Every holding was verified against a finalized block.'; }
+  status.dataset.state = kind;
+  const dot = document.createElement('span'); dot.className = 'status-dot'; dot.setAttribute('aria-hidden', 'true');
+  const label = document.createElement('span'); label.className = 'row-status-text'; label.textContent = text;
+  status.append(dot, label);
+  if (latest && !wallet.loading) {
+    const time = document.createElement('time'); time.className = 'row-status-time';
+    time.dateTime = new Date(latest).toISOString(); time.textContent = shortTime(latest);
+    status.append(time);
+    explanation += ' Last successful read ' + new Date(latest).toLocaleString() + '.';
+  }
+  explain(status, explanation, false);
+  return status;
+}
+function copyButton(wallet: Wallet) {
+  const copy = document.createElement('button');
+  copy.type = 'button'; copy.className = 'copy-address';
+  copy.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 9h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>';
+  copy.title = 'Copy address';
+  copy.setAttribute('aria-label', 'Copy ' + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
+  // Re-rendering keeps the mounted button but adopts this handler, so act on the
+  // event target rather than the element this closure was created with.
+  copy.onclick = async event => {
+    const button = event.currentTarget as HTMLElement;
+    try {
+      await navigator.clipboard.writeText(wallet.address);
+      button.classList.add('copied');
+      flash(button, 'Copied');
+      setTimeout(() => button.classList.remove('copied'), 1500);
+    } catch { flash(button, 'Copying is unavailable in this browser', 2500); }
+  };
+  return copy;
+}
 function render() {
   const viewport = captureViewport(walletList);
   const logs = new Map([...walletList.querySelectorAll<HTMLDetailsElement>('.retrieval-log')].map(node => {
@@ -578,7 +722,7 @@ function render() {
   const table = document.createElement('table');
   table.className = 'wallet-table';
   const colgroup = document.createElement('colgroup');
-  for (const kind of ['address', 'holdings', 'actions']) {
+  for (const kind of ['address', 'value', 'holdings', 'status', 'actions']) {
     const col = document.createElement('col'); col.className = 'wallet-column-' + kind; colgroup.append(col);
   }
   table.append(colgroup);
@@ -587,9 +731,10 @@ function render() {
   caption.textContent = 'Token balances by tracked address. Expand a row for timestamps and private request progress.';
   const head = document.createElement('thead');
   const columns = document.createElement('tr');
-  for (const entry of ['Address / refresh', 'Holdings', 'Actions']) {
+  for (const entry of ['Address', 'Value', 'Holdings', 'Status', 'Actions']) {
     const column = document.createElement('th');
     column.scope = 'col';
+    column.className = 'wallet-head-' + entry.toLowerCase();
     if (entry === 'Actions') column.setAttribute('aria-label', 'Address details');
     else column.textContent = entry;
     columns.append(column);
@@ -607,39 +752,25 @@ function render() {
     const identity = document.createElement('th');
     identity.scope = 'row';
     identity.className = 'wallet-head';
-    const address = addressDisplay(wallet, true);
-    const refresh = document.createElement('button');
-    refresh.className = 'refresh-icon';
-    refresh.textContent = wallet.loading ? '' : '↻';
-    if (wallet.loading && !wallet.queuedForVerifier) refresh.append(spinner());
-    else if (wallet.queuedForVerifier) refresh.textContent = '…';
-    refresh.disabled = wallet.loading || !tokens.length;
-    refresh.title = wallet.queuedForVerifier ? 'Queued for verification' : wallet.loading ? 'Reading balances' : !tokens.length ? 'Add a token to retrieve balances' : 'Refresh this address';
-    refresh.setAttribute('aria-label', (wallet.queuedForVerifier ? 'Queued ' : wallet.loading ? 'Reading ' : 'Refresh ') + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
-    refresh.onclick = () => { void refreshWallet(wallet); };
     const addressLine = document.createElement('div');
     addressLine.className = 'address-line';
+    addressLine.append(addressDisplay(wallet, true), copyButton(wallet));
+    identity.append(addressLine);
+    row.append(identity);
+    const valueCell = document.createElement('td'); valueCell.className = 'wallet-value';
     const valuation = estimatedTotal([wallet], tokens, pricing);
     const addressValue = document.createElement('div'); addressValue.className = 'address-valuation';
     addressValue.setAttribute('aria-label', 'Estimated address value');
     const value = document.createElement('span'); value.className = 'address-value-estimate';
-    value.textContent = valuationAmount(valuation) + ' ' + pricing.quote.symbol;
-    addressValue.title = value.textContent + ' · ' + valuation.known + '/' + valuation.count + ' holdings priced';
-    addressValue.append(value, valuationFlags(valuation));
+    const valueNumber = document.createElement('span'); valueNumber.className = 'value-number'; valueNumber.textContent = valuationAmount(valuation);
+    const valueCurrency = document.createElement('span'); valueCurrency.className = 'value-currency'; valueCurrency.textContent = pricing.quote.symbol;
+    const valueTrail = document.createElement('span'); valueTrail.className = 'value-trail'; valueTrail.append(valueCurrency, valuationFlags(valuation));
+    value.append(valueNumber, document.createTextNode(' '), valueTrail);
+    addressValue.title = valueNumber.textContent + ' ' + pricing.quote.symbol + ' · ' + valuation.known + '/' + valuation.count + ' holdings priced';
+    addressValue.append(value);
     explanationGroup(addressValue, addressValue.title);
-    addressLine.append(address, addressValue, refresh);
-    identity.append(addressLine);
-    {
-      const progress = document.createElement('small');
-      progress.className = 'verification-progress compact-progress';
-      const request = wallet.networkRequests?.[0];
-      progress.textContent = request ? (request.purpose || (request.state === 'waiting' ? 'Waiting for ' : 'Receiving ') + request.method) + ' · ' + request.host : stageLabels[wallet.verificationStage || 'connection'];
-      if (wallet.checkProgress) progress.textContent = checkLabel(wallet.checkProgress) + ' · ' + progress.textContent;
-      progress.title = request ? progress.textContent + ' · ' + request.method + (request.target ? ' · ' + request.target : '') : wallet.verificationStatus || '';
-      if (!wallet.loading || wallet.verificationStage === 'connection' || expandedAddresses.has(wallet.address)) { progress.textContent = ''; progress.setAttribute('aria-hidden', 'true'); }
-      identity.append(progress);
-    }
-    row.append(identity);
+    valueCell.append(addressValue);
+    row.append(valueCell);
     const pending = (asset: string) => wallet.loading && wallet.verificationStage !== 'connection' && !wallet.queuedForVerifier && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
     const holdingsCell = document.createElement('td'); holdingsCell.className = 'wallet-holdings';
     const holdingsContent = document.createElement('div'); holdingsContent.className = 'holdings-content';
@@ -656,8 +787,31 @@ function render() {
     }
     holdingsCell.append(holdingsContent);
     row.append(holdingsCell);
+    const statusCell = document.createElement('td'); statusCell.className = 'wallet-status';
+    statusCell.append(rowStatus(wallet));
+    {
+      const progress = document.createElement('small');
+      progress.className = 'verification-progress compact-progress';
+      const request = wallet.networkRequests?.[0];
+      progress.textContent = request ? (request.purpose || (request.state === 'waiting' ? 'Waiting for ' : 'Receiving ') + request.method) + ' · ' + request.host : stageLabels[wallet.verificationStage || 'connection'];
+      if (wallet.checkProgress) progress.textContent = checkLabel(wallet.checkProgress) + ' · ' + progress.textContent;
+      progress.title = request ? progress.textContent + ' · ' + request.method + (request.target ? ' · ' + request.target : '') : wallet.verificationStatus || '';
+      if (!wallet.loading || wallet.verificationStage === 'connection' || expandedAddresses.has(wallet.address)) { progress.textContent = ''; progress.setAttribute('aria-hidden', 'true'); }
+      statusCell.append(progress);
+    }
+    row.append(statusCell);
     const actions = document.createElement('td');
     actions.className = 'actions';
+    const refresh = document.createElement('button');
+    refresh.className = 'refresh-icon';
+    refresh.type = 'button';
+    refresh.textContent = wallet.loading ? '' : '↻';
+    if (wallet.loading && !wallet.queuedForVerifier) refresh.append(spinner());
+    else if (wallet.queuedForVerifier) refresh.textContent = '…';
+    refresh.disabled = wallet.loading || !tokens.length;
+    refresh.title = wallet.queuedForVerifier ? 'Queued for verification' : wallet.loading ? 'Reading balances' : !tokens.length ? 'Add a token to retrieve balances' : 'Refresh this address';
+    refresh.setAttribute('aria-label', (wallet.queuedForVerifier ? 'Queued ' : wallet.loading ? 'Reading ' : 'Refresh ') + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
+    refresh.onclick = () => { void refreshWallet(wallet); };
     const expanded = expandedAddresses.has(wallet.address);
     const toggle = document.createElement('button');
     toggle.type = 'button';
@@ -691,14 +845,14 @@ function render() {
         wallets.splice(wallets.indexOf(wallet), 1);
       });
     };
-    actions.append(toggle);
+    actions.append(refresh, toggle);
     row.append(actions);
     const details = document.createElement('tr');
     details.id = 'details-' + wallet.address;
     details.className = 'wallet-details';
     details.hidden = !expanded;
     const detailCell = document.createElement('td');
-    detailCell.colSpan = 3;
+    detailCell.colSpan = 5;
     const content = walletDetails(wallet, logs.get(wallet.address)?.open);
     const detailActions = document.createElement('div');
     detailActions.className = 'detail-actions';
@@ -973,6 +1127,8 @@ void start();
 window.addEventListener('offline', () => { retries.pause(); renderOffline(); });
 window.addEventListener('online', () => { renderOffline(); retries.resume(); if (!connection.cancelled) void start(true); });
 window.addEventListener('pagehide', () => {
+  // An edit still waiting for the portfolio lock must survive an immediate reload or close.
+  if (pendingEdits.length || persistAgain) { persistAgain = false; applyPendingEdits(); savePortfolio(wallets, tokens); }
   pageActive = false;
   refreshGeneration++;
   retries.cancel('connection');
