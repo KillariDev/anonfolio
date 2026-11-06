@@ -47,8 +47,14 @@ export function addressDisplay(wallet: TrackedAddress, compact = false) {
   }
   const address = document.createElement('span');
   address.className = 'wallet-address' + (compact ? ' address-value' : '');
-  address.textContent = wallet.address;
   address.title = wallet.address;
+  if (compact) {
+    // The full address stays in the text content; only the middle is clipped visually.
+    const head = document.createElement('span'); head.className = 'address-head'; head.textContent = wallet.address.slice(0, 6);
+    const middle = document.createElement('span'); middle.className = 'address-middle'; middle.textContent = wallet.address.slice(6, -4);
+    const tail = document.createElement('span'); tail.className = 'address-tail'; tail.textContent = wallet.address.slice(-4);
+    address.append(head, middle, tail);
+  } else address.textContent = wallet.address;
   text.append(address);
   root.append(svg, text);
   return root;

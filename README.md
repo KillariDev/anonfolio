@@ -33,7 +33,7 @@ Open **http://localhost:4173**.
 
 ## Use
 
-- Click **+** to add one or more addresses. Manage tokens, icons, pricing and network settings with the top-right gear.
+- Click **Add address** to add one or more addresses. Manage tokens, icons, pricing and network settings with the top-right gear.
 - Refresh each address independently. Saved balances reopen without automatic refresh; failed reads retain previous values with stale indicators.
 - View token totals and 30-minute Uniswap v3 TWAP estimates in USDC or a custom quote token. Assets without a qualifying direct pool stay unpriced, and totals are marked partial.
 
