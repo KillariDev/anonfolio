@@ -30,7 +30,7 @@ export function readHistory(wallet: Wallet, tokens: Token[]) {
     heading.textContent = blockName;
     header.append(heading);
     if (group.block) {
-      header.prepend(statusIcon('verified', 'Verified block', 'These balances were proved against finalized block ' + group.block.hash));
+      header.prepend(statusIcon('verified', 'Verified block', 'These balances were proved against finalized block #' + BigInt(group.block.number).toLocaleString()));
       const blockTime = document.createElement('div'); blockTime.className = 'snapshot-time';
       const label = document.createElement('span'); label.textContent = 'Block time';
       blockTime.append(label, readTime(group.block.timestamp));
@@ -60,12 +60,6 @@ export function readHistory(wallet: Wallet, tokens: Token[]) {
       row.append(name,time);
     }
     card.append(table);
-    if (group.block) {
-      const hash = document.createElement('details'); hash.className = 'snapshot-hash'; hash.dataset.block = key;
-      const toggle = document.createElement('summary'); toggle.textContent = 'Block hash'; toggle.title = group.block.hash; toggle.setAttribute('aria-label','Block hash '+group.block.hash);
-      const code = document.createElement('code'); code.textContent = group.block.hash;
-      hash.append(toggle,code); card.append(hash);
-    }
     section.append(card);
   }
   return section;

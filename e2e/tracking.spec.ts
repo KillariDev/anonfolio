@@ -1163,7 +1163,7 @@ test('portfolio value and token subtotals sum each address quote with explicit p
   await expect(page.locator('#estimated-total .status-stale')).toHaveAttribute('title',/3 saved or stale/);
 });
 
-test('read history groups shared blocks and keeps per-token read times and full hash details', async ({page}) => {
+test('read history groups shared blocks and keeps read times without displaying block hashes', async ({page}) => {
   await mockConnection(page);
   await page.goto('/');
   await page.locator('#address').fill(a);
@@ -1179,15 +1179,13 @@ test('read history groups shared blocks and keeps per-token read times and full 
     await expect(history.locator('tbody time').nth(index)).toHaveAttribute('datetime',new Date(saved[asset].updatedAt).toISOString());
   }
   await expect(history.locator('.snapshot-time time')).toHaveAttribute('datetime',new Date(saved.eth.verifiedBlock.timestamp).toISOString());
-  const hash=history.locator('.snapshot-hash');
-  await expect(hash.locator('code')).not.toBeVisible();
-  await hash.locator('summary').click();
-  await expect(hash.locator('code')).toHaveText(saved.eth.verifiedBlock.hash);
+  await expect(history.getByText('Block hash',{exact:true})).toHaveCount(0);
+  await expect(history).not.toContainText(saved.eth.verifiedBlock.hash);
   await page.evaluate(()=>{(window as any).__delay=2000;});
   await page.getByRole('button',{name:'Refresh '+a,exact:true}).click();
-  await expect(hash).toHaveJSProperty('open',true);
+  await expect(page.locator('.history-details')).toHaveJSProperty('open',true);
   await expect(page.getByRole('button',{name:'Refresh '+a,exact:true})).toBeEnabled();
-  await expect(hash).toHaveJSProperty('open',true);
+  await expect(page.locator('.history-details')).toHaveJSProperty('open',true);
   await page.screenshot({path:'/tmp/anonfolio-read-history-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

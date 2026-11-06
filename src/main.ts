@@ -563,7 +563,6 @@ function render() {
     return [node.closest<HTMLElement>('.wallet')!.dataset.address,{open:node.open}] as const;
   }));
   const openFailures = new Set([...walletList.querySelectorAll('.failure-technical[open]')].map(node => node.closest('.detail-content')?.getAttribute('data-address') + ':' + node.closest('.read-failure')?.getAttribute('data-view-key')));
-  const openBlocks = new Set([...walletList.querySelectorAll<HTMLElement>('.snapshot-hash[open]')].map(node => node.closest<HTMLElement>('.wallet')?.dataset.address + ':' + node.dataset.block));
   syncProgressClock();
   renderTotals();
   document.querySelector('#count')!.textContent = String(wallets.length);
@@ -697,7 +696,6 @@ function render() {
   walletList.querySelectorAll<HTMLDetailsElement>('.failure-technical').forEach(node => {
     node.open = openFailures.has(node.closest('.detail-content')?.getAttribute('data-address') + ':' + node.closest('.read-failure')?.getAttribute('data-view-key'));
   });
-  walletList.querySelectorAll<HTMLDetailsElement>('.snapshot-hash').forEach(node => { node.open = openBlocks.has(node.closest<HTMLElement>('.wallet')?.dataset.address + ':' + node.dataset.block); });
   restoreViewport(walletList, viewport);
   if (focus) {
     const card = [...walletList.querySelectorAll<HTMLElement>('.wallet')].find(node => node.dataset.address === focusAddress);

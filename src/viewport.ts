@@ -4,7 +4,7 @@ export function captureViewport(root: HTMLElement) {
   const bounds = root.getBoundingClientRect();
   const top = Math.max(0, bounds.top + (root.querySelector('thead')?.getBoundingClientRect().height || 0));
   const bottom = Math.min(bounds.bottom, window.innerHeight);
-  const entries = [...root.querySelectorAll<HTMLElement>('[data-view-key], [data-log-id], .balances, .activity-item, .detail-disclosure > summary, .retrieval-log > summary, .progress-heading, .read-times tbody tr[data-asset], .failure-technical > summary, .failure-message, .snapshot-hash > summary')]
+  const entries = [...root.querySelectorAll<HTMLElement>('[data-view-key], [data-log-id], .balances, .activity-item, .detail-disclosure > summary, .retrieval-log > summary, .progress-heading, .read-times tbody tr[data-asset], .failure-technical > summary, .failure-message')]
     .map(node => {
       const rect=node.getBoundingClientRect();
       const token=node.matches('.read-times tbody tr[data-asset]') ? {wallet:node.closest<HTMLElement>('.wallet')?.dataset.address,asset:node.dataset.asset} : undefined;
