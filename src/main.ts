@@ -395,10 +395,8 @@ function renderTotals() {
   value.append(number, document.createTextNode(' '), currency);
   primary.append(label, value);
   const metadata = document.createElement('div'); metadata.className = 'portfolio-value-meta';
-  const coverage = document.createElement('span'); coverage.className = 'valuation-coverage'; coverage.textContent = estimate.known + ' / ' + estimate.count + ' priced';
-  coverage.title = estimate.known + ' of ' + estimate.count + ' address/token holdings have usable price estimates.';
   const method = statusIcon('waiting', 'Price methodology', 'Estimated using 30-minute Uniswap v3 TWAPs from direct token/' + pricing.quote.symbol + ' pools at verified finalized blocks. Not a live trading quote.');
-  metadata.append(coverage, valuationFlags(estimate), method);
+  metadata.append(valuationFlags(estimate), method);
   updateChildren(summary, [primary, metadata]);
   const totals = document.createDocumentFragment();
   if (!tokens.length) {

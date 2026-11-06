@@ -626,7 +626,7 @@ test('TWAP holding estimates, partial totals and custom quote settings persist',
   await addToken(page);
   await page.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', 'Unpriced']);
-  await expect(page.locator('#estimated-total .valuation-coverage')).toHaveText('2 / 3 priced');
+  await expect(page.locator('#estimated-total .valuation-coverage')).toHaveCount(0);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Quote token', { exact: true }).selectOption('custom');
   await page.getByLabel('Quote contract address').fill('invalid');
@@ -1150,7 +1150,7 @@ test('portfolio value and token subtotals sum each address quote with explicit p
   await expect(page.locator('.total-amount')).toHaveText(['4','6','12']);
   await expect(page.locator('.token-value-amount')).toHaveText(['≈ 5000 USDC','≈ 4000 USDC','≈ 12 USDC']);
   await expect(page.locator('#estimated-total .portfolio-value-amount')).toHaveText('≈ 9012 USDC');
-  await expect(page.locator('#estimated-total .valuation-coverage')).toHaveText('5 / 6 priced');
+  await expect(page.locator('#estimated-total .valuation-coverage')).toHaveCount(0);
   await expect(page.locator('#estimated-total .status-partial')).toHaveAttribute('title',/only 5 of 6/);
   await expect(page.locator('#estimated-total .status-unverified')).toHaveAttribute('title',/different verified finalized blocks/);
   await expect(page.locator('.token-value').nth(0)).toHaveAttribute('data-state','complete');
