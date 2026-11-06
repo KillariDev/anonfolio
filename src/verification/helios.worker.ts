@@ -55,6 +55,11 @@ async function internalFetch(request: Request): Promise<Response> {
     const reply = new Promise<{ status: number; body: string }>((resolve, reject) => replies.set(id, { resolve, reject }));
     scope.postMessage({ type: 'consensus', id, url: url.href });
     const data = await reply;
+    // Consensus payloads supply hash/number pairs for request labels only;
+    // Helios still validates signatures and finalized headers independently.
+    if (data.status >= 200 && data.status < 300) {
+      try { current?.purposes.rememberConsensus(JSON.parse(data.body)); } catch { /* Helios reports malformed consensus responses. */ }
+    }
     if (syncingRun && current?.id === syncingRun && !current.block) step('Consensus response received; validating sync committee signatures and finalized headers.', 'consensus');
     if (url.pathname.includes('/light_client/bootstrap/')) {
       if (url.pathname.split('/').at(-1)?.toLowerCase() !== activeCheckpoint.root) throw new Error('Unexpected consensus checkpoint bootstrap root.');
@@ -123,6 +128,7 @@ async function refresh(message: any) {
     step('Consensus synchronized; selecting one verified finalized block for this refresh.', 'consensus');
     const block = verifiedBlock(await helios.get_block_by_number('finalized', false));
     current.block = block;
+    current.purposes.rememberBlock(block.hash, block.number);
     lightClientStatus({ phase: 'ready', block });
     send('block', { block });
     step('Verified finalized block ' + BigInt(block.number) + ' selected for every balance in this refresh.', 'balances');

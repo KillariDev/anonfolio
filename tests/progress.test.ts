@@ -42,5 +42,22 @@ test('request purposes distinguish accounts, storage, bytecode and independent p
   expect(describe('eth_getCode',pool).purpose).toBe('TOKEN/USDC pool bytecode');
   expect(describe('eth_getProof',tokens[1]!.address,['0x01']).purpose).toBe('WETH storage proof · 1 slot');
   expect(describe('eth_getCode',dependency)).toEqual({target:dependency,purpose:'Contract 0xcdcd…cdcd bytecode'});
-  expect(purposes.describe({jsonrpc:'2.0',id:1,method:'eth_getBlockByHash',params:['0x123',false]}).purpose).toBe('Block header');
+  const hash='0x'+'ab'.repeat(32);
+  const header=(method:string,target:string)=>purposes.describe({jsonrpc:'2.0',id:1,method,params:[target,false]}).purpose;
+  expect(header('eth_getBlockByNumber','0x1922bba')).toBe('Block header #26356666');
+  expect(header('eth_getBlockByNumber','finalized')).toBe('Block header finalized');
+  expect(header('eth_getBlockByHash',hash)).toBe('Block header 0xabababab…abab');
+  purposes.rememberConsensus({data:[{data:{finalized_header:{execution:{block_hash:hash,block_number:'26356666'}}}}]});
+  expect(header('eth_getBlockByHash',hash)).toBe('Block header #26356666');
+  expect(header('eth_getBlockByHash','0x'+'cd'.repeat(32))).toBe('Block header 0xcdcdcdcd…cdcd');
+  purposes.rememberBlock(hash,'invalid');
+  expect(header('eth_getBlockByHash',hash)).toBe('Block header #26356666');
+});
+
+test('consensus labels retain concise checkpoint and update identifiers',async()=>{
+  const {consensusPurpose}=await import('../src/verification/request-purpose');
+  const base='https://consensus.example/eth/v1/beacon/light_client/';
+  expect(consensusPurpose(base+'updates?start_period=1487&count=2')).toBe('Consensus updates · period 1487 × 2');
+  expect(consensusPurpose(base+'bootstrap/0x'+'ab'.repeat(32))).toBe('Consensus bootstrap 0xabababab…abab');
+  expect(consensusPurpose(base+'finality_update')).toBe('Consensus finality update');
 });
