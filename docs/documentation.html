@@ -633,7 +633,7 @@ bun run serve</code>
 </tr>
 <tr><td><code>bun run bootstrap:update SOURCE [DESTINATION]</code></td><td>Publish a fresh public Tor directory mirror.</td>
 </tr>
-<tr><td><code>bun run test:ipfs</code></td><td>Real local Kubo publishing, CID/CAR checks, and path/subdomain gateway browser scenarios. <code>LIVE_RPC=1</code> also enables the live mainnet case.</td>
+<tr><td><code>bun run test:ipfs</code></td><td>Native Windows/macOS/Linux local Kubo publishing, CID/CAR checks, and path/subdomain gateway browser scenarios. The Bun check invokes Kubo directly without <code>sh</code>, Git Bash, WSL or Docker; use <code>IPFS_BIN</code> for a custom Kubo executable path and install Playwright Chromium first. The Linux Docker image retains its shell entry points. <code>LIVE_RPC=1</code> also enables the live mainnet case.</td>
 </tr>
 </tbody>
 </table>

@@ -1,14 +1,15 @@
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import { kubo } from './ipfs';
 
 // Use a real, isolated Kubo repository. Never alter the operator's running node.
 const ipfs = Bun.which(process.env.IPFS_BIN || 'ipfs');
 if (!ipfs) throw new Error('Install Kubo (tested with v0.25.0), or set IPFS_BIN to its executable, then run bun run test:ipfs.');
 const root = resolve(import.meta.dir, '..');
 const temporary = await mkdtemp(resolve(tmpdir(), 'anonfolio-ipfs-'));
-const env = { ...process.env, IPFS_PATH: resolve(temporary, 'repo'),
-  PATH: dirname(ipfs) + delimiter + (process.env.PATH || '') };
+const env = { ...process.env, IPFS_PATH: resolve(temporary, 'repo') };
+const node = kubo([ipfs], root, env);
 async function run(command: string[], variables: Record<string, string | undefined> = env) {
   const process = Bun.spawn(command, { cwd: root, env: variables, stdout: 'pipe', stderr: 'pipe' });
   const [stdout, stderr, code] = await Promise.all([new Response(process.stdout).text(), new Response(process.stderr).text(), process.exited]);
@@ -29,9 +30,7 @@ try {
   await run([ipfs, 'config', 'Addresses.API', api]);
   await run([ipfs, 'config', 'Addresses.Gateway', '/ip4/127.0.0.1/tcp/' + gatewayPort]);
   const cid = await run([ipfs, 'add', '--cid-version', '1', '--quieter', '--only-hash', '--recursive', 'dist']);
-  const cidFile = resolve(temporary, 'build-cid.txt');
-  await Bun.write(cidFile, cid + '\n');
-  const publishEnv = { ...env, IPFS_API_MULTIADDR: api, IPFS_BUILD_CID_FILE: cidFile, IPFS_EXPORT_DIR: resolve(root, 'dist') };
+  const exportDirectory = resolve(root, 'dist');
   daemon = Bun.spawn([ipfs, 'daemon', '--offline'], { env, stdout: 'ignore', stderr: 'inherit' });
   let ready = false;
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -43,17 +42,14 @@ try {
     await Bun.sleep(100);
   }
   if (!ready) throw new Error('Kubo API did not become ready.');
-  console.log(await run(['sh', 'scripts/publish-ipfs.sh'], publishEnv));
+  console.log('Published CID: ' + await node.publish(cid, api, exportDirectory));
   // Exercise the fail-closed CID check against the real publisher as well.
-  await Bun.write(cidFile, 'unexpected-cid\n');
   let mismatchRejected = false;
-  try { await run(['sh', 'scripts/publish-ipfs.sh'], publishEnv); }
+  try { await node.publish('unexpected-cid', api, exportDirectory); }
   catch (error) { mismatchRejected = String(error).includes('does not match build CID'); }
   if (!mismatchRejected) throw new Error('Publisher accepted a mismatched CID.');
-  await Bun.write(cidFile, cid + '\n');
   const artifactDir = resolve(root, 'ipfs-artifacts');
-  await mkdir(artifactDir, { recursive: true });
-  console.log(await run(['sh', 'scripts/export-ipfs.sh'], { ...publishEnv, IPFS_ARTIFACT_DIR: artifactDir }));
+  console.log('Exported IPFS artifact: ' + await node.exportCar(cid, exportDirectory, artifactDir));
   // Import into a fresh repository to verify the CAR carries the complete site.
   const importEnv = { ...env, IPFS_PATH: resolve(temporary, 'import-repo') };
   await run([ipfs, 'init', '--profile=test'], importEnv);

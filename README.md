@@ -7,7 +7,7 @@ An Ethereum mainnet portfolio reader that verifies balances in your browser. Tra
 **Anonfolio will be hosted on IPFS** as a static, content-addressed application. Open it with an IPFS-capable browser or through an HTTPS IPFS gateway.
 
 <!-- ipfs-build -->
-**IPFS build:** [ipfs://bafybeicoxitkxyjqe5asjulkbnjcdybsvrblup7jz5sz5yzdcfq4skez6y/](ipfs://bafybeicoxitkxyjqe5asjulkbnjcdybsvrblup7jz5sz5yzdcfq4skez6y/)
+**IPFS build:** [ipfs://bafybeieldjot7zceyp3yjon4pryqzm4f3i76n4gdnqvuxixdmy2gtu2nau/](ipfs://bafybeieldjot7zceyp3yjon4pryqzm4f3i76n4gdnqvuxixdmy2gtu2nau/)
 
 This is the content address of the exported build validated with local IPFS gateways, not a guarantee that it is pinned on the public network. Updated releases have new CIDs.
 <!-- /ipfs-build -->
@@ -148,6 +148,15 @@ Build, publish and verify IPFS releases:
 bun run ui:docker            # build the image and publish through a reachable Kubo API
 bun run test:ipfs            # isolated Kubo/CAR/path + subdomain gateway checks; needs Kubo
 ```
+
+`bun run test:ipfs` runs natively on Windows, macOS and Linux with Bun, Kubo and Playwright Chromium; no `sh`, Git Bash, WSL or Docker is required for this check. Install Chromium with `bunx playwright install chromium`. Put `ipfs`/`ipfs.exe` on your `PATH`, or set `IPFS_BIN` to its executable path. For example, in PowerShell:
+
+```powershell
+$env:IPFS_BIN = 'C:\tools\kubo\ipfs.exe'
+bun run test:ipfs
+```
+
+The local check invokes Kubo directly and streams binary CAR bytes to disk. The `.sh` publishing/export entry points are used inside the Linux Docker image.
 
 `IPFS_API_MULTIADDR` selects the publisher's Kubo API; the Docker default is `/dns4/host.docker.internal/tcp/5001`. The publisher checks the uploaded CID against the build CID. `scripts/export-ipfs.sh` produces `anonfolio.car` and `ipfs-cid.txt`. Use `ipfs://<CID>/` with that exported CID; a content address alone does not guarantee public availability. `bun run test:ipfs` also writes these artifacts under `ipfs-artifacts/`, using an isolated local node without publishing them to the public network. See the [publishing section of the guide](docs/documentation.html#configuration-builds-and-publishing) and [IPFS workflow template](.github-workflows/ipfs-deploy.yml) for export/release details. Enabling that template requires credentials with workflow-write permission.
 
