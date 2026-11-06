@@ -220,3 +220,51 @@ test('an aborted read ignores late verifier events and preserves saved balances'
   finish(); await pending;
   expect(wallet.eth).toEqual(previous);
 });
+
+test('an older in-flight response cannot replace a newer cross-tab balance or attach its quote', async () => {
+  const wallet = makeWallet(address, 'https://one.example');
+  const newerBlock = { ...block, number: '0x101', hash: '0x' + '33'.repeat(32) };
+  const newer = { amount: 9n, failed: false, updatedAt: Date.now(), verifiedBlock: newerBlock };
+  await readBalances(wallet, unusedWorker, [defaultTokens()[0]!], () => {}, false, engine((_tokens, emit) => {
+    // A storage event updates this holding while the older read is in flight.
+    wallet.eth = newer;
+    emit({ type: 'price', asset: 'eth', block, estimate: { blockHash: block.hash } as any });
+    emit({ type: 'balance', asset: 'eth', amount: '2', block });
+  }));
+  expect(wallet.eth).toBe(newer);
+  expect(wallet.eth.estimate).toBeUndefined();
+});
+
+test('transient price errors retry only affected tokens with one explicit pricing snapshot and the same route', async () => {
+  const { defaultPricing, retryPrice } = await import('../src/pricing');
+  const settings = defaultPricing(), wallet = makeWallet(address, 'https://one.example');
+  const key = wallet.isolationKey;
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, false, engine((tokens, emit) => {
+    for (const token of tokens) emit({ type: 'balance', asset: token.address, amount: '7', block });
+    emit({ type: 'price-error', asset: 'eth', error: 'Private eth_getProof timed out after 90 seconds.' });
+    emit({ type: 'price-error', asset: tokens[1]!.address, error: 'No direct pool qualifies' });
+  }), undefined, settings);
+  expect(wallet.eth.failed).toBe(false);
+  expect(retryPrice(wallet.eth, settings)).toBe(true);
+  expect(retryPrice(wallet.weth, settings)).toBe(false);
+  await readBalances(wallet, unusedWorker, defaultTokens(), () => {}, true, async (selectedWallet, worker, tokens, emit, snapshot) => {
+    expect(selectedWallet.isolationKey).toBe(key); expect(worker).toBe(unusedWorker);
+    expect(tokens.map(token => token.address)).toEqual(['eth']); expect(snapshot).toEqual(settings);
+    expect(snapshot).not.toBe(settings);
+    emit({ type: 'balance', asset: 'eth', amount: '7', block });
+    emit({ type: 'price', asset: 'eth', block, estimate: { blockHash: block.hash } as any });
+  }, undefined, settings);
+  expect(wallet.eth.priceError).toBeUndefined(); expect(wallet.eth.priceFailure).toBeUndefined();
+  expect(wallet.weth.priceError).toBe('No direct pool qualifies');
+});
+
+test('a crash after balance success marks unfinished pricing for retry without marking balances failed', async () => {
+  const { defaultPricing, retryPrice } = await import('../src/pricing');
+  const wallet = makeWallet(address, 'https://one.example');
+  await readBalances(wallet, unusedWorker, [defaultTokens()[0]!], () => {}, false, async (_wallet, _worker, _tokens, emit) => {
+    emit({ type: 'balance', asset: 'eth', amount: '7', block });
+    throw new Error('Consensus GET timed out');
+  });
+  expect(wallet.eth.failed).toBe(false); expect(wallet.eth.amount).toBe(7n);
+  expect(retryPrice(wallet.eth, defaultPricing())).toBe(true);
+});

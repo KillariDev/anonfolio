@@ -3,6 +3,7 @@ import { WETH } from './config';
 import { validateToken, type Token } from './tokens';
 import type { VerifiedBlock } from './verification/trust';
 import { mapConcurrent } from './verification/parallel';
+import { errorMessage, readFailure, type ReadFailure } from './errors';
 
 export const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as Address;
 export const V3_FACTORY = '0x1F98431c8aD98523631AE4a59f267346ea31F984' as Address;
@@ -10,6 +11,19 @@ export const WETH_USDC_POOL = '0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640' as Ad
 export const WINDOW = 1800;
 export const PRICING_KEY = 'anonfolio.pricing.v1';
 export type PricingSettings = { quote: Token & { address: Address }; minLiquidity: string };
+export type PriceFailure = ReadFailure & { settingsKey: string; retryable: boolean };
+export const pricingSettingsKey = (settings: PricingSettings) => JSON.stringify([settings.quote.address, settings.quote.decimals, settings.minLiquidity]);
+export function transientPricingError(error: unknown): boolean {
+  const message = errorMessage(error);
+  if (/no direct pool|no qualifying|insufficient.*(?:history|liquidity)|pool identity|unexpected.*pool|invalid.*proof|proof.*(?:mismatch|does not match|invalid)|missing requested storage|bytecode|digest|checkpoint|pinned finalized block/i.test(message)) return false;
+  return /timed? out|timeout|offline|connection|network|fetch|unavailable|outage|worker.*(?:failed|stopped)|429|rate.?limit|too many requests|HTTP\s+5\d\d/i.test(message);
+}
+export function priceFailure(error: unknown, settings: PricingSettings): PriceFailure {
+  return { ...readFailure(error, 'Pricing oracle'), settingsKey: pricingSettingsKey(settings), retryable: transientPricingError(error) };
+}
+export function retryPrice(balance: { priceFailure?: PriceFailure }, settings: PricingSettings): boolean {
+  return balance.priceFailure?.settingsKey === pricingSettingsKey(settings) && balance.priceFailure.retryable;
+}
 export const defaultPricing = (): PricingSettings => ({ quote: { address: USDC, symbol: 'USDC', decimals: 6 }, minLiquidity: '10000' });
 export function validatePricing(value: unknown): PricingSettings {
   const data = value as PricingSettings;
@@ -89,8 +103,10 @@ export class TwapOracle {
     if (floor <= 0n) throw new Error('Invalid liquidity floor.');
     const selectionKey = [base, quote, WINDOW, block.hash, floor].join(':');
     let selected = this.selections.get(selectionKey);
+    if (selected) progress(`Pricing ${token.symbol}: reusing the shared verified quote for this finalized block.`);
     if (!selected) {
       let pending = this.pendingSelections.get(selectionKey);
+      if (pending) progress(`Pricing ${token.symbol}: sharing the price lookup already in progress for this finalized block.`);
       if (!pending) {
         pending = (async () => {
           const fixed = base === WETH && quote === USDC;

@@ -201,3 +201,30 @@ test('independent pool identity and state reads overlap instead of waiting for e
   await new TwapOracle().estimate(ethToken, defaultPricing(), block, delayed, progress);
   expect(peak).toBe(2);
 });
+
+test('ten addresses reuse one ETH/WETH quote without price reads on the other nine routes', async () => {
+  const oracle = new TwapOracle(), rpc = fixture();
+  const log: string[] = [];
+  for (let wallet = 0; wallet < 10; wallet++) {
+    const route: LocalCall = wallet === 0 ? rpc.call : async () => { throw new Error('A shared quote must not be fetched per address.'); };
+    for (const token of [ethToken, wethToken]) {
+      const quote = await oracle.estimate(token, defaultPricing(), block, route, message => log.push(message));
+      expect(quote.pool).toBe(WETH_USDC_POOL);
+    }
+  }
+  expect(rpc.calls).toHaveLength(8); // factory + four identity checks + three oracle reads
+  expect(rpc.calls.filter(call => call.method === 'observe')).toHaveLength(1);
+  expect(log.filter(message => message.includes('reusing the shared verified quote'))).toHaveLength(19);
+  // Another finalized block has a different state root and must be priced again.
+  await oracle.estimate(ethToken, defaultPricing(), { ...block, hash: '0x' + '44'.repeat(32) }, rpc.call, progress);
+  expect(rpc.calls.filter(call => call.method === 'observe')).toHaveLength(2);
+});
+
+test('pricing retry classification stops permanent failures and binds retries to the quote settings', async () => {
+  const { priceFailure, retryPrice, transientPricingError } = await import('../src/pricing');
+  for (const message of ['Failed to fetch', 'Private connection unavailable', 'RPC returned HTTP 503', 'RPC returned HTTP 429', 'Request timed out']) expect(transientPricingError(message)).toBe(true);
+  for (const message of ['No direct pool qualifies', 'Invalid storage proof', 'Bytecode hash mismatch', 'Consensus checkpoint rejected', 'Pool identity mismatch', 'RPC returned HTTP 401']) expect(transientPricingError(message)).toBe(false);
+  const balance = { priceFailure: priceFailure('Failed to fetch', defaultPricing()) };
+  expect(retryPrice(balance, defaultPricing())).toBe(true);
+  expect(retryPrice(balance, { ...defaultPricing(), minLiquidity: '20000' })).toBe(false);
+});

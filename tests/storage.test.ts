@@ -243,3 +243,37 @@ test('a remote token removal wins over balances arriving in a stale tab', () => 
   expect(second.tokens).toHaveLength(2);
   expect(second.wallets[0]!.tokens[token.address]).toBeUndefined();
 });
+
+for (const synchronize of [false, true]) test(`late older blocks cannot overwrite a newer cross-tab holding (storage event: ${synchronize})`, () => {
+  const first = loadPortfolio(operators);
+  first.wallets.push(makeWallet(getAddress(address), operators[0]!));
+  const balance = (height: number) => ({ amount: BigInt(height), updatedAt: Date.now(), failed: false, decimals: 18,
+    verifiedBlock: { hash: '0x' + height.toString(16).padStart(64, '0'), stateRoot: '0x' + '22'.repeat(32), number: '0x' + height.toString(16), timestamp: Date.now() - 60000 } });
+  first.wallets[0]!.eth = balance(1); savePortfolio(first.wallets, first.tokens);
+  const second = loadPortfolio(operators);
+  first.wallets[0]!.eth = balance(3); savePortfolio(first.wallets, first.tokens);
+  if (synchronize) syncPortfolio(second.wallets, second.tokens, operators);
+  second.wallets[0]!.eth = { ...balance(2), updatedAt: Date.now() + 1000 };
+  savePortfolio(second.wallets, second.tokens);
+  expect(loadPortfolio(operators).wallets[0]!.eth).toMatchObject({ amount: 3n, verifiedBlock: { number: '0x3' } });
+  expect(second.wallets[0]!.eth.amount).toBe(3n);
+  // The losing tab must still be able to save unrelated metadata.
+  second.wallets[0]!.name = 'Savings'; savePortfolio(second.wallets, second.tokens);
+  expect(loadPortfolio(operators).wallets[0]!).toMatchObject({ name: 'Savings', eth: { amount: 3n } });
+});
+
+test('pricing errors and retry provenance survive reload and unsafe retry flags are recomputed', async () => {
+  const { defaultPricing, priceFailure, retryPrice } = await import('../src/pricing');
+  const wallet = makeWallet(getAddress(address), operators[0]!);
+  wallet.eth = { amount: 5n, updatedAt: Date.now(), failed: false,
+    priceError: 'Private eth_getProof timed out', priceFailure: priceFailure('Private eth_getProof timed out', defaultPricing()) };
+  expect(savePortfolio([wallet], defaultTokens())).toBe(true);
+  const restored = loadPortfolio(operators).wallets[0]!.eth;
+  expect(restored).toMatchObject({ amount: 5n, failed: false, priceError: wallet.eth.priceError, priceFailure: wallet.eth.priceFailure });
+  expect(retryPrice(restored, defaultPricing())).toBe(true);
+  const data = JSON.parse(values.get(PORTFOLIO_KEY)!);
+  data.wallets[0].balances.eth.priceFailure.message = 'No direct pool qualifies';
+  data.wallets[0].balances.eth.priceFailure.retryable = true;
+  values.set(PORTFOLIO_KEY, JSON.stringify(data));
+  expect(retryPrice(loadPortfolio(operators).wallets[0]!.eth, defaultPricing())).toBe(false);
+});

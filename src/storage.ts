@@ -1,5 +1,6 @@
 import { readFailure } from './errors';
-import { WINDOW, type Estimate } from './pricing';
+import { WINDOW, transientPricingError, type Estimate, type PriceFailure } from './pricing';
+import { olderBalance } from './balance-freshness';
 import { validateAddressName } from './addresses';
 import { WETH, config } from './config';
 import { getAddress, isAddress, type Address } from 'viem';
@@ -28,6 +29,15 @@ function restoreBalance(value: unknown): Balance {
     && typeof value.failure.at === 'number' && Number.isSafeInteger(value.failure.at) && value.failure.at > 0 && value.failure.at <= Date.now() + 60_000
     ? { ...readFailure(value.failure.message, typeof value.failure.stage === 'string' ? value.failure.stage : undefined), at: value.failure.at } : undefined;
   const unavailable: Balance = failure ? { failed: true, failure, cached: true } : { failed: false };
+  if (typeof value.priceError === 'string') unavailable.priceError = readFailure(value.priceError).message;
+  const pricingFailure = value.priceFailure;
+  if (record(pricingFailure) && typeof pricingFailure.message === 'string' && typeof pricingFailure.settingsKey === 'string'
+    && pricingFailure.settingsKey.length <= 256 && typeof pricingFailure.at === 'number' && Number.isSafeInteger(pricingFailure.at)
+    && pricingFailure.at > 0 && pricingFailure.at <= Date.now() + 60_000) {
+    unavailable.priceFailure = { ...readFailure(pricingFailure.message, 'Pricing oracle'), at: pricingFailure.at,
+      settingsKey: pricingFailure.settingsKey, retryable: transientPricingError(pricingFailure.message) } satisfies PriceFailure;
+    unavailable.priceError = unavailable.priceFailure.message;
+  }
   if (typeof value.amount !== 'string' || !/^\d{1,78}$/.test(value.amount)
     || typeof value.updatedAt !== 'number' || !Number.isSafeInteger(value.updatedAt)
     || value.updatedAt <= 0 || value.updatedAt > Date.now() + 60_000) return unavailable;
@@ -47,7 +57,7 @@ function restoreBalance(value: unknown): Balance {
     && typeof price.denominator === 'string' && /^[1-9][0-9]{0,200}$/.test(price.denominator)
     && typeof price.minLiquidity === 'string' && /^\d{1,24}(\.\d{1,18})?$/.test(price.minLiquidity)
     && price.blockHash === block.hash && price.window === WINDOW) estimate = price as Estimate;
-  return { ...(failure ? { failure } : {}), estimate, amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true,
+  return { ...unavailable, estimate, amount, updatedAt: value.updatedAt, failed: value.failed === true, cached: true,
     ...(block ? { verifiedBlock: block } : {}),
     ...(typeof value.decimals === 'number' && Number.isInteger(value.decimals) && value.decimals >= 0 && value.decimals <= 255
       ? { decimals: value.decimals } : {}),
@@ -96,9 +106,10 @@ function parsePortfolio(data: unknown, rpcUrls: string[]): { wallets: Wallet[]; 
   }
   return { wallets, tokens };
 }
-function savedBalance(balance: Balance) {
-  return balance.amount === undefined ? (balance.failure ? { failed: true, failure: balance.failure } : undefined)
-    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, failure: balance.failure, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, estimate: balance.estimate };
+function savedBalance(balance: Balance): (Omit<Balance, 'amount'> & { amount?: string }) | undefined {
+  const errors = { failure: balance.failure, priceError: balance.priceError, priceFailure: balance.priceFailure };
+  return balance.amount === undefined ? (balance.failure || balance.priceError ? { failed: balance.failed, ...errors } : undefined)
+    : { amount: balance.amount.toString(), updatedAt: balance.updatedAt, failed: balance.failed, ...errors, verifiedBlock: balance.verifiedBlock, decimals: balance.decimals, estimate: balance.estimate };
 }
 type Snapshot = { version: 3; tokens: Token[]; wallets: { address: Address; name?: string; balances: Record<string, ReturnType<typeof savedBalance>> }[] };
 const baselines = new WeakMap<Wallet[], Snapshot>();
@@ -137,6 +148,10 @@ function mergeRecords<T extends { address: string }>(base: T[], local: T[], remo
 }
 function mergeSnapshots(base: Snapshot, local: Snapshot, remote: Snapshot): Snapshot {
   const choose = <T>(before: T | undefined, ours: T, theirs: T) => same(ours, before) ? theirs : ours;
+  const chooseBalance = (before: ReturnType<typeof savedBalance>, ours: ReturnType<typeof savedBalance>, theirs: ReturnType<typeof savedBalance>) => {
+    const selected = choose(before, ours, theirs), other = selected === ours ? theirs : ours;
+    return olderBalance(selected, other) ? other : selected;
+  };
   const tokens = mergeRecords(base.tokens, local.tokens, remote.tokens, (before, ours, theirs) => ({
     address: ours.address, symbol: choose(before?.symbol, ours.symbol, theirs.symbol),
     decimals: choose(before?.decimals, ours.decimals, theirs.decimals), icon: choose(before?.icon, ours.icon, theirs.icon),
@@ -145,7 +160,7 @@ function mergeSnapshots(base: Snapshot, local: Snapshot, remote: Snapshot): Snap
     address: ours.address, name: choose(before?.name, ours.name, theirs.name),
     // Each amount, proof provenance and quote is one indivisible record.
     balances: Object.fromEntries(tokens.map(token => [token.address,
-      choose(before?.balances[token.address], ours.balances[token.address], theirs.balances[token.address])])),
+      chooseBalance(before?.balances[token.address], ours.balances[token.address], theirs.balances[token.address])])),
   }));
   return JSON.parse(JSON.stringify({ version: 3, tokens, wallets }));
 }

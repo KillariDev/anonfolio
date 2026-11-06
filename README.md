@@ -69,6 +69,10 @@ Pricing uses **exactly one direct token/quote pool**, validated against the cano
 
 Two balance jobs and two pricing jobs can overlap within one address session. Different addresses queue through the shared verifier. Requests retain the address's isolation key across retries; RPC batches containing different addresses are forbidden. Removing an address or leaving the page cancels queued/active verification, aborts requests and ignores late messages.
 
+Prices are shared across addresses in the running verifier. ETH and WETH use the same WETH quote: one successful lookup is reused for every address at the same finalized block and pricing settings. The first lookup needs several verified factory/pool calls, not just one HTTP request. A different finalized block requires a new quote, and restarting the verifier clears its in-memory oracle cache. Logs distinguish a new lookup from reuse.
+
+Temporary pricing failures retry automatically for affected holdings on their existing route, even if balance verification succeeded. The retry verifies those holdings and prices together at its selected finalized block. Missing direct pools and other permanent pricing failures remain unpriced without endless retries. Error details survive reload, but reopening the app still does not start reads automatically. Tabs synchronize quote settings without starting network reads; each requested refresh keeps one pricing-settings snapshot. A late result cannot replace a holding from a newer verified block.
+
 The [illustrated system guide](docs/documentation.html) covers the architecture, flowcharts, networking, verification, pricing, cache formats, retries and deployment in detail. It opens directly from disk or at **`/docs/documentation.html`** on either server.
 
 ## Privacy, trust and configuration

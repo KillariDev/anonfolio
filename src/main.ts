@@ -21,7 +21,7 @@ import { formatBalance, makeWallet, prepareActivity, readBalances, tokenBalance,
 import { loadPortfolio, savePortfolio, syncPortfolio, PORTFOLIO_KEY } from './storage';
 import { validateToken, defaultTokens, type Token } from './tokens';
 import { RetryQueue, retryDelay } from './retries';
-import { loadPricing, savePricing, validatePricing, defaultPricing, usableEstimate, valueFraction, displayValue } from './pricing';
+import { loadPricing, savePricing, validatePricing, defaultPricing, usableEstimate, valueFraction, displayValue, retryPrice, pricingSettingsKey, PRICING_KEY, type PricingSettings } from './pricing';
 import { estimatedTotal, portfolioTotals } from './totals';
 import { readIcon, tokenIcon, statusIcon, type StatusIcon } from './icons';
 import './style.css';
@@ -187,7 +187,13 @@ function persist() {
   }).finally(() => { persistence = undefined; if (persistAgain) persist(); });
 }
 window.addEventListener('storage', event => {
-  if (event.storageArea !== localStorage || (event.key !== PORTFOLIO_KEY && event.key !== null)) return;
+  if (event.storageArea !== localStorage) return;
+  if (event.key === PRICING_KEY || event.key === null) {
+    adoptPricing(loadPricing());
+    showPricingSettings();
+    render();
+  }
+  if (event.key !== PORTFOLIO_KEY && event.key !== null) return;
   const before = [...wallets], previousTokens = JSON.stringify(tokens);
   syncPortfolio(wallets, tokens, config.rpcUrls);
   reconcileRemoved(before);
@@ -282,6 +288,9 @@ function failureReport(label: string, failure: ReadFailure, rpcHost?: string, id
 function balanceFailure(balance: Balance): ReadFailure | undefined {
   return balance.failed ? balance.failure || { message: 'No error details were saved for the previous failure. Refresh this address to capture a new error.', at: 0 } : undefined;
 }
+function visiblePriceFailure(balance: Balance) {
+  return balance.priceFailure && balance.priceFailure.settingsKey !== pricingSettingsKey(pricing) ? undefined : balance.priceError;
+}
 function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: Balance, pending: boolean, asset: string) {
   const box = document.createElement('div');
   box.className = 'balance';
@@ -332,7 +341,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   const estimate = usableEstimate(balance, pricing);
   const price = document.createElement('small'); price.className = 'price-estimate';
   price.textContent = estimate ? '≈ ' + formatBalance(displayValue(valueFraction(balance.amount!, estimate)), estimate.decimals + 18) + ' ' + pricing.quote.symbol + (balance.cached || balance.failed ? ' · stale' : '') : 'Unpriced';
-  price.title = estimate ? '30-minute direct-pool TWAP · ' + estimate.pool + ' · finalized block ' + estimate.blockHash : balance.priceError || 'Waiting for a qualifying direct pool at the balance’s verified block.';
+  price.title = estimate ? '30-minute direct-pool TWAP · ' + estimate.pool + ' · finalized block ' + estimate.blockHash : visiblePriceFailure(balance) || 'Waiting for a qualifying direct pool at the balance’s verified block.';
   if (!estimate) price.replaceChildren(statusIcon('unpriced', 'Unpriced', 'Unpriced: ' + price.title));
   else if (balance.cached || balance.failed) {
     price.textContent = price.textContent!.replace(/ · stale$/, '');
@@ -405,7 +414,7 @@ function renderTokens() {
       wallets.forEach(wallet => {
         setTokenBalance(wallet, token, { failed: false });
         pruneTokenBalances(wallet);
-        if (!tokens.some(asset => tokenBalance(wallet, asset).failed)) retries.cancel(wallet);
+        if (!tokens.some(asset => tokenBalance(wallet, asset).failed || retryPrice(tokenBalance(wallet, asset), pricing))) retries.cancel(wallet);
       });
       persist(); renderTokens(); render();
     };
@@ -568,7 +577,8 @@ function walletDetails(wallet: Wallet, logOpen=false) {
     const balance = tokenBalance(wallet, token);
     const failure = balanceFailure(balance);
     if (failure) { failures.append(failureReport(token.symbol + ' balance', failure, new URL(wallet.rpcUrl).hostname, token.address + ':balance')); failureCount++; }
-    if (balance.priceError) { failures.append(failureReport(token.symbol + ' price', { message: errorMessage(balance.priceError), stage: 'Pricing oracle', at: 0 }, new URL(wallet.rpcUrl).hostname, token.address + ':price')); failureCount++; }
+    const priceError = visiblePriceFailure(balance);
+    if (priceError) { failures.append(failureReport(token.symbol + ' price', balance.priceFailure || { message: errorMessage(priceError), stage: 'Pricing oracle', at: 0 }, new URL(wallet.rpcUrl).hostname, token.address + ':price')); failureCount++; }
   }
   if (wallet.activity.length) {
     const activity = document.createElement('div');
@@ -793,6 +803,7 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   else retries.cancel(wallet);
   if (connection.cancelled) return;
   const selectedTokens = [...tokens];
+  const selectedPricing = structuredClone(pricing);
   const controller = new AbortController();
   refreshControllers.set(wallet, controller);
   wallet.loading = true;
@@ -803,14 +814,14 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   wallet.queuedForVerifier = false;
   appendRetrievalLog(wallet, (onlyFailed?'Automatic retry':'Refresh')+' started · '+new URL(wallet.rpcUrl).hostname+(config.mode === 'https' ? ' through direct HTTPS (not anonymous).' : ' through the address’s Anon-RPC route.'));
   appendRetrievalLog(wallet, config.mode === 'https' ? 'Using direct HTTPS; RPC providers see your IP and requested addresses.' : state==='ready'?'Using the ready private worker.':connectionMessage);
-  prepareActivity(wallet, selectedTokens, onlyFailed);
+  prepareActivity(wallet, selectedTokens, onlyFailed, selectedPricing);
   render();
   try {
     if (!navigator.onLine) throw new Error('Offline');
     const worker = await connection.get();
     controller.signal.throwIfAborted();
     appendRetrievalLog(wallet, config.mode === 'https' ? 'HTTPS transport ready; requesting finalized verification.' : 'Private worker ready; requesting finalized verification.');
-    if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { if (!controller.signal.aborted) { pruneTokenBalances(wallet); persist(); render(); } }, onlyFailed, undefined, controller.signal);
+    if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { if (!controller.signal.aborted) { pruneTokenBalances(wallet); persist(); render(); } }, onlyFailed, undefined, controller.signal, selectedPricing);
   } catch (cause) {
     if (controller.signal.aborted) return;
     const failure = readFailure(navigator.onLine ? cause : 'Browser is offline.', config.mode === 'https' ? 'Starting the HTTPS connection' : 'Starting the private connection');
@@ -829,7 +840,7 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
     pruneTokenBalances(wallet);
     persist(); render();
     if (controller.signal.aborted || generation !== refreshGeneration || !pageActive || !wallets.includes(wallet) || connection.cancelled) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
-    const failed = tokens.some(token => tokenBalance(wallet, token).failed);
+    const failed = tokens.some(token => tokenBalance(wallet, token).failed || retryPrice(tokenBalance(wallet, token), pricing));
     if (wallet.queuedRefresh && !failed) { wallet.queuedRefresh = false; void refreshWallet(wallet); }
     else if (failed) { wallet.queuedRefresh = false; retries.schedule(wallet); }
     else retries.cancel(wallet);
@@ -1016,21 +1027,34 @@ const quoteAddress = document.querySelector<HTMLInputElement>('#pricing-address'
 const quoteSymbol = document.querySelector<HTMLInputElement>('#pricing-symbol')!;
 const quoteDecimals = document.querySelector<HTMLInputElement>('#pricing-decimals')!;
 const quoteLiquidity = document.querySelector<HTMLInputElement>('#pricing-liquidity')!;
-const presetQuote = defaultPricing().quote;
-pricingPreset.value = pricing.quote.address === presetQuote.address && pricing.quote.decimals === presetQuote.decimals && pricing.quote.symbol === presetQuote.symbol ? 'usdc' : 'custom';
-quoteAddress.value = pricing.quote.address; quoteSymbol.value = pricing.quote.symbol;
-quoteDecimals.value = String(pricing.quote.decimals); quoteLiquidity.value = pricing.minLiquidity;
+function showPricingSettings() {
+  const presetQuote = defaultPricing().quote;
+  pricingPreset.value = pricing.quote.address === presetQuote.address && pricing.quote.decimals === presetQuote.decimals && pricing.quote.symbol === presetQuote.symbol ? 'usdc' : 'custom';
+  quoteAddress.value = pricing.quote.address; quoteSymbol.value = pricing.quote.symbol;
+  quoteDecimals.value = String(pricing.quote.decimals); quoteLiquidity.value = pricing.minLiquidity;
+  showPricingCustom();
+}
+function adoptPricing(next: PricingSettings) {
+  pricing = next;
+  // Storage events update the view without starting requests in another tab.
+  for (const wallet of wallets) {
+    for (const token of tokens) {
+      const balance = tokenBalance(wallet, token);
+      if (!usableEstimate(balance, pricing)) delete balance.estimate;
+      if (balance.priceFailure?.settingsKey !== pricingSettingsKey(pricing)) { delete balance.priceError; delete balance.priceFailure; }
+    }
+    if (!tokens.some(token => tokenBalance(wallet, token).failed || retryPrice(tokenBalance(wallet, token), pricing))) retries.cancel(wallet);
+  }
+}
 function showPricingCustom() { document.querySelector<HTMLElement>('#pricing-custom')!.hidden = pricingPreset.value !== 'custom'; }
-pricingPreset.onchange = showPricingCustom; showPricingCustom();
+pricingPreset.onchange = showPricingCustom; showPricingSettings();
 document.querySelector('#pricing-form')!.addEventListener('submit', event => {
   event.preventDefault();
   const error = document.querySelector('#pricing-error')!;
   try {
     const next = validatePricing({ quote: pricingPreset.value === 'usdc' ? defaultPricing().quote : { address: quoteAddress.value, symbol: quoteSymbol.value, decimals: Number(quoteDecimals.value) }, minLiquidity: quoteLiquidity.value });
     if (!savePricing(next)) throw new Error('Browser storage unavailable; pricing settings were not changed.');
-    pricing = next;
-    // Old quote settings must never be mixed with freshly requested valuations.
-    wallets.forEach(wallet => tokens.forEach(token => { delete tokenBalance(wallet, token).estimate; delete tokenBalance(wallet, token).priceError; }));
+    adoptPricing(next);
     error.textContent = ''; persist(); render(); closeSettings();
     wallets.forEach(wallet => { void refreshWallet(wallet); });
   } catch (cause) { error.textContent = (cause as Error).message; }
