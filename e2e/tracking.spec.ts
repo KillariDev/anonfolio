@@ -782,7 +782,7 @@ test('checkpoint settings validate, persist through reconnect and restore the re
 });
 
 
-test('manual PublicNode worker update is explicit, cached, applied on save and fails closed if corrupted', async ({ page }) => {
+test('manual PublicNode update accepts mixed HTTPS/KPS resolvers, caches on save and rejects corruption', async ({ page }) => {
   const bundle = '// user-selected Tor worker fixture';
   const hash = keccak256(stringToBytes(bundle));
   const resolver = 'https://tor-download.example/anon-rpc-worker.js';
@@ -800,7 +800,7 @@ test('manual PublicNode worker update is explicit, cached, applied on save and f
   ` }));
   await page.route('https://ethereum-rpc.publicnode.com/', route => {
     const body = route.request().postDataJSON(); requests.push(body);
-    const result = body.method === 'eth_blockNumber' ? '0x123' : body.id === 2 ? hash : encodeAbiParameters([{type:'string[]'}], [[resolver]]);
+    const result = body.method === 'eth_blockNumber' ? '0x123' : body.id === 2 ? hash : encodeAbiParameters([{type:'string[]'}], [[resolver, 'kps:152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ/keccak/worker']]);
     return route.fulfill({json:{jsonrpc:'2.0',id:body.id,result}});
   });
   let downloads = 0;

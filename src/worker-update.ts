@@ -28,7 +28,13 @@ export async function discoverTorWorker(progress: Progress, fetcher: typeof fetc
   progress('Direct PublicNode eth_call: workerResolvers() on the same specifier and block.');
   const encoded = await rpc('eth_call', [{ to: TOR_SPECIFIER, data: WORKER_RESOLVERS_SELECTOR }, blockNumber]);
   const [resolvers] = decodeAbiParameters([{ type: 'string[]' }], encoded);
-  return validateWorkerMetadata({ hash, resolvers, blockNumber });
+  // Resolver lists can mix transports. This manual downloader supports HTTPS;
+  // KPS belongs to the harness and must not invalidate usable HTTPS mirrors.
+  const httpsResolvers = resolvers.filter(resolver => /^https:/i.test(resolver));
+  const skipped = resolvers.length - httpsResolvers.length;
+  if (!httpsResolvers.length) throw new Error('The Tor specifier advertises no HTTPS worker download locations. This updater supports HTTPS downloads; KPS and other resolver types are skipped.');
+  if (skipped) progress('Using ' + httpsResolvers.length + ' HTTPS worker download location(s); skipped ' + skipped + ' KPS or unsupported resolver entry/entries.');
+  return validateWorkerMetadata({ hash, resolvers: httpsResolvers, blockNumber });
 }
 export async function cacheTorWorker(metadata: WorkerMetadata, progress: Progress, fetcher: typeof fetch = fetch) {
   const selected = validateWorkerMetadata(metadata);

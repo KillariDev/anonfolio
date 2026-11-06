@@ -37,3 +37,27 @@ test('a user-selected digest is supplied locally to the harness with no network 
   const provider = pinnedSpecifierProvider('blob:https://app.example/saved-worker', hash);
   expect(await provider.request({ method: 'eth_call', params: [{ to: TOR_SPECIFIER, data: WORKER_HASH_SELECTOR }, 'latest'] })).toBe(hash);
 });
+
+test('mixed on-chain resolver transports keep HTTPS mirrors and skip KPS without executing it', async () => {
+  const kps = 'kps:152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ/keccak/5b/worker';
+  const mirrors = ['https://cdn.jsdelivr.net/npm/tor-js@0.4.4/dist/anon-rpc-worker.js', 'https://unpkg.com/tor-js@0.4.4/dist/anon-rpc-worker.js'];
+  for (const advertised of [[...mirrors, kps], [kps, ...mirrors], [...mirrors, 'http://unsupported.example/worker.js']]) {
+    const progress: string[] = [];
+    const fetcher = (async (_url: any, init: any) => {
+      const body = JSON.parse(init.body);
+      return Response.json({ jsonrpc:'2.0', id:body.id, result:body.method==='eth_blockNumber'?'0x123'
+        :body.params[0].data===WORKER_HASH_SELECTOR?TOR_WORKER_HASH:encodeAbiParameters([{type:'string[]'}],[advertised]) });
+    }) as typeof fetch;
+    expect(await discoverTorWorker(message => progress.push(message),fetcher)).toEqual({...metadata,resolvers:mirrors});
+    expect(progress.at(-1)).toContain('skipped 1 KPS or unsupported');
+  }
+});
+test('KPS-only discovery explains the unsupported transport and unsafe HTTPS metadata stays rejected', async () => {
+  for (const [resolvers,reason] of [
+    [['kps:gateway.example:123:hash/worker'],'no HTTPS worker download locations'],
+    [['https://user:secret@worker.example/','kps:gateway.example:123:hash/worker'],'without credentials or fragments'],
+  ] as const) {
+    const fetcher=(async(_url:any,init:any)=>{const body=JSON.parse(init.body);return Response.json({jsonrpc:'2.0',id:body.id,result:body.method==='eth_blockNumber'?'0x123':body.params[0].data===WORKER_HASH_SELECTOR?TOR_WORKER_HASH:encodeAbiParameters([{type:'string[]'}],[resolvers])});}) as typeof fetch;
+    await expect(discoverTorWorker(()=>{},fetcher)).rejects.toThrow(reason);
+  }
+});
