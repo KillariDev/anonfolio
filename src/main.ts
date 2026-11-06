@@ -723,12 +723,13 @@ let refreshGeneration = 0;
 async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   if (!pageActive) return;
   const generation = refreshGeneration;
-  if (wallet.loading) { wallet.queuedRefresh = true; return; }
+  if (wallet.loading) { if (!onlyFailed) wallet.queuedRefresh = true; return; }
   if (!wallets.includes(wallet)) return;
   if (!tokens.length) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
   if (onlyFailed) retries.begin(wallet);
   else retries.cancel(wallet);
   if (connection.cancelled) return;
+  wallet.queuedRefresh = false;
   const selectedTokens = [...tokens];
   const selectedPricing = structuredClone(pricing);
   const controller = new AbortController();
@@ -768,8 +769,10 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
     persist(); render();
     if (controller.signal.aborted || generation !== refreshGeneration || !pageActive || !wallets.includes(wallet) || connection.cancelled) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
     const failed = tokens.some(token => tokenBalance(wallet, token).failed || retryPrice(tokenBalance(wallet, token), pricing));
-    if (wallet.queuedRefresh && !failed) { wallet.queuedRefresh = false; void refreshWallet(wallet); }
-    else if (failed) { wallet.queuedRefresh = false; retries.schedule(wallet); }
+    // An explicit refresh (including changed pricing) covers every holding even
+    // when this older attempt failed. Automatic retries remain failure-only.
+    if (wallet.queuedRefresh) { void refreshWallet(wallet); }
+    else if (failed) retries.schedule(wallet);
     else retries.cancel(wallet);
   }
 }

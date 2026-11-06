@@ -7,7 +7,7 @@ An Ethereum mainnet portfolio reader that verifies balances in your browser. Tra
 **Anonfolio will be hosted on IPFS** as a static, content-addressed application. Open it with an IPFS-capable browser or through an HTTPS IPFS gateway.
 
 <!-- ipfs-build -->
-**IPFS build:** [ipfs://bafybeibwjwadplzlrmxckq63wya5wqkm6tumjemhuz5pgqusztdwchguyy/](ipfs://bafybeibwjwadplzlrmxckq63wya5wqkm6tumjemhuz5pgqusztdwchguyy/)
+**IPFS build:** [ipfs://bafybeicoxitkxyjqe5asjulkbnjcdybsvrblup7jz5sz5yzdcfq4skez6y/](ipfs://bafybeicoxitkxyjqe5asjulkbnjcdybsvrblup7jz5sz5yzdcfq4skez6y/)
 
 This is the content address of the exported build validated with local IPFS gateways, not a guarantee that it is pinned on the public network. Updated releases have new CIDs.
 <!-- /ipfs-build -->

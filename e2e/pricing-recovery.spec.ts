@@ -19,7 +19,8 @@ async function fixture(page: Page, failure = '') {
   await page.route('**/src/verification/client.ts*', route => route.fulfill({ contentType: 'text/javascript', body: `
     window.__runs=[];window.__failure=${JSON.stringify(failure)};window.__height=1;
     export async function verifyWallet(wallet,worker,tokens,emit,pricing,signal){
-      const height=window.__height, failure=window.__failure;
+      const height=window.__height, failure=window.__failure, balanceFailure=window.__balanceFailure;
+      window.__balanceFailure=false;
       window.__failure='';window.__runs.push({tokens:tokens.map(t=>t.address),pricing:structuredClone(pricing)});
       if(window.__hold) await new Promise(resolve=>window.__release=resolve);
       if(signal?.aborted)return;
@@ -27,6 +28,7 @@ async function fixture(page: Page, failure = '') {
       for(const token of tokens){
         emit({type:'asset',asset:token.address});
         await worker.fetch(wallet.rpcUrl,{method:'POST',body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_getProof',params:[wallet.address,[],{blockHash:block.hash}]}),anonOptions:{isolationKey:wallet.isolationKey}});
+        if(balanceFailure && token.address===${JSON.stringify(weth)}){emit({type:'asset-error',asset:token.address,error:'Contract read failed'});continue;}
         emit({type:'balance',asset:token.address,amount:(BigInt(height)*10n**18n).toString(),block});
         if(token.address==='eth'&&failure)emit({type:'price-error',asset:token.address,error:failure});
         else emit({type:'price',asset:token.address,block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:pricing.quote.address,symbol:pricing.quote.symbol,decimals:pricing.quote.decimals,numerator:'1',denominator:'1',window:1800,blockHash:block.hash,minLiquidity:pricing.minLiquidity}});
@@ -140,4 +142,26 @@ test('a late response from another tab cannot replace a newer verified holding o
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances.eth.verifiedBlock.number)).toBe('0x3');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances.eth.estimate.blockHash)).toBe('0x' + '3'.padStart(64, '0'));
   await other.close();
+});
+
+for (const failure of ['balance', 'price']) test(`a quote change queued during a ${failure} failure refreshes every holding`, async ({ page }) => {
+  await page.clock.install(); await fixture(page); await page.goto('/'); await add(page);
+  await page.evaluate(failure => {
+    (window as any).__hold = true;
+    if (failure === 'balance') (window as any).__balanceFailure = true;
+    else (window as any).__failure = 'Private eth_getProof timed out after 90 seconds.';
+  }, failure);
+  await page.getByRole('button', { name: 'Refresh ' + address, exact: true }).click();
+  await expect.poll(() => page.evaluate(() => typeof (window as any).__release)).toBe('function');
+  await setQuote(page);
+  await page.evaluate(() => { (window as any).__hold = false; (window as any).__release(); });
+  await expect.poll(() => page.evaluate(() => (window as any).__runs.length)).toBe(3);
+  await expect(page.getByRole('button', { name: 'Refresh ' + address, exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => (window as any).__runs.map((run: any) => ({ tokens: run.tokens, quote: run.pricing.quote.address })))).toEqual([
+    { tokens: ['eth', weth], quote: usdc }, { tokens: ['eth', weth], quote: usdc }, { tokens: ['eth', weth], quote: weth },
+  ]);
+  await expect(page.locator('.wallet .price-estimate')).toHaveText(['≈ 1 WETH', '≈ 1 WETH']);
+  expect(new Set((await page.evaluate(() => (window as any).__privateCalls)).map((call: any) => call.key)).size).toBe(1);
+  await page.clock.runFor(65000);
+  expect(await page.evaluate(() => (window as any).__runs.length)).toBe(3);
 });

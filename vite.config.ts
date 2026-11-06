@@ -47,22 +47,24 @@ export default defineConfig({
     generateBundle(_, bundle) {
       const paths = [...Object.keys(bundle).filter(path => /\.(html|js|css|png|jpg|jpeg|svg|webp|wasm|pdf)$/.test(path)), './'];
       const version = createHash('sha256').update(JSON.stringify(paths)).update(documentation).update(documentationImage).update(presentation).update(presentationPdf).digest('hex').slice(0, 16);
+      // A raw colon cannot occur in an encoded scope, preventing prefix
+      // collisions even for nested applications on an IPFS path gateway.
       this.emitFile({
         type: 'asset', fileName: 'sw.js',
-        source: 'const CACHE = "anonfolio-shell-' + version + '";\nconst PATHS = ' + JSON.stringify(paths) + ';\n' + `
+        source: 'const CACHE_PREFIX = "anonfolio-shell-" + encodeURIComponent(self.registration.scope) + ":";\nconst CACHE = CACHE_PREFIX + "' + version + '";\nconst PATHS = ' + JSON.stringify(paths) + ';\n' + `
 const urls = PATHS.map(path => new URL(path, self.registration.scope).href);
 // Saved portfolios need only the UI. Verifier runtimes and documentation are
 // cached when requested, so an optional download cannot block installation.
 const essential = urls.filter(url => {
-  const path = new URL(url).pathname, name = path.split('/').at(-1);
-  return !path.includes('/docs/') && !name.endsWith('.wasm') && !name.endsWith('.pdf')
+  const path = url.slice(self.registration.scope.length), name = path.split('/').at(-1);
+  return !path.startsWith('docs/') && !name.endsWith('.wasm') && !name.endsWith('.pdf')
     && !name.startsWith('anon-rpc-worker-') && !name.startsWith('helios.worker-');
 });
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(essential)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('anonfolio-shell-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', event => {
   // Navigation requests can retain #slide fragments; they identify a position
@@ -82,7 +84,7 @@ self.addEventListener('fetch', event => {
       if (!response.ok && cached) return cached;
       // Keep installed app HTML paired with its cached release assets. A new
       // service-worker installation replaces both together after deployment.
-      const appNavigation = event.request.mode === 'navigate' && !new URL(key).pathname.includes('/docs/');
+      const appNavigation = event.request.mode === 'navigate' && !key.slice(self.registration.scope.length).startsWith('docs/');
       if (response.ok && (!appNavigation || !cached)) event.waitUntil(cache.put(key, response.clone()).catch(() => {}));
       return response;
     } catch (error) {
