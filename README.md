@@ -1,231 +1,126 @@
 # Anonfolio
 
-A standalone Bun, Vite and TypeScript Ethereum mainnet portfolio reader. Track wallet addresses and ERC-20 balances without connecting a wallet. Tor is the default, with an Anon-RPC isolation key per address. Settings also offers explicit **Direct HTTPS (not anonymous)**, keeping browser-side proof verification while exposing your IP and requested addresses to providers. Tor failures never switch modes automatically.
+An Ethereum mainnet portfolio reader that verifies balances in your browser. Track named addresses, ETH, WETH and custom ERC-20 tokens without connecting a wallet, signing messages or sending transactions.
 
-Read [how the application works](docs/documentation.html) for the illustrated HTML guide to the architecture, networking, verification, pricing, storage, interface and deployment. Open the file directly, or visit `/docs/documentation.html` on the development or production server. The production build includes the guide and its local image, with no diagram CDN or external fonts.
+**Tor via Anon-RPC is the default.** Each address uses its own isolation key. You can explicitly select **Direct HTTPS (not anonymous)** in Settings; providers then see your IP and requested addresses. A Tor failure never switches to HTTPS automatically.
 
-## Run
+![Anonfolio showing token totals, estimated USDC values and named tracked addresses](docs/images/readme-portfolio.png)
 
-Use [Bun](https://bun.sh) **1.3.14** (the project baseline):
+*Application screenshot with deterministic demonstration data. The amounts are illustrative, not live balances or evidence of a successful Tor connection.*
+
+## Technologies
+
+| Technology | How Anonfolio uses it |
+| --- | --- |
+| <img src="src/assets/technology/typescript.svg" width="24" height="24" alt=""> **[TypeScript](https://www.typescriptlang.org/)** | Application, transport and verification orchestration, using native HTML/CSS and browser DOM APIs. No frontend framework. |
+| <img src="src/assets/technology/bun.svg" width="24" height="24" alt=""> **[Bun](https://bun.sh/)** | Package management, scripts, unit tests and the simple static web server. Baseline: **1.3.14**. |
+| <img src="src/assets/technology/vite.svg" width="24" height="24" alt=""> **[Vite](https://vite.dev/)** | Development server and production bundling of the page, workers and local assets. |
+| <img src="src/assets/technology/tor.svg" width="40" height="24" alt=""> **[Tor](https://www.torproject.org/) · [Anon-RPC](https://github.com/ethereum/anon-rpc) · [tor-js](https://github.com/ethereum/tor-js)** | Private execution and consensus requests through `@anon-rpc/browser-harness`, Tor and WebRTC/KPS gateways. |
+| **[Helios](https://github.com/a16z/helios) · WebAssembly · revm** | A shared consensus light client and local EVM execution with verified account/storage proofs and bytecode. Reviewed Helios **0.12.0**, including PR #813 fixes. |
+| <img src="src/assets/tokens/eth.png" width="24" height="24" alt=""> **[Ethereum](https://ethereum.org/)** | Mainnet ETH, WETH and ERC-20 balances, pinned to a verified finalized block for each refresh. |
+| <img src="src/assets/technology/viem.png" width="24" height="24" alt=""> **[viem](https://viem.sh/) · [EthereumJS Trie](https://github.com/ethereumjs/ethereumjs-monorepo/tree/master/packages/trie)** | Address and ABI utilities, bigint unit formatting, and additional Merkle-proof checks. |
+| <img src="src/assets/technology/uniswap.svg" width="24" height="24" alt=""> **[Uniswap v3](https://docs.uniswap.org/contracts/v3/overview)** | Estimated holding values from a 30-minute TWAP using one qualifying direct token/quote pool. USDC is the default quote. |
+| **Browser APIs** | Web Workers, Web Crypto, localStorage, Web Locks and a service worker for isolation, integrity checks, safe cross-tab saving and offline application assets. |
+| <img src="src/assets/technology/playwright.svg" width="24" height="24" alt=""> **[Playwright](https://playwright.dev/)** | Chromium UI, layout, routing, offline and opt-in real-provider smoke tests. |
+| <img src="src/assets/technology/ipfs.svg" height="24" alt=""> **[IPFS / Kubo](https://docs.ipfs.tech/) · [Docker](https://www.docker.com/)** | Optional static-site publishing, CID validation and CAR exports. Neither is needed to run the app locally. |
+
+Logos identify their technologies, not endorsements. See [artwork sources and credits](src/assets/technology/README.md). The app uses the Tor logo for Tor mode, Ethereum's mark for the network, and Uniswap's mark for price methodology. All runtime artwork is local and works offline.
+
+## Run locally
+
+Install [Bun 1.3.14](https://bun.sh/), then:
 
 ```sh
 bun install --frozen-lockfile
-bun run dev                  # http://127.0.0.1:5173 (loopback only)
-bun run test                 # balance, storage, token and static-server tests
+bun run dev
+```
+
+Open **http://127.0.0.1:5173**. Development binds to loopback and serves the pinned Tor worker as unchanged bytes; its integrity check stays enabled.
+
+To build and serve the production page:
+
+```sh
+bun run build
+bun run serve
+```
+
+Open **http://localhost:4173**. Set `HOST` and `PORT` to change the static server's bind address and port. It serves only `dist/`; it is not an RPC proxy.
+
+The committed lockfile uses format version 1 for Bun 1.3.14 compatibility. Bun 1.4.x can install with `--frozen-lockfile`, but may rewrite the format during dependency changes. If you encounter “Unknown lockfile version,” restore the committed `bun.lock` and use the baseline Bun version.
+
+## Track a portfolio
+
+- Click **+** below the addresses to add an address or a list. Give one address an optional name, or paste named lines such as `Savings | 0x…`. Validation happens locally.
+- Open the top-right **Settings** gear to manage tracked tokens, optional PNG/JPEG/WebP icons, quote-token pricing and network settings. ETH and WETH are included by default and use the same token controls as custom assets. Token decimals are user-supplied; the app does not call `decimals()`.
+- Use the refresh button next to an address to update that address. Newly added addresses receive an initial read. Reopening the page shows saved balances and prices without automatically refreshing them.
+- The overview sums holdings across addresses. Values use bigint arithmetic and display at most two decimals; tiny positive values display as `<0.01`. Current proven zero holdings are omitted from address rows. Unknown values are not treated as zero; cached or failed values remain visible with stale/unavailable indicators.
+- Expand an address with its chevron for read times, verification progress, timestamped request logs and error details. **Remove address** is inside that view and requires confirmation.
+
+Addresses, names, token settings, icons, balances and quotes remain in browser storage. Open tabs synchronize without starting reads; shared Web Locks serialize saves and merge edits so stale tabs cannot overwrite additions or resurrect removals. Safe persistence needs a current browser on HTTPS or localhost with Web Locks. Storage failures show a warning while the in-memory session remains usable.
+
+## How reads and estimates work
+
+1. Start the selected transport. Tor startup uses bundled, hash-pinned worker data, not an Ethereum RPC discovery request. Each watched address receives a random isolation key; shared consensus uses a separate route.
+2. Helios bootstraps from a trusted mainnet checkpoint and verifies consensus. Each refresh selects one verified finalized execution block.
+3. Prove ETH with `eth_getProof`. Execute ERC-20 `balanceOf(address)` locally against verified bytecode and storage, including proxy dependencies. Invalid proofs, wrong wallets/blocks, missing requested slots and tampered code fail closed.
+4. In parallel, read Uniswap factory/pool data through the same verified local-call path at that block. Join a price to a holding only after its balance is proven at the matching block, then save each result with its block identity and timestamp.
+
+Pricing uses **exactly one direct token/quote pool**, validated against the canonical v3 factory, with at least 30 minutes of history and sufficient current/harmonic liquidity. There are no multihop routes, spot-price fallbacks or external pricing APIs. ETH and WETH both use the WETH/USDC **0.05%** pool when USDC is selected. Tokens without a qualifying direct pool remain unpriced, making totals partial. Estimates are historical reference values, not executable trade quotes.
+
+Two balance jobs and two pricing jobs can overlap within one address session. Different addresses queue through the shared verifier. Requests retain the address's isolation key across retries; RPC batches containing different addresses are forbidden. Removing an address or leaving the page cancels queued/active verification, aborts requests and ignores late messages.
+
+The [illustrated system guide](docs/documentation.html) covers the architecture, flowcharts, networking, verification, pricing, cache formats, retries and deployment in detail. It opens directly from disk or at **`/docs/documentation.html`** on either server.
+
+## Privacy, trust and configuration
+
+**Tor mode:** consensus, balance proofs, bytecode and price-oracle requests go through Anon-RPC. RPC providers see the addresses they serve, while Tor hides the browser's IP from them. Per-address isolation does not guarantee different Tor exit nodes. No analytics, remote icon services, external fonts or addresses in page URLs are used.
+
+**Direct HTTPS mode:** verification remains enabled, but execution and consensus requests use ordinary browser fetch. The header explicitly identifies this as non-anonymous. There is no automatic switch between modes.
+
+In **Settings → Network connection**, configure gateways and HTTPS RPC endpoints. Defaults start with dRPC, followed by PublicNode and Ankr. Operators must support historical proofs at the selected finalized block. Explicit proof-history rejections can try another configured operator with the same isolation key and block; other transport or verification failures fail closed.
+
+The default is one development demo gateway; live Tor retrieval depends on gateway, WebRTC/UDP, Tor and provider availability. Deployment defaults can be set with `VITE_ANON_GATEWAYS`, `VITE_RPC_URLS` and `VITE_TOR_BOOTSTRAP_URL`. See [gateway deployment and directory mirrors](deploy/tor-gateways/README.md).
+
+The consensus checkpoint must be less than 14 days old. **Settings → Consensus checkpoint** accepts a root and matching slot checked against independent trusted mainnet sources. Never replace it merely with an untrusted RPC's suggested value.
+
+**Update Tor worker from PublicNode** is an explicit recovery action: it queries PublicNode and downloads a worker directly, without sending watched addresses. Applying it trusts PublicNode's selected worker code/digest instead of the reviewed bundled pin. Failed updates keep the existing worker. Runtime settings cannot change the pinned Helios binary.
+
+Browser storage is not encrypted: someone with access to that origin's storage can read saved addresses and any API keys in configured endpoint URLs. The app caches application assets for offline reopening, never RPC responses. Saved balances can be shown offline; retrieving new values still requires a working connection.
+
+## Tests
+
+```sh
+bun run test                 # unit, proof, transport, storage and build-input regressions
+bun run typecheck
 bun audit                    # dependency advisories
 bunx playwright install chromium
-bun run test:browser         # deterministic Chromium UI tests
-bun run test:all             # unit tests, build, UI tests and production/offline checks
-bun run test:live:https      # real verified ETH/WETH over explicitly selected HTTPS
-bun run test:live            # actual tor-js worker + mainnet; needs WebRTC/network access
-bun run build               # type-check and produce dist/
-bun run serve               # simple Bun static server, http://localhost:4173
+bun run test:browser         # deterministic Chromium tests
+bun run test:all             # unit tests, build, browser tests and static/offline checks
+bun run test:live:https      # real verified ETH/WETH using explicitly selected HTTPS
+bun run test:live            # real Tor/Helios balance and pricing smoke test
 ```
 
-Development uses patched Vite 7.3.7 and serves the pinned Tor worker as unchanged bytes, including in development. The digest check remains enabled.
-
-Set `HOST` and `PORT` to change the static server's bind address and port. It serves only `dist/` and is not an RPC proxy. It accepts GET and HEAD and returns 404 for absent assets.
-
-The committed lockfile uses format version 1 so Bun 1.3.14 can read it. Bun 1.4.x can install it with `bun install --frozen-lockfile`. Use Bun 1.3.14 when changing dependencies; a normal install with Bun 1.4.x may migrate the lockfile to version 2.
-
-If you saw “Unknown lockfile version”, pull the latest branch and run `bun install --frozen-lockfile`. If an earlier install rewrote your local lockfile, restore `bun.lock` from the updated branch first.
-
-## Portfolio layout and totals
-
-The overview sums each token across all tracked addresses using exact bigint arithmetic and the configured token decimals. ETH, WETH and each custom contract have separate totals; tokens with the same symbol remain separate. Removing an address or token updates the totals immediately. Totals do not trigger extra RPC requests.
-
-A total uses only available balance values. Unknown amounts are not counted as zero: the coverage label shows how many addresses are included and marks incomplete totals as **Partial**. Retained cached or failed values are included with a stale count; loading indicators stay on the address being refreshed while totals retain their previous values. These are sums of independently fetched values, not an atomic snapshot of a single block.
-
-The watchlist uses compact table rows with refresh next to each address. Full addresses are shown whenever the column has room; smaller screens truncate only the visible text, retaining the full address for accessibility and tooltips. Choose **Details** to see read timestamps, errors and request progress. Expanded rows stay open while results arrive. Adding addresses, token settings and connection diagnostics are collapsible; the address form closes after adding entries. Narrow screens scroll the table horizontally while the address column stays visible. Long watchlists scroll within the table with fixed column headers.
-
-## Tracking wallets and tokens
-
-Paste one Ethereum address or a list separated by newlines, commas, spaces or semicolons, then choose **add address to track**. Validation happens locally before adding any address. Invalid entries reject the whole list; existing wallets and duplicates are skipped. Each wallet row has Refresh/Retry and a chevron to expand or collapse details. **Remove address** sits at the bottom of expanded details. Removing an address requires confirmation showing its name (if set) and full address; cancelling keeps the address and its saved balances. Give a single address an optional name, or enter a named list as `Savings | 0x…`, one entry per line. Names are limited to 80 characters and are saved alongside addresses and cached balances. Existing unnamed entries continue to work. The shared address component shows the name above the address in wallet rows. Its mirrored 8×8 blockie SVG is generated deterministically from the address, without dependencies or network requests; the same address keeps its icon across reloads and letter casing. Names are display-only and never enter RPC payloads or page URLs.
-
-ETH and WETH are included by default in the same tracked-token list as every other asset. All tokens have the same Remove and Change icon controls. Removing a token removes its column, total and future balance requests; removing the last token leaves addresses saved without making balance requests. Removed defaults stay removed after reload. The add form has ETH/WETH presets for re-adding them, plus a custom ERC-20 option. Native ETH intrinsically uses 18 decimals; its balance is proven from the account trie. ERC-20 balanceOf executes locally against proven state; decimals come from the configured token settings.
-
-Open the top-right **Settings** gear, then expand **Tracked tokens** to add a mainnet ERC-20 by contract address, symbol and decimals, with an optional uploaded icon. The supplied symbol is a display setting. The app always uses the supplied decimals and never calls decimals() on token contracts. For example, USDC has 6 decimals. Adding a token refreshes wallets; if a wallet is already reading, one follow-up refresh is queued.
-
-The application icon is bundled locally and used in the header and browser tab, including offline/IPFS builds. Token icons appear in totals, table headers and settings. ETH/WETH icons are bundled with the app. Uploaded PNG/JPEG/WebP images (up to 1 MB) are decoded locally, fitted into a 64×64 PNG, and saved in localStorage. Every token can change its icon. Missing or unreadable icons use a symbol badge. Remote icon URLs and SVG uploads are not accepted, so icons cause no third-party image requests and remain available offline. Bundled icon sources and their MIT license are recorded in [src/assets/tokens](src/assets/tokens/README.md).
-
-Token configuration itself requires no network request. Balance refreshes use the shared Helios verifier: ETH account proofs and local ERC-20 balanceOf execution at one verified finalized block per wallet refresh. Proofs, code and retries use that wallet's private Anon-RPC route. There are no approvals, transactions or wallet connections.
-
-## Estimated portfolio value
-
-Balances show an estimated quote-token value and the overview sums priced holdings. The default quote is Circle's [canonical Ethereum USDC](https://developers.circle.com/stablecoins/usdc-contract-addresses), `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`. In **Settings → Price estimates**, select USDC or enter a custom mainnet ERC-20 quote contract, display symbol and decimals. Pricing uses the configured quote decimals without any decimals() contract call. Save pricing settings to refresh all addresses; settings and successful estimates persist locally. Cached estimates are historical and labeled stale. A quote-token holding is valued at par in its own units without a pool conversion.
-
-Every other estimate uses exactly one direct token/quote Uniswap v3 pool. ETH is treated as WETH for pricing. With USDC selected, both ETH and WETH exclusively use the WETH/USDC **0.05%** pool `0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640`. Other pairs check fee tiers 0.01%, 0.05%, 0.3% and 1% via the [canonical mainnet v3 factory](https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments), `0x1F98431c8aD98523631AE4a59f267346ea31F984`. Factory, token identities and fee are checked. Among qualifying pools, the one with the greatest harmonic quote-side virtual reserve is selected (pool address breaks ties). No routing, multihop, pool blending, spot-price fallback or external price API is used. A token with only a WETH pool remains unpriced when USDC is the quote.
-
-The [30-minute oracle](https://developers.uniswap.org/docs/protocols/v3/concepts/price-oracles) uses `observe([1800, 0])`, the arithmetic mean tick rounded down for negative non-integral results, and harmonic mean in-range liquidity. Canonical pools reject an observation older than their available history. Both the current and harmonic virtual quote reserves must meet **Minimum quote-side liquidity**, default **10,000 USDC**. Adjust this amount in quote-token units when changing the quote token. Virtual reserves are computed from in-range liquidity and current/TWAP square-root prices; this is a liquidity filter, not total TVL or an executable sale quote.
-
-After selecting one verified finalized block, balance proofs and oracle work run in parallel, with at most one balance operation and one token’s pricing work active at a time. Price discovery does not depend on the holding amount. Early quotes wait in memory for a successful balance proof at the same block; failed proofs or mismatched blocks cannot produce a new holding value. The progress panel shows both stages while they overlap. Factory, pool and observation reads execute locally in Helios at that same finalized block hash. All missing code/storage proofs and retries use the selected transport; Tor mode retains that address’s Anon-RPC worker and isolation key. Successful pool oracle data are cached in bounded memory by pool, 1,800-second window and block hash; reverse quote directions recompute liquidity from the cached raw data. No failures are cached. The first default balance endpoint is dRPC, tested with finalized oracle storage proofs. RPC operators must serve historical account/storage proofs at the verified finalized block; a short proof window can reject otherwise valid reads. For an explicit proof-history rejection, the app retries the identical request at another configured RPC, using the same Anon-RPC worker, wallet isolation key and finalized block hash. The selected replacement is used for subsequent requests and refreshes in the browser session. Tor never falls back to direct HTTPS. HTTPS is used only when explicitly selected in Settings. If all configured RPCs lack the required proofs, add a historical-proof-capable endpoint in **Settings → Network connection**. Ordinary transport/RPC failures and invalid proofs still fail closed. Price failures leave verified balances intact and show **Unpriced**; use the address's Refresh button to retry. Missing prices make the estimated portfolio total **Partial**. Totals label stale values and mixed finalized blocks, and suppress conflicting quote-decimal results.
-
-Tick exponentiation uses bigint fixed point with 512 fractional bits. Raw holdings are multiplied by the raw quote/base ratio, so token ordering and differing decimals are handled without floating-point amounts. Values are summed as rational bigint fractions before conversion for the two-decimal display; no per-holding currency rounding feeds the aggregate. Estimates describe a historical 30-minute geometric price average and exclude swap fees, slippage and price impact.
-
-## Progress and saved balances
-
-Spinners indicate worker startup, wallet refresh and individual pending reads. The header connection status shows loading and hash-checking the bundled Tor worker before private requests begin. Startup performs no Ethereum RPC lookup. The header shows concise directory, gateway, guard or circuit stages when worker diagnostics identify them. A slow notice after 30 seconds preserves the same Tor attempt until its five-minute deadline; Cancel stops automatic recovery until Retry connection is clicked.
-
-Failed balances show a short cause with a **Details** action. The expanded report shows a compact error card with recovery advice, RPC hostname and attempt time; **Technical details** reveals the original error and a distinct failed step without repeating the same failure. Recovery advice provides specific guidance for checkpoint expiry, RPC proof-history limits, rate limits, and connection failures. Causes stay attached to their assets across later progress and reloads, and clear after successful verification. Credential-bearing endpoint URLs are redacted in saved/displayed error messages.
-
-Each wallet's expandable Details panel shows per-asset request details: the RPC method and destination hostname, token contract when applicable, verified finalized block hash/time, private proof submission, retry attempts and the final result. The address stays in its wallet row and is not repeated inside Details. “Submitted” means handed to the worker; it does not claim that a gateway or destination has already been reached.
-
-Successful amounts and timestamps are queued for saving as each result arrives; a slow or failed token does not delay storing other successful reads. Raw amounts and totals use exact bigint arithmetic. The UI rounds to at most two decimal places using integer arithmetic and removes trailing zeros; a positive amount below 0.01 displays as `<0.01`. Totals sum raw amounts before rounding, and stored balances retain their original precision. A proven zero is `0` with a verified-finalized label; an unavailable amount is `—`. Unverified legacy zeroes are labeled explicitly.
-
-Wallet names, wallet/token additions and removals, balance values and successful-read timestamps are stored as one versioned localStorage snapshot. The app migrates the original address-only watchlist and the previous portfolio format into a complete active-token list and per-token balances. Explicitly removed defaults and empty token lists are preserved. Cached entries are validated when loaded; corrupt entries are ignored. Isolation keys, request payloads and RPC credentials are not persisted in the portfolio snapshot. Each verified amount stores its finalized block hash, state root, number and timestamp, together with configured display decimals. Legacy amounts have no verification provenance and are labeled unverified until refreshed. Cached verified metadata is historical; use Refresh to reverify it.
-
-On reload, saved values appear immediately with their original timestamps and stale/cache labels, without automatic balance or price reads. Failed reads retain the last successful amount and timestamp. Failed first reads show an error. Storage failures display a warning while the current in-memory session remains usable. Browser storage can be cleared or evicted by the user or browser. Portfolio writes use a shared Web Lock and merge changes against each tab’s last snapshot. Storage events synchronize open tabs without triggering reads; removals win over late results so deleted addresses/tokens cannot be resurrected by another tab. Live request state and isolation keys remain local to each tab. Safe persistence requires Web Locks (a current browser on HTTPS or localhost); if locking is unavailable, changes remain in memory with a warning rather than risking an unsafe overwrite.
-
-The production build includes a service worker that caches only the application HTML, JavaScript, CSS and bundled icon assets after a successful initial visit. It permits an offline reload of saved wallets, tokens and balances; it never caches or intercepts RPC, resolver, or gateway requests. HTTPS (or localhost) and browser service-worker support are required. The first visit still needs a network connection. Connection startup and failed balance retrievals retry automatically with delays of 2, 4, 8, 16, 32, then at most 60 seconds between rounds. The UI shows the next scheduled attempt. Automatic balance retries read only failed assets, preserving successful values and timestamps. Retries pause offline and resume immediately when connectivity returns. Successful retrieval stops its scheduled retries. Removing an address or leaving the page also aborts its active/queued verification; cancellation terminates an active verifier, aborts its requests and ignores late events. Other queued addresses continue on their own routes. Reopening the page shows saved values without refreshing balances or prices. Returning through browser history does not resume previous balance retries. Click an address’s Refresh button to update it; newly added addresses receive an initial read. Manual Refresh/Retry starts a fresh round immediately.
-
-## Deployment
-
-Upload the contents of `dist/`, including `sw.js`, to a static **HTTPS** host. No backend, wallet extension, API key or routing rules are required. Localhost works for development. Build for a subdirectory with `bun run build --base=/your-path/`. Serve `sw.js` with revalidation/no-cache so browsers can discover updated application builds.
-
-Copy `.env.example` to `.env.local` before building:
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_ANON_GATEWAYS` | Comma-separated KPS gateway entries, each `ip:port:certhash`. |
-| `VITE_RPC_URLS` | Comma-separated mainnet HTTPS RPC endpoints, preferably different operators. |
-
-The shipped gateway is the official guide's **development demo gateway**, with limited capacity and availability. Run your own tor-js gateway for deployment and configure its entry. All `VITE_*` settings are public bundle contents; never put secrets there. Endpoints must be Ethereum mainnet; the app does not add chain-ID requests to balance reads.
-
-The top-right **Settings** gear opens a compact panel for tracked tokens and network configuration. Close it with Escape, the close button, or a click outside. Token changes save automatically. Use the **Network connection** section to change Tor gateways and private balance RPC endpoints without rebuilding. **Consensus checkpoint** accepts a trusted finalized mainnet beacon block root and its matching beacon slot. Compare both across independent trusted sources before saving; this is the light client’s trust anchor. Checkpoints must be less than 14 days old, and the bootstrap header must match the supplied slot. Saving restarts the shared light client. Enter one gateway or HTTPS RPC URL per line. Gateway entries support `ip:port:certhash` and `[ipv6]:port:certhash`. RPC endpoints must serve Ethereum mainnet; settings are validated locally without querying watched addresses.
-
-**Tor worker** defaults to the bundled release. If it stops working, click **Update Tor worker from PublicNode** to explicitly query PublicNode directly for the specifier’s hash and download locations at one block. The app downloads a matching worker, checks its Keccak-256, and caches its bytes locally. Review the displayed metadata, then **Save settings and reconnect** to apply it. This trusts PublicNode’s selected worker code rather than the release-reviewed Tor pin. No tracked addresses are sent by the updater. Subsequent startup uses the cached worker and checks its hash again; missing/corrupt bytes fail closed without automatic public requests. Select **Bundled release worker** or **Restore defaults** to revert. The update button never changes the consensus checkpoint or Helios binary.
-
-**Save settings and reconnect** saves browser-local overrides and reloads the page, closing the previous worker and replacing all wallet clients together. Saved balances and token/address configuration remain visible as stale data while fresh private reads start. Existing requests cannot update the new page or retry using old endpoints. **Restore defaults** clears only the network overrides and reconnects using the deployment's `VITE_*` defaults. Corrupt settings fall back to deployment defaults; failed storage writes keep the existing session and show an error. Settings persist full endpoint URLs, including any query/path API keys, in localStorage; they are accessible to anyone with access to this browser's storage. Overrides apply only in this browser.
-
-Default operators are PublicNode, dRPC and Ankr. Some public endpoints reject Tor exits or require credentials; replace unavailable operators. A wallet uses an unused endpoint where possible, then reuses configured endpoints if the watchlist exceeds the pool.
-
-The harness uses a sandboxed srcdoc iframe and blob worker. If the host adds a strict Content Security Policy, follow the harness README's same-origin `iframeUrl` bootstrap workflow or permit its required inline/worker capabilities. Browser WebRTC/KPS connectivity is required for new reads.
-
-## Routing and privacy
-
-One long-lived `AnonRpcWorker` uses the pinned tor-js identity `0x700dA3193D35fA54Cd3fBf29B66f2a2A0385659e`. Its unchanged worker bundle is shipped with the application, and `src/bootstrap.ts` answers the harness’s two specifier metadata calls locally. The harness fetches the same-origin asset and verifies its pinned Keccak-256 before execution. No Ethereum RPC, CDN resolver or remote discovery provider is used to start Tor. See [the vendored bundle](vendor/tor/README.md). Legacy `bootstrapRpc` settings and `VITE_BOOTSTRAP_RPC` are ignored; saving network settings drops the obsolete field.
-
-Each wallet receives a random UUID isolation key and an explicit private execution route. One shared Helios consensus light client queues wallet execution serially. Every execution-network attempt uses `worker.fetch` with that wallet's `anonOptions.isolationKey`. Keys survive refresh and retry for the in-memory wallet's lifetime; reload creates new keys. HTTP batching, multicall and CCIP redirects are disabled. There is no direct-fetch or public-RPC fallback. Helios internal HTTP retries and subsequent automatic rounds keep the same wallet endpoint and key. There is no ordinary-fetch execution transport.
-
-ETH uses eth_getProof against the verified finalized state root. WETH and every custom ERC-20 use local Helios/revm balanceOf execution with verified bytecode and demanded storage, including proxy dependencies. Mainnet WETH is `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`. All assets in one refresh use one verified finalized block hash. Independent wallets/refreshes can observe different finalized blocks; totals explicitly label mixed blocks. Configured token decimals apply consistently across all addresses and cached snapshots.
-
-Decoded responses have streamed byte limits: 16 MiB for execution/consensus, 20 MB for worker updates, 256 KiB for worker discovery, and 8 MiB for the Helios binary. Oversized or aborted streams are canceled before JSON parsing, hashing or caching. Each execution or consensus request attempt has a 90-second timeout; each Tor worker startup attempt has a five-minute timeout. An active verification session is bounded to five minutes; queued wallets show Queued without spinners. Hard request deadlines cover response bodies even if abort is ignored. A failed transport ends the attempt and releases the next queued address, with spinners cleared during retry backoff. Failed rounds retry automatically with capped exponential backoff. The UI keeps saved amounts visible throughout. Each RPC operator sees the wallet queries it serves through Tor. Beacon consensus GETs also use Anon-RPC, under a separate shared consensus isolation key; background sync never uses an ordinary browser fetch. Tor keys isolate circuits and TLS sessions but can randomly share an exit. The local Tor bundle must match the release digest or the explicitly applied PublicNode update digest; missing or tampered bytes fail closed without remote fallback. The app trusts the release-pinned consensus checkpoint (or the root/slot you choose in Settings), the reviewed Helios WASM and the release-pinned Tor implementation (or the update you explicitly apply); RPC state is verified locally.
-
-No analytics, external fonts, address links, address URL parameters or address logging are added. A referrer policy prevents outgoing referrers. Wallets and cached balances are intentionally stored in this browser; anyone with access to its storage can read them.
-
-## Verification
-
-`BASE_URL=http://127.0.0.1:4173 bun run test:live` runs the actual Tor/Helios balance and TWAP smoke test against a built page. Optionally set `LIVE_BALANCE_RPC` to an HTTPS RPC endpoint to test a specific operator without changing defaults.
-
-`bun run test:all` runs the deterministic suite, production build and Chromium checks, including a fully offline production reload. Browser scenarios cover local validation, bulk additions, custom tokens and decimals, spinners, request status, cached balances, stale refreshes, recovery, storage failures, removals, persistence automatic retry recovery, offline pause/resume, cancellation, and mobile layout. Retry scheduler tests verify capped backoff and prevent duplicate work. Transport and verifier tests check requested-address/root/slot binding, code hashes, no batches, distinct keys, private retries, partial completion and forbidden public fallbacks. Static-server tests check content, headers, HEAD, missing files, invalid methods and path traversal.
-
-The [GitHub Actions workflow](.github/workflows/test.yml) tests Bun 1.3.14 and 1.4.3 with locked installs. Failed browser checks retain screenshots, traces and HTML reports.
-
-Live mainnet tests remain opt-in because they depend on external gateway, RPC and Tor availability. To test the production build:
+To regenerate the README screenshot with labelled demonstration data:
 
 ```sh
-bun run build
-BASE_URL=http://127.0.0.1:4173 bun run test:live
+UPDATE_README_SCREENSHOT=1 bun run test:browser e2e/technology.spec.ts --grep "README portfolio screenshot"
 ```
 
-The test runner starts the static server if needed. Deterministic UI tests replace the connection boundary only in Playwright; the production app has no mock mode.
+Live tests are opt-in and depend on external services. To exercise a production build, build and start `bun run serve`, then set `BASE_URL=http://127.0.0.1:4173` when running the live command. `LIVE_BALANCE_RPC` can select an operator for the smoke test.
 
-References: [Anon-RPC web integration](https://ethereum.github.io/anon-rpc/wallets/), [tor-js circuit isolation](https://github.com/ethereum/tor-js#circuit-isolation), and [browser harness](https://github.com/ethereum/anon-rpc/tree/main/impl/browser-harness).
+Tests cover wrong-wallet/block proofs, omitted nonzero storage slots, bytecode tampering, private-route escapes, cancellation and late replies, response-size limits, concurrent tab edits, quote ordering/decimals/history, zero balances, failures, offline cache behavior and loading layout stability. CI runs locked installs on Bun 1.3.14 and 1.4.3; failed browser checks retain screenshots and traces.
 
-## IPFS publishing
+## Static HTTPS and IPFS deployment
 
-The Docker publisher follows [Sealwort's IPFS deployment](https://github.com/DarkFlorist/Sealwort/tree/bc67c11581a0dba371a7335fe0220d9dc47ef396) (Unlicense): a pinned Bun builder produces the site, a pinned Kubo v0.25.0 computes a CIDv1 for the directory, and the runtime uploads and pins that same directory to your Kubo RPC API. Publishing fails if the returned CID differs from the build-time CID. No pinning provider is selected or authenticated automatically.
+Upload the complete **`dist/`** directory to a static HTTPS host. No application backend or wallet extension is required. For a subdirectory, build with `bun run build --base=/your-path/`. Serve `sw.js` with revalidation/no-cache so browsers can discover updates.
 
-The matching package commands are:
+Optional IPFS commands:
 
 ```sh
-bun run typecheck
-bun run check
-bun run ui:docker
+bun run ui:docker            # build the image and publish through a reachable Kubo API
+bun run test:ipfs            # isolated Kubo/CAR/path + subdomain gateway checks; needs Kubo
 ```
 
-`check` runs unit tests, type checking and the production build. `ui:docker` builds the `anonfolio-ui` image, publishes `/export` to the host's existing Kubo node, checks its CID, and prints `http://<CID>.ipfs.localhost:8080/`. It requires a running Docker engine and Kubo; it does not start or reconfigure your node. Like Sealwort, its default RPC multiaddress is `/dns4/host.docker.internal/tcp/5001`, with a host-gateway mapping for Linux and Docker Desktop support on Windows/macOS.
+`IPFS_API_MULTIADDR` selects the publisher's Kubo API; the Docker default is `/dns4/host.docker.internal/tcp/5001`. The publisher checks the uploaded CID against the build CID. `scripts/export-ipfs.sh` produces `anonfolio.car` and `ipfs-cid.txt`. See the [publishing section of the guide](docs/documentation.html#configuration-builds-and-publishing) and [IPFS workflow template](.github-workflows/ipfs-deploy.yml) for export/release details. Enabling that template requires credentials with workflow-write permission.
 
-Override the RPC multiaddress if necessary:
-
-```sh
-IPFS_API_MULTIADDR=/ip4/192.0.2.10/tcp/5001 bun run ui:docker
-```
-
-In PowerShell:
-
-```powershell
-$env:IPFS_API_MULTIADDR = '/ip4/192.0.2.10/tcp/5001'
-bun run ui:docker
-```
-
-A Linux host daemon bound only to `127.0.0.1:5001` is not reachable via Docker's host-gateway mapping. Use a trusted container network or a private host address reachable from the publisher. Keep the Kubo RPC API private; the browser needs only the gateway. The printed URL assumes your gateway listens on port 8080; use your actual gateway port or HTTPS domain otherwise. The runtime pins content on your node; continued public availability requires keeping that node reachable or pinning the CID elsewhere.
-
-The ready-to-install IPFS workflow template in [.github-workflows/ipfs-deploy.yml](.github-workflows/ipfs-deploy.yml) builds and pushes a GHCR image for `main` and `v*` tags. Enable it by copying the template into `.github/workflows/ipfs-deploy.yml` using credentials with workflow-write permission (the current repository token cannot push workflow changes). Tags also attach `anonfolio.car` and `ipfs-cid.txt` to the GitHub release, using the same checked CID. Import an artifact into your chosen Kubo node with `ipfs dag import anonfolio.car`; it contains the full site and pins the root by default. You can also produce the artifact directly from an image without publishing to a host node:
-
-```sh
-mkdir -p ipfs-artifacts
-docker run --rm --entrypoint /bin/sh --volume "$PWD/ipfs-artifacts:/output" anonfolio-ui /export-ipfs.sh
-```
-
-The production build forces Bun as the JavaScript runtime, matching the Docker builder. Builds use relative asset paths, so the same directory works at both `https://<CID>.ipfs.<gateway>/` and `https://<gateway>/ipfs/<CID>/`. Keep the trailing slash. The app's service worker registers under that directory and caches only the application files; RPC and gateway connections remain uncached. Use HTTPS (or local loopback gateways) for browser worker and offline support. The Docker build uses the shipped deployment defaults; browser Settings can override gateways and RPCs after loading.
-
-Prefer a subdomain gateway for per-CID browser origin isolation. A path gateway shares browser storage with other applications on that gateway origin. With subdomain gateways, each new CID has a separate origin, so wallets, names and settings from a previous CID do not automatically carry over.
-
-### Verify a real local IPFS deployment
-
-Install Kubo (tested with v0.25.0), Chromium via `bunx playwright install chromium`, and a POSIX shell (Linux, macOS or WSL), then run:
-
-```sh
-bun run test:ipfs
-# Or point to an installed Kubo binary:
-IPFS_BIN=/path/to/ipfs bun run test:ipfs
-# Include actual mainnet reads through the real tor-js worker:
-LIVE_RPC=1 bun run test:ipfs
-```
-
-The check builds the production site, starts an isolated offline Kubo node on random loopback ports, runs the exact Docker publishing script, checks CID-mismatch rejection, exports a CAR, and imports it into a fresh repository. Chromium loads the site through actual path and subdomain gateways and checks relative assets, service-worker scope, named wallets, tokens, cached zero balances, offline reloads and absence of public balance requests. It leaves `ipfs-artifacts/anonfolio.car` and `ipfs-artifacts/ipfs-cid.txt`, then stops the temporary node. It never changes an existing Kubo configuration, pins to a public provider, or requires Docker. The optional live check additionally exercises ETH/WETH/USDC, two wallets, zero balances and manual refresh from the IPFS-hosted production page.
-
-
-## Browser-side balance verification
-
-[Helios 0.12.0](https://github.com/a16z/helios/tree/0.12.0), including [PR #813](https://github.com/a16z/helios/pull/813), is vendored as unchanged WASM with an adapted internal HTTP bridge. See [the review and trust boundaries](vendor/helios/README.md). One shared consensus client verifies sync committee signatures and finalized execution headers, starting from the release-pinned mainnet checkpoint or a user-configured root and matching slot. Each refresh freezes a single finalized block hash and state root before reading any asset. No unverified balance fallback exists.
-
-The dedicated verifier worker sends both execution and beacon consensus requests through the main-thread Anon-RPC bridge. Consensus GETs are restricted to the source-pinned origin and beacon paths and use their own isolation key, including outside active wallet sessions. Every execution proof, code fetch, block-body lookup and retry uses the active wallet's isolation key. Ordinary browser fetch loads local application assets and, only after the explicit Settings update action, PublicNode specifier metadata and Tor worker downloads. All balance/proof/consensus/oracle requests stay on Anon-RPC. State requests are bound to the frozen block hash. Account addresses, requested storage slots and bytecode hashes are checked both at the adapter boundary and by Helios. Helios/revm demand-loads verified state for balanceOf, including delegatecall/proxy dependencies. Remote eth_call and access-list execution hints are not used.
-
-ETH verifies eth_getProof against the finalized state root. All ERC-20 contracts use local EVM execution; there are no assumed balance storage layouts. Token and quote decimals always come from Settings; decimals() is never called. A failed proof/transport preserves historical amounts as stale. Missing data never becomes zero. Totals identify mixed finalized blocks and use the same configured precision for every address.
-
-Progress reports the actual step: loading and digest-checking WASM, private beacon requests through Anon-RPC, consensus verification, private RPC method submission, Merkle-proof checking, verified bytecode, local execution. Details show the finalized block hash/time; compact rows show current work without needing to expand them.
-
-Checkpoints expire after 14 days. Renew the trust anchor in Settings → Consensus checkpoint using a root and matching slot checked across independent operators, or install a reviewed release with a newer default. Restore defaults selects the release-pinned checkpoint. Runtime settings cannot change the Helios binary pin. The explicit Tor updater can replace the worker digest with the PublicNode-supplied value. Frozen finalized blocks older than one hour are rejected. The shared verifier serializes wallet execution, trading throughput for a single consensus sync and unambiguous private routing. Proof-unavailable RPC operators fail closed; configure a mainnet endpoint supporting eth_getProof and EIP-1898 block-hash queries.
-
-Run `bun run test:all` for unit, adversarial and deterministic UI/offline checks. `BASE_URL=http://127.0.0.1:4173 bun run test:live` exercises the actual production WASM and Tor worker (build first); the live checks additionally reject any ordinary browser proof/code requests. UI fixtures replace the verifier boundary only inside tests, never in the shipped app. Unit regressions use genuine generated trie proofs for wrong-wallet, wrong-block, omitted-nonzero-slot, exclusion/zero and tampered-bytecode attacks; transport tests forbid native-fetch fallbacks. `LIVE_RPC=1 bun run test:ipfs` runs the same verifier on a real local Kubo gateway.
-
-
-## Resilient Tor deployment and HTTPS mode
-
-Choose **Settings → Network connection → Connection mode**. Tor remains the
-default; **Direct HTTPS (not anonymous)** uses the configured RPC endpoints,
-starting with `https://eth.drpc.org`, and the configured-in-source beacon API.
-HTTPS mode omits credentials/referrers, blocks redirects and batches, and allows
-only proof/code/block RPC methods and approved beacon URLs. It keeps the same
-Helios verification and finalized-block checks. The header always labels it
-non-anonymous. It does not download or initialize Tor.
-
-Configure multiple real `ip:port:certhash` gateways in Settings or
-`VITE_ANON_GATEWAYS`; tor-js distributes connections and backs off failed gateways.
-Only one public demo gateway is known and shipped. Additional production hosts
-must be operated or supplied; see [the deployment guide](deploy/tor-gateways/README.md).
-
-To accelerate cold Tor starts, publish the gateway's fresh public directory:
-
-```sh
-bun run bootstrap:update /path/to/gateway/data/bootstrap.zip.zst
-bun run build
-```
-
-Run publication hourly against your static host, or set a maintained HTTPS
-manifest in **Tor directory mirror URL** / `VITE_TOR_BOOTSTRAP_URL`. A missing,
-stale or corrupt mirror falls back to the saved directory and gateways. The
-mirror carries no wallet data; Arti verifies directory signatures. Immutable
-IPFS releases need republishing or a maintained external mirror for fresh data.
+Prefer an IPFS subdomain gateway for a separate browser origin per CID. Path gateways can share storage origins with other content; changing CIDs/subdomains does not migrate saved portfolios automatically.

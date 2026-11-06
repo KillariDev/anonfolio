@@ -1,3 +1,4 @@
+import { technologyIcon } from './technology-icons';
 import { visibleHoldings } from './holdings';
 import { captureViewport, restoreViewport } from './viewport';
 import { updateChildren } from './dom';
@@ -88,6 +89,9 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 
 </div>
 </main>`;
+
+document.querySelector('.network i')!.replaceWith(technologyIcon('ethereum', true));
+document.querySelector('#pricing-form h2')!.prepend(technologyIcon('uniswap', true));
 
 let state: ConnectionState = 'starting';
 let connectionMessage = 'Preparing the bundled Tor worker. Ethereum requests wait for the private connection.';
@@ -209,6 +213,7 @@ function renderConnection() {
   node.setAttribute('aria-label', config.mode === 'https' ? 'HTTPS connection' : 'Private connection');
   const heading = document.createElement('div');
   heading.className = 'connection-heading';
+  if (config.mode !== 'https') heading.append(technologyIcon('tor'));
   if (state === 'starting') heading.append(spinner());
   const title = document.createElement('strong');
   title.textContent = config.mode === 'https' ? state === 'ready' ? 'Direct HTTPS · not anonymous' : state === 'starting' ? 'Starting HTTPS connection…' : 'HTTPS connection unavailable'
@@ -431,6 +436,7 @@ function renderTotals() {
   primary.append(label, value);
   const metadata = document.createElement('div'); metadata.className = 'portfolio-value-meta';
   const method = statusIcon('waiting', 'Price methodology', 'Estimated using 30-minute Uniswap v3 TWAPs from direct token/' + pricing.quote.symbol + ' pools at verified finalized blocks. Not a live trading quote.');
+  method.querySelector('svg')!.replaceWith(technologyIcon('uniswap', true));
   metadata.append(valuationFlags(estimate), method);
   updateChildren(summary, [primary, metadata]);
   const totals = document.createDocumentFragment();

@@ -31,7 +31,7 @@ header { position: relative; max-width: 1280px; margin: auto; padding: 18px 32px
 .brand-mark { display: inline-flex; justify-content: center; align-items: center; background: #b8ec8c; color: #182211; width: 26px; height: 26px; border-radius: 7px; font-size: 23px; margin-right: 9px; }
 .brand-dot { color: #b8ec8c; }
 .network { font-size: 11px; color: #b4c2ab; }
-.network i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #b8ec8c; margin-right: 7px; }
+
 main { max-width: 1280px; margin: 18px auto 0; padding: 0 32px; }
 .page-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 15px; }
 h1 { font-size: 25px; letter-spacing: -.8px; line-height: 1.2; margin: 0; font-weight: 550; }
@@ -369,3 +369,11 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
   .wallet-details[hidden] { display: none; }
   .wallet-details > td { display: block; }
 }
+
+/* Technology marks keep a fixed footprint while connection status changes. */
+.technology-logo { display: inline-block; width: 18px; height: 18px; flex: 0 0 18px; object-fit: contain; vertical-align: middle; }
+.network .technology-logo { width: 14px; height: 14px; flex-basis: 14px; margin-right: 6px; }
+#pricing-form h2 { display: flex; align-items: center; gap: 8px; }
+.status-icon .technology-logo { width: 14px; height: 14px; flex-basis: 14px; }
+
+.technology-tor { width: 30px; flex-basis: 30px; }
