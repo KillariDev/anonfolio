@@ -38,6 +38,12 @@ bun scripts/sync-screenshot-docs.ts
 UPDATE_PRESENTATION_PDF=1 bun run test:browser e2e/presentation.spec.ts --grep "self-contained presentation"
 ```
 
+The inline environment assignments above use POSIX syntax. In PowerShell set the corresponding `$env:UPDATE_SCREENSHOTS`, `$env:SCREENSHOT_LIVE` or `$env:UPDATE_PRESENTATION_PDF` flag before invoking the command, then clear it with `Remove-Item Env:FLAG_NAME`.
+
 For new mainnet data, replace `UPDATE_SCREENSHOTS=1` with `SCREENSHOT_LIVE=1` in the first command. This path uses the real application/verifier without mocked RPC responses, replaces the saved snapshot only after every balance is proven and custom-token quotes succeed, and checks that no remote `eth_call` was used. It intentionally selects HTTPS for this public-data capture; the application's default remains Tor. Update the capture date/block description above when replacing the snapshot, then run the synchronization/PDF commands and build again.
 
 The ordinary browser suite replays the checked-in snapshot through the UI's verification boundary, blocks external requests, and checks nonzero custom-token holdings, their estimates/icons, real addresses and responsive rendering. Replay changes neither the stored raw amounts nor the price fractions and is not a new live proof verification. The separate live command exercises the actual verifier.
+
+## Separate ten-image gallery
+
+The [repository screenshot gallery](../../screenshots/README.md) is a separate live capture: four public accounts including the ENS DAO treasury, five tokens including ENS, and desktop/tablet/mobile and verification views. Its per-image metadata lives in `screenshots/mainnet-snapshots.json`; it does not replace the three-address snapshot used by this page, the README hero, guide and presentation. Regenerate it with `SCREENSHOT_GALLERY=1 bun run test:browser e2e/screenshot-gallery.spec.ts`. ENS remains unpriced where no direct USDC pool qualifies. Both capture workflows explicitly use verified Direct HTTPS; neither claims a live Tor connection.

@@ -9,10 +9,10 @@ const accounts = [
   { name: 'ENS DAO treasury', address: '0xFe89cc7aBB2C4183683ab71653C4cdc9B02D44b7' },
 ];
 const ensIcon = 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72/logo.png';
-const directory = new URL('../scerenshots/', import.meta.url);
+const directory = new URL('../screenshots/', import.meta.url);
 
 test('capture ten real mainnet portfolio screenshots', async ({ page, request }) => {
-  test.skip(process.env.SCREENSHOT_GALLERY !== '1', 'Opt-in live mainnet screenshot capture; writes scerenshots/.');
+  test.skip(process.env.SCREENSHOT_GALLERY !== '1', 'Opt-in live mainnet screenshot capture; writes screenshots/.');
   test.skip(!!process.env.BASE_URL || !!process.env.IPFS_GATEWAY_URL, 'Capture the current source application with Vite.');
   test.setTimeout(900_000);
   const localIcon = async (name: string) => 'data:image/png;base64,' + await readFile(new URL(`../src/assets/tokens/${name}.png`, import.meta.url), 'base64');

@@ -1,9 +1,9 @@
 # Running the production gateway pool
 
-The upstream public address is a development demo, not a redundant production
-service. Additional production addresses cannot be fabricated: run these steps
-on at least two hosts in different providers/regions, or obtain addresses from
-operators you trust. Anonfolio does not provision servers or create cloud bills.
+The application ships one development demo gateway. It does not provision a
+redundant production service. To operate an optional redundant pool, run these
+steps on at least two hosts in different providers/regions, or obtain addresses
+from operators you trust. Anonfolio does not provision servers or create cloud bills.
 
 Use the pinned tor-js source commit (the app separately pins the 0.4.4 worker bytes):
 
@@ -42,7 +42,7 @@ bun run build
 ```
 
 This writes a content-addressed archive and `tor-bootstrap.json` under `public/`;
-Vite copies them into `dist/`. The app tries this same-origin manifest first,
+Vite copies them into `dist/`. By default the app loads this same-origin manifest,
 with an eight-second total budget, a six-hour freshness limit, an 8 MiB archive
 limit and a SHA-256 integrity check. Arti still verifies directory signatures.
 Missing, stale, oversized or corrupted mirrors fall back to saved directory data
