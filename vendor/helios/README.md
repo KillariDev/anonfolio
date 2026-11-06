@@ -25,17 +25,19 @@ one import added and its three WASM HTTP-fetch imports redirected to
 `heliosFetch` in `fetch.js`. No main-thread/global fetch replacement is used.
 Initialization receives already downloaded, SHA-256-checked WASM bytes.
 
-The adapter only permits wallet execution HTTP via the main thread's explicit
-Anon-RPC bridge. Consensus GETs use the pinned beacon origin and a restricted
-path allowlist, through the same Anon-RPC worker with a separate consensus key.
+The adapter only permits wallet execution HTTP via the main thread's explicitly
+selected transport capability. Tor mode uses Anon-RPC; user-selected Direct HTTPS
+uses restricted browser fetch while keeping the same local verification. Consensus
+GETs use the pinned beacon origin and a restricted path allowlist. Tor mode sends
+them through the same Anon-RPC worker with a separate consensus key.
 The main-thread bridge handles consensus background sync without a wallet session;
 there is no direct-fetch consensus fallback. Proofs, bytecode, retries and execution-block metadata all use
-`worker.fetch` with the active wallet's original isolation key. Batches and
+`worker.fetch` on the selected capability; Tor retains the active wallet's original isolation key, while Direct HTTPS strips isolation metadata. Batches and
 remote eth_call execution are forbidden. A response URL is supplied on synthetic
 responses because reqwest's WASM adapter requires it.
 
-One shared EthereumClient runs consensus, with a fixed independently pinned
-checkpoint and in-memory database. Wallet refreshes execute serially; concurrent
+One shared EthereumClient runs consensus, with a selected independently trusted
+checkpoint (release-pinned by default) and in-memory database. Wallet refreshes execute serially; concurrent
 refreshes queue, so all synchronous/asynchronous execution requests and retries
 remain bound to one immutable wallet session. No proof or code request is
 allowed without that session's verified finalized block. Background execution

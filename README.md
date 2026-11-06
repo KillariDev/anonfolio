@@ -7,7 +7,7 @@ An Ethereum mainnet portfolio reader that verifies balances in your browser. Tra
 **Anonfolio will be hosted on IPFS** as a static, content-addressed application. Open it with an IPFS-capable browser or through an HTTPS IPFS gateway.
 
 <!-- ipfs-build -->
-**IPFS build:** [ipfs://bafybeieldjot7zceyp3yjon4pryqzm4f3i76n4gdnqvuxixdmy2gtu2nau/](ipfs://bafybeieldjot7zceyp3yjon4pryqzm4f3i76n4gdnqvuxixdmy2gtu2nau/)
+**IPFS build:** [ipfs://bafybeid27ry4lwzkc7mjc66ty3tzxyldscfghu2ura4knxukwz75hm6ddi/](ipfs://bafybeid27ry4lwzkc7mjc66ty3tzxyldscfghu2ura4knxukwz75hm6ddi/)
 
 This is the content address of the exported build validated with local IPFS gateways, not a guarantee that it is pinned on the public network. Updated releases have new CIDs.
 <!-- /ipfs-build -->
@@ -20,7 +20,7 @@ This is the content address of the exported build validated with local IPFS gate
 *Public mainnet snapshot · 6 Nov 2026 · ETH, WETH, USDC and UNI · Helios-verified over direct HTTPS. [Capture details](docs/images/README.md).*
 <!-- /portfolio-screenshot -->
 
-Explore the [10-image mainnet screenshot gallery](scerenshots/README.md), featuring public DAO treasuries, custom ERC-20s, verification details and mobile layouts.
+Explore the [10-image mainnet screenshot gallery](screenshots/README.md), featuring public DAO treasuries, custom ERC-20s, verification details and mobile layouts.
 
 ## Technologies
 
@@ -85,13 +85,15 @@ Two balance jobs and two pricing jobs can overlap within one address session. Di
 
 Prices are shared across addresses in the running verifier. ETH and WETH use the same WETH quote: one successful lookup is reused for every address at the same finalized block and pricing settings. The first lookup needs several verified factory/pool calls, not just one HTTP request. A different finalized block requires a new quote, and restarting the verifier clears its in-memory oracle cache. Logs distinguish a new lookup from reuse.
 
-Temporary pricing failures retry automatically for affected holdings on their existing route, even if balance verification succeeded. The retry verifies those holdings and prices together at its selected finalized block. Missing direct pools and other permanent pricing failures remain unpriced without endless retries. Error details survive reload, but reopening the app still does not start reads automatically. Tabs synchronize quote settings without starting network reads; each requested refresh keeps one pricing-settings snapshot. A late result cannot replace a holding from a newer verified block.
+Temporary pricing failures retry automatically for affected holdings on their existing route, even if balance verification succeeded. The retry verifies those holdings and prices together at its selected finalized block. Missing direct pools and other permanent pricing failures remain unpriced without endless retries. Error details survive reload, but reopening the app still does not start reads automatically. Tabs synchronize quote settings without starting network reads; each requested refresh keeps one pricing-settings snapshot. If pricing changes while an address is loading, one full follow-up refresh uses the newest settings even if the older attempt fails. A late result cannot replace a holding from a newer verified block.
 
 The [illustrated system guide](docs/documentation.html) covers the architecture, flowcharts, networking, verification, pricing, cache formats, retries and deployment in detail. It opens directly from disk or at **`/docs/documentation.html`** on either server.
 
+The [Uniswap developer feedback](FEEDBACK.md) records integration feedback and requested improvements for Uniswap documentation.
+
 The [technical presentation](docs/presentation.html) is a self-contained 16-slide deck covering the project, technology stack, worker messages, Tor/KPS networking, consensus and account/storage proofs, local ERC-20 execution, and shared Uniswap pricing. Open it directly from disk or at **`/docs/presentation.html`**. A [PDF copy](docs/presentation.pdf) is also included. Use arrow keys to present, **Notes** for speaker detail, **All slides** to read continuously, or **Print / PDF** to export. Logos, diagrams and the demonstration screenshot are embedded; the deck sends no network requests unless you follow a reference link.
 
-After editing the slides, regenerate the committed PDF with `UPDATE_PRESENTATION_PDF=1 bun run test:browser e2e/presentation.spec.ts --grep "self-contained presentation"`, then rebuild. The test checks a 16-page PDF export; the production build includes both formats in the offline application shell.
+After editing the slides, regenerate the committed PDF with `UPDATE_PRESENTATION_PDF=1 bun run test:browser e2e/presentation.spec.ts --grep "self-contained presentation"`, then rebuild. The test checks a 16-page PDF export. The production build includes both formats; the service worker caches each when requested, so open/download the desired format online before relying on it offline.
 
 ## Privacy, trust and configuration
 
@@ -122,7 +124,9 @@ bun run test:live:https      # real verified ETH/WETH using explicitly selected 
 bun run test:live            # real Tor/Helios balance and pricing smoke test
 ```
 
-To regenerate all published screenshots from the saved, verified mainnet snapshot:
+Examples below using `NAME=value command` use POSIX shell syntax. In PowerShell, set `$env:NAME = 'value'` before running the command and remove it afterward with `Remove-Item Env:NAME`. The package commands such as `bun run test:ipfs` work directly in PowerShell.
+
+To recreate the README, guide and presentation images from their saved, verified three-address mainnet snapshot:
 
 ```sh
 UPDATE_SCREENSHOTS=1 bun run test:browser e2e/published-screenshots.spec.ts
@@ -130,17 +134,21 @@ bun scripts/sync-screenshot-docs.ts
 UPDATE_PRESENTATION_PDF=1 bun run test:browser e2e/presentation.spec.ts --grep "self-contained presentation"
 ```
 
-Use `SCREENSHOT_LIVE=1` instead of `UPDATE_SCREENSHOTS=1` for a fresh mainnet capture through the real Helios verifier in explicit HTTPS mode. This updates the saved snapshot and both images; run the synchronization and PDF commands shown above to update the captions and presentation. See [screenshot provenance](docs/images/README.md).
+Use `SCREENSHOT_LIVE=1` instead of `UPDATE_SCREENSHOTS=1` for a fresh mainnet capture through the real Helios verifier in explicit HTTPS mode. This updates the saved snapshot and both images; run the synchronization and PDF commands shown above to update the captions and presentation. See [documentation screenshot provenance](docs/images/README.md). The separate [ten-image gallery](screenshots/README.md) includes the ENS DAO treasury and ENS token, with its own per-image snapshots. Regenerate it with fresh mainnet data using:
+
+```sh
+SCREENSHOT_GALLERY=1 bun run test:browser e2e/screenshot-gallery.spec.ts
+```
 
 Live tests are opt-in and depend on external services. To exercise a production build, build and start `bun run serve`, then set `BASE_URL=http://127.0.0.1:4173` when running the live command. `LIVE_BALANCE_RPC` can select an operator for the smoke test.
 
-Tests cover wrong-wallet/block proofs, omitted nonzero storage slots, bytecode tampering, private-route escapes, cancellation and late replies, response-size limits, concurrent tab edits, quote ordering/decimals/history, zero balances, failures, offline cache behavior and loading layout stability. CI runs locked installs on Bun 1.3.14 and 1.4.3; failed browser checks retain screenshots and traces.
+Tests cover wrong-wallet/block proofs, omitted nonzero storage slots, bytecode tampering, private-route escapes, cancellation and late replies, response-size limits, concurrent tab edits, quote ordering/decimals/history, queued refreshes after failures, zero balances, offline cache scope isolation and loading layout stability. The IPFS regression tests exercise shell-free Kubo invocation, paths containing spaces, binary CAR output, CID mismatches and failed exports. CI runs the deterministic suite on Ubuntu with locked installs on Bun 1.3.14 and 1.4.3; live mainnet captures and real Kubo integration are opt-in, and the Windows IPFS path has not been validated on a native Windows runner. Failed browser checks retain screenshots and traces.
 
 ## IPFS hosting and static HTTPS deployment
 
 Anonfolio is intended to reside on IPFS. Each release contains the complete **`dist/`** directory, identified by an immutable CID. Updating the app produces a new CID; publish and pin that release to keep it available. IPFS delivers the application files; Ethereum requests still use Anon-RPC/Tor by default, or Direct HTTPS when explicitly selected. IPFS hosting alone does not anonymize requests.
 
-For ordinary browsers, use an HTTPS IPFS gateway so browser security features remain available. The same build can also be uploaded to a static HTTPS host. No application backend or wallet extension is required. For a subdirectory, build with `bun run build --base=/your-path/`. Serve `sw.js` with revalidation/no-cache so browsers can discover updates. The service worker installs the small UI shell first; verifier runtimes and documentation are cached when requested. Visited documentation remains available offline. Cached pages return after three seconds if the host is too slow.
+For ordinary browsers, use an HTTPS IPFS gateway so browser security features remain available. The same build can also be uploaded to a static HTTPS host. No application backend or wallet extension is required. For a subdirectory, build with `bun run build --base=/your-path/`. Serve `sw.js` with revalidation/no-cache so browsers can discover updates. The service worker installs the small UI shell first; verifier runtimes and documentation are cached when requested. Cache cleanup is scoped to the application path, so sibling and nested IPFS releases on one gateway keep separate offline shells. Visited documentation remains available offline. Cached pages return after three seconds if the host is too slow.
 
 Build, publish and verify IPFS releases:
 

@@ -48,6 +48,8 @@ bunx playwright install chromium
 SCREENSHOT_GALLERY=1 bun run test:browser e2e/screenshot-gallery.spec.ts
 ```
 
+In PowerShell, set `$env:SCREENSHOT_GALLERY = '1'`, run `bun run test:browser e2e/screenshot-gallery.spec.ts`, then clear the flag with `Remove-Item Env:SCREENSHOT_GALLERY`.
+
 The opt-in capture starts/reuses the Vite development server, performs real verified reads, and writes exactly ten numbered PNGs plus `mainnet-snapshots.json` into this folder. It uses the application's ordinary controls to change the watchlist and open details/settings. Normal test-suite runs skip this network-dependent asset-generation task. Fresh data can change the displayed amounts, block numbers and pool availability.
 
 ETH/WETH/USDC/UNI icons use the project's [existing artwork and MIT license](../src/assets/tokens/README.md). The additional ENS icon is embedded in the snapshot's local token metadata, copied from [Trust Wallet assets](https://github.com/trustwallet/assets/blob/master/blockchains/ethereum/assets/0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72/logo.png), copyright 2019–2023 Trust Wallet, under the [same MIT license](../src/assets/tokens/LICENSE). Icons are fetched only by the opt-in capture setup and rendered from local data URLs in the app.
