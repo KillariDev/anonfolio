@@ -560,7 +560,8 @@ test('header settings icon, responsive full addresses and application favicon', 
   expect(iconUrl).toBeTruthy();
   const icon = await page.request.get(iconUrl!);
   expect(icon.ok()).toBe(true);
-  expect(await icon.text()).toContain('<svg');
+  expect(icon.headers()['content-type']).toContain('image/png');
+  expect((await icon.body()).subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
   await expect.poll(() => page.locator('.brand-mark').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await page.screenshot({ path: 'test-results/header-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

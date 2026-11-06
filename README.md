@@ -1,5 +1,7 @@
 # Anonfolio
 
+<img src="src/assets/branding/anonfolio-icon.png" width="80" height="80" alt="Anonfolio: a mint-green folded shield with a check-shaped opening">
+
 An Ethereum mainnet portfolio reader that verifies balances in your browser. Track named addresses, ETH, WETH and custom ERC-20 tokens without connecting a wallet, signing messages or sending transactions.
 
 **Tor via Anon-RPC is the default.** Each address uses its own isolation key. You can explicitly select **Direct HTTPS (not anonymous)** in Settings; providers then see your IP and requested addresses. A Tor failure never switches to HTTPS automatically.

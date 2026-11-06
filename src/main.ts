@@ -10,7 +10,7 @@ import chevronDown from './assets/chevron-down.svg?raw';
 import { discoverTorWorker, cacheTorWorker } from './worker-update';
 import type { WorkerMetadata } from './worker-metadata';
 import { DEFAULT_CHECKPOINT, checkCheckpointAge } from './verification/trust';
-import appIcon from './assets/anonfolio.svg?no-inline';
+import appIcon from './assets/branding/anonfolio-icon.png?no-inline';
 import { addressDisplay } from './address-display';
 import { parseTrackedAddresses } from './addresses';
 import { config, defaultConfig } from './config';

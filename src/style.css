@@ -28,7 +28,7 @@ button:disabled { cursor: wait; opacity: .6; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, #wallets:focus-visible { outline: 2px solid #b8ec8c; outline-offset: 3px; }
 header { position: relative; max-width: 1280px; margin: auto; padding: 18px 32px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 24px; align-items: center; border-bottom: 1px solid #293426; }
 .brand { font-size: 21px; letter-spacing: -.8px; font-weight: 700; color: #f1f4ec; text-decoration: none; display: flex; align-items: center; }
-.brand-mark { display: inline-flex; justify-content: center; align-items: center; background: #b8ec8c; color: #182211; width: 26px; height: 26px; border-radius: 7px; font-size: 23px; margin-right: 9px; }
+.brand-mark { display: block; width: 28px; height: 28px; object-fit: contain; margin-right: 9px; }
 .brand-dot { color: #b8ec8c; }
 .network { font-size: 11px; color: #b4c2ab; }
 

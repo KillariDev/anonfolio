@@ -89,7 +89,7 @@ test('static build technology logos remain available after an offline reload', a
     if(!navigator.serviceWorker.controller) await new Promise<void>(resolve=>navigator.serviceWorker.addEventListener('controllerchange',()=>resolve(),{once:true}));
   });
   await context.setOffline(true); await page.reload();
-  for(const selector of ['#connection .technology-tor','.network .technology-ethereum','#estimated-total .technology-uniswap']) {
+  for(const selector of ['.brand-mark','#connection .technology-tor','.network .technology-ethereum','#estimated-total .technology-uniswap']) {
     await expect(page.locator(selector)).toBeVisible();
     await expect.poll(()=>page.locator(selector).evaluate(image=>(image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   }
