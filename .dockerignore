@@ -1,0 +1,12 @@
+.git/
+.github/
+.github-workflows/
+node_modules/
+dist/
+ipfs-artifacts/
+test-results/
+playwright-report/
+.env
+.env.*
+*.car
+*.log

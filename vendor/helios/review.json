@@ -1,0 +1,29 @@
+{
+  "version": "0.12.0",
+  "commit": "2af9b41887e069144ee56cd710f3ddca195473f8",
+  "wasmSha256": "edbf06fa1cc95e2e406bdbdab780948f5b47a4cf7d9c82d32fd415f78f1448e8",
+  "checkpoint": {
+    "root": "0xe69fdb2e234b0627296c707c2c6ee401c237d4f22abefef4d2ed3c06de994388",
+    "canonical": true,
+    "header": {
+      "message": {
+        "slot": "15589024",
+        "proposer_index": "2289758",
+        "parent_root": "0xe900541820123664e036b1f5101ad3a3068d35a2b6f4dec30b9136e9d27e92d6",
+        "state_root": "0xa5c13dd902fb97a2fb5cadca5adde140ed120b73cb23f91e9cea7773ceded298",
+        "body_root": "0x6fbbfeaac8a79ece24355d1b04b8c571c2ae935c73ed9c94017424421c57fe67"
+      },
+      "signature": "0xb08b4b66d0d87972f7871306d4b0874b8bb4a1d302167c52183f57d2d6d0ecb1ea3a2b3d8c45492a34ef044df06c597510104c00abcba9ea7aae5448da46c517451348f256b33e68a28d65320b21accb4def2fb53ba8f25385d92cfd968e0266"
+    }
+  },
+  "independentSources": [
+    "https://sync-mainnet.beaconcha.in/checkpointz/v1/beacon/slots",
+    "https://mainnet-checkpoint-sync.attestant.io/checkpointz/v1/beacon/slots",
+    "https://beaconstate-mainnet.chainsafe.io/checkpointz/v1/beacon/slots"
+  ],
+  "torWorker": {
+    "specifier": "0x700dA3193D35fA54Cd3fBf29B66f2a2A0385659e",
+    "keccak256": "0x5b62f358ce7a2b94ee9bc3a0e6a08757db68fa08fc348276f31eda788aec818b",
+    "independentBundle": "https://cdn.jsdelivr.net/npm/tor-js@0.4.4/dist/anon-rpc-worker.js"
+  }
+}

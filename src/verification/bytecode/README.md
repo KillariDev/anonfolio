@@ -1,0 +1,9 @@
+# Bundled mainnet runtime bytecode
+
+`mainnet.json` includes runtime code for WETH9, the canonical Uniswap v3 factory, and the default WETH/USDC 0.05% pool. It was retrieved on November 6, 2026 with `eth_getCode(address, "latest")` from `https://ethereum-rpc.publicnode.com` during development. This download is not a runtime discovery step. The release contains the raw code, source address and Keccak-256 hash for each entry.
+
+These files are **untrusted cache seeds**, not verification roots. Before using any bundled or cached code, the verifier proves the requested contract account against the refresh's verified finalized state root and compares the code's Keccak-256 hash with the proven account code hash. An entry for another address, block, or implementation cannot authorize execution. New or upgraded contracts are downloaded through the selected wallet transport and verified before caching; Tor mode has no direct HTTPS fallback. Storage and proxy dependencies remain demand-loaded and independently proven.
+
+Code is indexed by content hash, not contract address, so identical code may be reused across contracts and blocks only when each requested account proves that same hash. Browser persistence stores hashes and bytecode, without wallet addresses. Cache Storage failures only disable persistence. Memory and persistent caches each retain at most 128 entries; each code entry is limited to 64 KiB. Clear the site's browser storage to remove the persistent cache.
+
+To update the seeds, retrieve the three listed addresses with `eth_getCode`, compute `keccak256(result)`, and replace the corresponding JSON entries. Runtime proof verification is required even for freshly updated seeds. There is no need to update these files for a changed block, storage value, wallet, or token price.

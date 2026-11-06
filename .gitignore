@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+test-results/
+playwright-report/
+ipfs-artifacts/
+*.car
+
+public/tor-bootstrap.json
+public/tor-bootstrap-*.zip.zst
+public/.tor-bootstrap-*.json
