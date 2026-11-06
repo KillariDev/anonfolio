@@ -87,13 +87,12 @@ input::placeholder, textarea::placeholder { color: #687462; }
 #token-error { color: #eeb69b; }
 .scroll-hint { display: none; }
 #wallets { container-type: inline-size; scrollbar-gutter: stable; overflow-anchor: none; position: relative; overflow: auto; max-height: 70vh; border: 1px solid #35422f; border-radius: 9px; }
-.wallet-table { --balance-width: 280px; --address-width: clamp(200px, 34vw, 430px); table-layout: fixed; min-width: calc(var(--address-width) + var(--token-count) * var(--balance-width) + 58px); width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
-.wallet-column-address { width: var(--address-width); }
+.wallet-table { table-layout: fixed; min-width: 0; width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; }
+.wallet-column-address { width: 40%; }
 .wallet-column-actions { width: 58px; }
 .wallet-table > thead > tr > th { position: sticky; top: 0; z-index: 2; font-size: 10px; font-weight: 500; color: #829876; padding: 10px 14px; background: #151d14; border-bottom: 1px solid #35422f; white-space: nowrap; }
-.wallet-table > thead > tr > th:first-child, .wallet-head { position: sticky; left: 0; z-index: 1; }
 .wallet-table > thead > tr > th:first-child { z-index: 3; }
-.wallet-head { font-weight: 400; min-width: 200px; width: clamp(200px, 34vw, 430px); max-width: 430px; }
+.wallet-head { font-weight: 400; }
 .balances > th, .balances > td { padding: 6px 14px; border-bottom: 1px solid #2b3826; background: #192019; vertical-align: middle; height: 54px; }
 .wallet:last-child .balances > th, .wallet:last-child .balances > td { border-bottom: 0; }
 .wallet:hover .balances > th, .wallet:hover .balances > td { background: #1c271a; }
@@ -172,8 +171,6 @@ input::placeholder, textarea::placeholder { color: #687462; }
   .connection strong { font-size: 10px; white-space: normal; min-width: 0; }
   .section-heading .local-note { font-size: 9px; }
   .scroll-hint { display: block; color: #819777; font-size: 10px; margin: 0 0 7px; }
-  .wallet-table { --balance-width: min(280px, calc(100vw - 64px)); --address-width: 200px; }
-  .wallet-head, .wallet-table > thead > tr > th:first-child { min-width: 200px; width: 200px; max-width: 200px; }
   .address-line { gap: 6px; }
   .balances > th, .balances > td { padding: 6px 11px; }
   .address-value { font-size: 10px; }
@@ -341,8 +338,42 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 .connection-heading strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connection-heading button { flex: 0 0 auto; }
 
-/* On narrow screens a pinned address would cover part of a full balance column. */
+/* Holdings belong to their address rather than a global token column. */
+.wallet-head, .wallet-table > thead > tr > th:first-child { left: auto; min-width: 0; width: auto; max-width: none; }
+.wallet-head { position: static; }
+.balances > th, .balances > td { padding-top: 4px; padding-bottom: 4px; }
+.address-line { flex-wrap: wrap; gap: 6px; }
+.address-line .compact-address { flex: 1 1 180px; width: 0; }
+.address-line .wallet-address { white-space: normal; overflow-wrap: anywhere; }
+.address-line .refresh-icon { margin-left: auto; }
+.address-valuation { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; color: #c4dcb3; font: 11px/1.5 ui-monospace, monospace; }
+.address-value-estimate { min-width: 0; overflow-wrap: anywhere; }
+.holdings-content { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.holdings-list { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; max-width: 100%; }
+.holdings-list:empty { display: none; }
+.holdings-list > .balance { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-width: 0; max-width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid #30412a; border-radius: 6px; background: #141e12; }
+.balance .token { display: inline-flex; align-items: center; gap: 5px; color: #abc29e; font-size: 10px; }
+.balance .token .token-icon { flex-basis: 16px; width: 16px; height: 16px; font-size: 8px; }
+.balance-values { min-width: 0; max-width: 100%; }
+.zero-holdings { min-width: 0; max-width: 100%; }
+.zero-holdings[hidden] { display: none; }
+.zero-holdings[open] { flex-basis: 100%; }
+.zero-holdings > summary { width: fit-content; padding: 4px 0; font-size: 10px; color: #8fa583; }
+.zero-holdings[open] > summary { border-bottom: 0; margin-bottom: 4px; }
 @media (max-width: 720px) {
-  .wallet-head { position: static; }
-  .wallet-table > thead > tr > th:first-child { left: auto; }
+  .wallet-table, .wallet-table > tbody { display: block; }
+  .wallet-table > colgroup, .wallet-table > thead { display: none; }
+  .balances { display: grid; grid-template-columns: minmax(0,1fr) 42px; border-bottom: 1px solid #2b3826; }
+  .address-line .compact-address { flex-basis: 100%; width: auto; }
+  .address-valuation { min-height: 30px; }
+  .holdings-content > .holdings-list { width: 100%; }
+  .holdings-list > .balance { display: block; width: 100%; }
+  .balance .token { display: flex; height: 18px; margin-bottom: 3px; }
+  .balance-values { min-height: 40px; align-content: start; }
+  .balances > .wallet-head { display: block; height: auto; min-width: 0; width: auto; max-width: none; border: 0; }
+  .balances > .actions { grid-column: 2; grid-row: 1; width: auto; height: auto; display: flex; align-items: center; padding: 6px; border: 0; }
+  .balances > .wallet-holdings { grid-column: 1 / -1; display: block; min-width: 0; height: auto; padding-top: 0; border: 0; }
+  .wallet-details { display: block; }
+  .wallet-details[hidden] { display: none; }
+  .wallet-details > td { display: block; }
 }

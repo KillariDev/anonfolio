@@ -68,7 +68,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   await expect(page.locator('.activity').first()).toContainText('eth_getProof(address)');
   await expect(page.locator('.activity').first()).toContainText(usdc);
   await expect(page.locator('.activity').first()).not.toContainText('eth.drpc.org');
-  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23', '1', '0', '1.23']);
+  await expect(page.locator('.amount')).toHaveText(['1', '1.23', '0', '1', '1.23', '0']);
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
   const calls = await page.evaluate(() => (window as any).__calls);
@@ -88,8 +88,8 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();
-  await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
-  const originalTimes = await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')));
+  await expect(page.locator('.amount')).toHaveText(['1', '1.23', '0']);
+  const originalTimes = await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => [node.closest('.balance')!.getAttribute('data-asset'),node.getAttribute('datetime')]).sort());
   const snapshot = await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!));
   expect(snapshot.tokens.find((token: any) => token.address === usdc).decimals).toBe(6);
   expect(snapshot.wallets[0].balances.eth.amount).toBe('1000000000000000000');
@@ -98,13 +98,13 @@ test('cached token amounts and timestamps survive reload and failed refresh; rem
   await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.error')).toHaveCount(3);
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
-  expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))).toEqual(originalTimes);
+  expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => [node.closest('.balance')!.getAttribute('data-asset'),node.getAttribute('datetime')]).sort())).toEqual(originalTimes);
   await page.unroute('**/src/connection.ts*');
   await mockConnection(page, false, true);
   await page.reload();
   await expect(page.locator('.amount')).toHaveText(['1', '0', '1.23']);
   await expect(page.locator('.error')).toHaveCount(3);
-  expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))).toEqual(originalTimes);
+  expect(await page.locator('.balance time').evaluateAll(nodes => nodes.map(node => [node.closest('.balance')!.getAttribute('data-asset'),node.getAttribute('datetime')]).sort())).toEqual(originalTimes);
   await openTokenSettings(page);
   await page.getByRole('button', { name: 'Remove token USDC' }).click();
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
@@ -265,16 +265,9 @@ test('ten addresses fit compact rows with live totals and expandable details', a
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.locator('#wallets')).toBeVisible();
-  await page.locator('#wallets').evaluate(node => { node.scrollLeft = 300; });
-  expect(await page.locator('#wallets').evaluate(node => node.scrollLeft)).toBeGreaterThan(200);
+  expect(await page.locator('#wallets').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
   await page.getByRole('button', { name: 'Refresh ' + b, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Refresh ' + b, exact: true })).toBeEnabled();
-  // Mobile addresses scroll with the table so they cannot cover token values.
-  // Clicking its refresh control brings that address back into view.
-  expect(await page.locator('#wallets').evaluate(node => node.scrollLeft)).toBeLessThan(20);
-  const left = await page.locator('.wallet-head .address-display').first().boundingBox();
-  expect(left!.x).toBeLessThan(35);
-  await page.locator('#wallets').evaluate(node => { node.scrollLeft = 0; });
   await page.screenshot({ path: 'test-results/compact-mobile.png', fullPage: true });
 });
 
@@ -494,12 +487,12 @@ test('named addresses use blockies in rows, avoid duplicate detail addresses, pe
   expect(await page.evaluate(() => JSON.stringify((window as any).__calls))).not.toContain('Savings');
   await page.reload();
   await expect(page.locator('.wallet-head .address-name')).toHaveText('Savings');
-  expect(await page.locator('.wallet-head svg').innerHTML()).toBe(blockie);
+  expect(await page.locator('.wallet-head svg.blockie').innerHTML()).toBe(blockie);
   await openAddressForm(page);
   await page.locator('#address').fill('Trading | ' + b + '\nUnnamed | 0x0000000000000000000000000000000000000003');
   await page.getByRole('button', { name: 'add address to track' }).click();
   await expect(page.locator('.wallet-head .address-name')).toHaveText(['Savings', 'Trading', 'Unnamed']);
-  expect(await page.locator('.wallet-head svg').nth(1).innerHTML()).not.toBe(blockie);
+  expect(await page.locator('.wallet-head svg.blockie').nth(1).innerHTML()).not.toBe(blockie);
   expect(externalImages).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -566,7 +559,7 @@ test('header settings icon, responsive full addresses and application favicon', 
   await expect.poll(() => page.locator('.brand-mark').evaluate(img => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   await page.screenshot({ path: 'test-results/header-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  expect(await address.evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
+  expect(await address.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await settings.click();
   await expect(page.locator('#settings-panel')).toBeVisible();
@@ -627,7 +620,7 @@ test('TWAP holding estimates, partial totals and custom quote settings persist',
   await expect(page.locator('#estimated-total .status-partial')).toHaveCount(0);
   await addToken(page);
   await page.getByRole('button', { name: 'Close settings', exact: true }).click();
-  await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', '≈ 0 USDC', 'Unpriced']);
+  await expect(page.locator('.price-estimate')).toHaveText(['≈ 2000 USDC', 'Unpriced', '≈ 0 USDC']);
   await expect(page.locator('#estimated-total .valuation-coverage')).toHaveText('2 / 3 priced');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Quote token', { exact: true }).selectOption('custom');
@@ -1075,8 +1068,9 @@ test('compact status icons explain verification, proven zero, missing prices and
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
-  await expect(page.locator('.amount')).toHaveText(['1','0','1.23']);
-  const eth=page.locator('.balance').nth(0), weth=page.locator('.balance').nth(1), custom=page.locator('.balance').nth(2);
+  await expect(page.locator('.amount')).toHaveText(['1','1.23','0']);
+  const eth=page.locator('.balance[data-asset="eth"]'), weth=page.locator('.balance[data-asset="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]'), custom=page.locator('.balance[data-asset="'+usdc+'"]');
+  await page.locator('.zero-holdings > summary').click();
   const proven=eth.getByRole('img',{name:'Verified finalized',exact:true});
   await expect(proven.locator('svg')).toBeVisible();
   await proven.hover();
@@ -1115,8 +1109,8 @@ test('refresh preserves focus on the same address and token when status icons sh
   await openAddressForm(page);
   await page.locator('#address').fill(a+'\n'+b);
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
-  await expect(page.locator('.amount')).toHaveText(['1','0','1.23','1','0','1.23']);
-  const icon=page.locator('.wallet').nth(1).locator('.balance').nth(2).getByRole('img',{name:'Verified finalized',exact:true});
+  await expect(page.locator('.amount')).toHaveText(['1','1.23','0','1','1.23','0']);
+  const icon=page.locator('.wallet').nth(1).locator('.balance[data-asset="'+usdc+'"]').getByRole('img',{name:'Verified finalized',exact:true});
   await icon.focus();
   await page.locator('.refresh-icon').first().evaluate(button=>(button as HTMLButtonElement).click());
   await expect(icon).toBeFocused();
@@ -1355,9 +1349,9 @@ for (const width of [1280, 390]) test(`balance updates keep mounted rows, icons 
   await page.goto('/');
   await page.locator('#address').fill(a + '\n' + b);
   await page.getByRole('button', { name: 'add address to track', exact: true }).click();
-  await expect(page.locator('.wallet-table > thead > tr > th')).toHaveCount(4);
-  await expect(page.locator('.balances').first().locator(':scope > th, :scope > td')).toHaveCount(4);
-  await expect(page.locator('.wallet-details > td').first()).toHaveAttribute('colspan', '4');
+  await expect(page.locator('.wallet-table > thead > tr > th')).toHaveCount(3);
+  await expect(page.locator('.balances').first().locator(':scope > th, :scope > td')).toHaveCount(3);
+  await expect(page.locator('.wallet-details > td').first()).toHaveAttribute('colspan', '3');
   await openWalletDetails(page, a);
   await page.locator('.retrieval-log > summary').first().click();
   await expect(page.locator('.log-stream li').first()).toHaveAttribute('data-log-id', /\d+/);
@@ -1706,4 +1700,59 @@ for (const width of [1280, 768, 390, 320]) test(`large balances and estimated va
   await expect(page.locator('.balance .amount').first()).toContainText('115792089237316195423570985008687907853269984665640564039457.58');
   expect(await page.locator('.amount, .price-value, .total-amount, .token-value-amount, .portfolio-value-number').evaluateAll(nodes => nodes.filter(node => node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1).map(node => node.className))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+for (const width of [1280, 390]) test(`sparse holdings hide only proven zeroes and preserve their disclosure at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({width,height:844});
+  await stalledVerifier(page);
+  await page.addInitScript(() => {
+    const tokens = [{address:'eth',symbol:'ETH',decimals:18},{address:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',symbol:'WETH',decimals:18},
+      ...Array.from({length:10},(_,i)=>({address:'0x'+(256+i).toString(16).padStart(40,'0'),symbol:'T'+i,decimals:18}))];
+    localStorage.setItem('anonfolio.portfolio.v2',JSON.stringify({version:3,tokens,wallets:[]}));
+  });
+  await page.goto('/');
+  await page.locator('#address').fill(a+'\n'+b);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  const first=page.locator('.wallet').first();
+  // Unknown tokens stay visible while the first verified reads are outstanding.
+  await expect(first.locator('.holdings-content > .holdings-list > .balance:visible')).toHaveCount(12);
+  const complete = async (done:boolean) => page.evaluate(done => {
+    const worker=(window as any).__verifiers[0],run=worker.request.id;
+    const block={hash:'0x'+'11'.repeat(32),stateRoot:'0x'+'22'.repeat(32),number:'0x100',timestamp:Date.now()-60000};
+    for(const [i,token] of worker.request.tokens.entries()) {
+      if(i===11) {worker.onmessage({data:{type:'asset-error',run,asset:token.address,error:'Private proof unavailable'}});continue;}
+      worker.onmessage({data:{type:'balance',run,asset:token.address,amount:i===(worker.request.address.endsWith('1')?0:2)?'7000000000000000000':'0',block}});
+      worker.onmessage({data:{type:'price',run,asset:token.address,block,estimate:{pool:'0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640',quote:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',symbol:'USDC',decimals:6,numerator:'2000000000',denominator:'1000000000000000000',window:1800,blockHash:block.hash,minLiquidity:'10000'}}});
+    }
+    if(done)worker.onmessage({data:{type:'done',run}});
+  },done);
+  await complete(false);
+  await expect(first.locator('.holdings-content > .holdings-list > .balance:visible')).toHaveCount(2);
+  await expect(first.locator('.address-valuation')).toContainText('≈ 14000 USDC');
+  await expect(first.locator('.zero-holdings > summary')).toHaveText('10 zero-balance tokens');
+  const weth=first.locator('.balance[data-asset="0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]');
+  await expect(weth).toBeHidden();
+  await first.locator('.zero-holdings > summary').click();
+  await expect(weth).toBeVisible();
+  await expect(weth.locator('.status-verified')).toHaveAttribute('title','Verified finalized · proven zero');
+  await page.evaluate(() => {
+    const worker=(window as any).__verifiers[0],run=worker.request.id;
+    worker.onmessage({data:{type:'asset-error',run,asset:'0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',error:'Private route unavailable'}});
+  });
+  await expect(first.locator('.holdings-content > .holdings-list > .balance:visible')).toHaveCount(3);
+  await expect(first.locator('.zero-holdings > summary')).toHaveText('9 zero-balance tokens');
+  await expect(first.locator('.zero-holdings')).toHaveAttribute('open','');
+  await complete(true);
+  await expect(first.locator('.zero-holdings > summary')).toHaveText('10 zero-balance tokens');
+  await expect(first.locator('.zero-holdings')).toHaveAttribute('open','');
+  await first.locator('.zero-holdings > summary').click();
+  await expect(weth).toBeHidden();
+  await complete(true);
+  const second=page.locator('.wallet').nth(1);
+  await expect(second.locator('.holdings-content > .holdings-list > .balance:visible')).toHaveCount(2);
+  await expect(second.locator('.holdings-content > .holdings-list .token').first()).toHaveAttribute('title','0x0000000000000000000000000000000000000100');
+  await expect(first.locator('.holdings-content > .holdings-list .token').first()).toHaveAttribute('title','Native Ethereum');
+  expect(await page.locator('#wallets').evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/sparse-holdings-'+width+'.png',fullPage:true});
 });

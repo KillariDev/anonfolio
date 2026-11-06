@@ -2,7 +2,9 @@
 // The portfolio owns vertical scrolling; details, requests and logs do not.
 export function captureViewport(root: HTMLElement) {
   const bounds = root.getBoundingClientRect();
-  const top = Math.max(0, bounds.top + (root.querySelector('thead')?.getBoundingClientRect().height || 0));
+  // Keep a small reading inset even when the responsive layout hides the header,
+  // so the topmost clipped/context line does not replace the reader's main row.
+  const top = Math.max(0, bounds.top + Math.max(32, root.querySelector('thead')?.getBoundingClientRect().height || 0));
   const bottom = Math.min(bounds.bottom, window.innerHeight);
   const entries = [...root.querySelectorAll<HTMLElement>('[data-view-key], [data-log-id], .balances, .activity-item, .detail-disclosure > summary, .retrieval-log > summary, .progress-heading, .read-times tbody tr[data-asset], .failure-technical > summary, .failure-message')]
     .map(node => {
@@ -10,10 +12,13 @@ export function captureViewport(root: HTMLElement) {
       const token=node.matches('.read-times tbody tr[data-asset]') ? {wallet:node.closest<HTMLElement>('.wallet')?.dataset.address,asset:node.dataset.asset} : undefined;
       return {node,offset:rect.top-bounds.top,rect,token};
     }).filter(entry => entry.rect.height>0 && entry.rect.bottom>top && entry.rect.top<bottom);
-  const anchors = [
-    ...entries.filter(entry => entry.rect.top<top-1 && entry.rect.bottom-top>=Math.min(entry.rect.height/2,24) && entry.node.matches('[data-log-id], .read-times tbody tr, .failure-message')),
-    ...entries.filter(entry => entry.rect.top>=top-1),
-  ];
+  const complete = entries.filter(entry => entry.rect.top>=top-1);
+  const partial = entries.filter(entry => entry.rect.top<top-1 && entry.rect.bottom-top>=Math.min(entry.rect.height/2,24) && entry.node.matches('[data-log-id], .read-times tbody tr, .failure-message'));
+  // Prefer a fully visible token row over the preceding clipped token in the
+  // same address. Otherwise a shorter header can make a regrouped balance move
+  // the row the reader can actually see. Keep partial log/paragraph anchoring.
+  const deferred = partial.filter(entry => entry.token && complete.some(other => other.token?.wallet===entry.token!.wallet));
+  const anchors = [...partial.filter(entry => !deferred.includes(entry)), ...complete, ...deferred];
   const tails = [...root.querySelectorAll<HTMLDetailsElement>('.retrieval-log[open]')].filter(log => {
     const rect=log.querySelector('.log-stream > li:last-child')?.getBoundingClientRect();
     return rect && rect.height>0 && rect.bottom>=top && rect.bottom<=bottom+4;

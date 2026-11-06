@@ -1,3 +1,4 @@
+import { partitionHoldings } from './holdings';
 import { captureViewport, restoreViewport } from './viewport';
 import { updateChildren } from './dom';
 import { appendRetrievalLog } from './retrieval-log';
@@ -75,7 +76,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div id="totals" class="totals" aria-live="polite"></div></section>
 <p id="offline-notice" role="status"></p><p id="storage-warning" role="status"></p>
 <div class="section-heading"><h2>Addresses <span id="count">0</span></h2></div>
-<p class="scroll-hint">Swipe the table to see more tokens and controls.</p>
 <section id="wallets" aria-label="Watched wallets"></section>
 <div class="controls">
 <details id="address-panel" class="address-settings"><summary class="address-toggle" role="button" aria-label="Add addresses" title="Add addresses" aria-controls="wallet-form"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></summary>
@@ -243,12 +243,16 @@ function balanceFailure(balance: Balance): ReadFailure | undefined {
   return balance.failed ? balance.failure || { message: 'No error details were saved for the previous failure. Refresh this address to capture a new error.', at: 0 } : undefined;
 }
 function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: Balance, pending: boolean, asset: string) {
-  const box = document.createElement('td');
+  const box = document.createElement('div');
   box.className = 'balance';
+  box.setAttribute('role', 'group');
+  box.setAttribute('aria-label', symbol + ' holding');
   box.dataset.asset = asset;
   const label = document.createElement('div');
   label.className = 'token';
-  label.textContent = symbol;
+  const token = tokens.find(token => token.address === asset)!;
+  label.append(tokenIcon(token), document.createTextNode(symbol));
+  label.title = asset === 'eth' ? 'Native Ethereum' : asset;
 
   const amount = document.createElement('div');
   amount.className = 'amount';
@@ -588,9 +592,8 @@ function render() {
   const assets = tokens;
   const table = document.createElement('table');
   table.className = 'wallet-table';
-  table.style.setProperty('--token-count', String(assets.length));
   const colgroup = document.createElement('colgroup');
-  for (const kind of ['address', ...assets.map(() => 'token'), 'actions']) {
+  for (const kind of ['address', 'holdings', 'actions']) {
     const col = document.createElement('col'); col.className = 'wallet-column-' + kind; colgroup.append(col);
   }
   table.append(colgroup);
@@ -599,18 +602,11 @@ function render() {
   caption.textContent = 'Token balances by tracked address. Expand a row for timestamps and private request progress.';
   const head = document.createElement('thead');
   const columns = document.createElement('tr');
-  for (const entry of ['Address / refresh', ...assets, 'Actions']) {
+  for (const entry of ['Address / refresh', 'Holdings', 'Actions']) {
     const column = document.createElement('th');
     column.scope = 'col';
-    if (entry === 'Actions') { column.setAttribute('aria-label', 'Address details'); }
-    else if (typeof entry === 'string') column.textContent = entry;
-    else {
-      const label = document.createElement('span');
-      label.className = 'column-token';
-      label.append(tokenIcon(entry), document.createTextNode(entry.symbol));
-      column.append(label);
-      column.title = entry.address === 'eth' ? 'Native Ethereum' : entry.address;
-    }
+    if (entry === 'Actions') column.setAttribute('aria-label', 'Address details');
+    else column.textContent = entry;
     columns.append(column);
   }
   head.append(columns);
@@ -638,7 +634,14 @@ function render() {
     refresh.onclick = () => { void refreshWallet(wallet); };
     const addressLine = document.createElement('div');
     addressLine.className = 'address-line';
-    addressLine.append(address, refresh);
+    const valuation = estimatedTotal([wallet], tokens, pricing);
+    const addressValue = document.createElement('div'); addressValue.className = 'address-valuation';
+    addressValue.setAttribute('aria-label', 'Estimated address value');
+    const value = document.createElement('span'); value.className = 'address-value-estimate';
+    value.textContent = valuationAmount(valuation) + ' ' + pricing.quote.symbol;
+    addressValue.title = value.textContent + ' · ' + valuation.known + '/' + valuation.count + ' holdings priced';
+    addressValue.append(value, valuationFlags(valuation));
+    addressLine.append(address, addressValue, refresh);
     identity.append(addressLine);
     {
       const progress = document.createElement('small');
@@ -652,7 +655,30 @@ function render() {
     }
     row.append(identity);
     const pending = (asset: string) => wallet.loading && wallet.verificationStage !== 'connection' && !wallet.queuedForVerifier && wallet.activity.some(item => item.asset === asset && (item.phase === 'waiting' || item.phase === 'requesting'));
-    row.append(...assets.map(token => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address)));
+    const holdingsCell = document.createElement('td'); holdingsCell.className = 'wallet-holdings';
+    const holdingsContent = document.createElement('div'); holdingsContent.className = 'holdings-content';
+    const holdings = document.createElement('div'); holdings.className = 'holdings-list';
+    holdings.setAttribute('aria-label', 'Holdings for ' + (wallet.name || wallet.address));
+    const groups = partitionHoldings(wallet, assets);
+    const holding = (token: Token) => balanceNode(wallet, token.symbol, token.decimals, tokenBalance(wallet, token), pending(token.address), token.address);
+    holdings.append(...groups.visible.map(holding));
+    holdingsContent.append(holdings);
+    const zero = document.createElement('details'); zero.className = 'zero-holdings';
+    // Keep the disclosure mounted even at zero entries to preserve the reader's
+    // open state when a refresh temporarily makes a saved zero stale/unavailable.
+    zero.hidden = !groups.zero.length;
+    const zeroToggle = document.createElement('summary');
+    zeroToggle.textContent = groups.zero.length + ' zero-balance token' + (groups.zero.length === 1 ? '' : 's');
+    zeroToggle.title = 'Show tokens with a verified zero balance';
+    const zeroList = document.createElement('div'); zeroList.className = 'holdings-list';
+    zeroList.append(...groups.zero.map(holding));
+    zero.append(zeroToggle, zeroList); holdingsContent.append(zero);
+    if (!assets.length) {
+      const empty = document.createElement('p'); empty.className = 'form-hint'; empty.textContent = 'No tokens tracked.';
+      holdingsCell.append(empty);
+    }
+    holdingsCell.append(holdingsContent);
+    row.append(holdingsCell);
     const actions = document.createElement('td');
     actions.className = 'actions';
     const expanded = expandedAddresses.has(wallet.address);
@@ -690,7 +716,7 @@ function render() {
     details.className = 'wallet-details';
     details.hidden = !expanded;
     const detailCell = document.createElement('td');
-    detailCell.colSpan = assets.length + 2;
+    detailCell.colSpan = 3;
     const content = walletDetails(wallet, logs.get(wallet.address)?.open);
     const detailActions = document.createElement('div');
     detailActions.className = 'detail-actions';
