@@ -423,7 +423,10 @@ function renderTotals() {
   method.querySelector('svg')!.replaceWith(technologyIcon('uniswap', true));
   metadata.append(valuationFlags(estimate), method);
   updateChildren(summary, [primary, metadata]);
-  explanationGroup(summary, value.textContent || 'Portfolio value unavailable');
+  // Keep the aggregate explanation on the value itself. The full-width row
+  // includes empty space beside the pricing icon and is a misleading anchor.
+  number.removeAttribute('title');
+  explain(number, [value.textContent || 'Portfolio value unavailable', ...[...metadata.querySelectorAll<HTMLElement>('[data-tooltip]')].map(icon => icon.dataset.tooltip!)].join('\n'));
   const totals = document.createDocumentFragment();
   if (!tokens.length) {
     const empty = document.createElement('p');
