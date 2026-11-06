@@ -4,6 +4,14 @@
 
 An Ethereum mainnet portfolio reader that verifies balances in your browser. Track named addresses, ETH, WETH and custom ERC-20 tokens without connecting a wallet, signing messages or sending transactions.
 
+**Anonfolio will be hosted on IPFS** as a static, content-addressed application. Open it with an IPFS-capable browser or through an HTTPS IPFS gateway.
+
+<!-- ipfs-build -->
+**IPFS build:** [ipfs://bafybeibwjwadplzlrmxckq63wya5wqkm6tumjemhuz5pgqusztdwchguyy/](ipfs://bafybeibwjwadplzlrmxckq63wya5wqkm6tumjemhuz5pgqusztdwchguyy/)
+
+This is the content address of the exported build validated with local IPFS gateways, not a guarantee that it is pinned on the public network. Updated releases have new CIDs.
+<!-- /ipfs-build -->
+
 **Tor via Anon-RPC is the default.** Each address uses its own isolation key. You can explicitly select **Direct HTTPS (not anonymous)** in Settings; providers then see your IP and requested addresses. A Tor failure never switches to HTTPS automatically.
 
 <!-- portfolio-screenshot -->
@@ -26,7 +34,7 @@ An Ethereum mainnet portfolio reader that verifies balances in your browser. Tra
 | <img src="src/assets/technology/uniswap.svg" width="24" height="24" alt=""> **[Uniswap v3](https://docs.uniswap.org/contracts/v3/overview)** | Estimated holding values from a 30-minute TWAP using one qualifying direct token/quote pool. USDC is the default quote. |
 | **Browser APIs** | Web Workers, Web Crypto, localStorage, Web Locks and a service worker for isolation, integrity checks, safe cross-tab saving and offline application assets. |
 | <img src="src/assets/technology/playwright.svg" width="24" height="24" alt=""> **[Playwright](https://playwright.dev/)** | Chromium UI, layout, routing, offline and opt-in real-provider smoke tests. |
-| <img src="src/assets/technology/ipfs.svg" height="24" alt=""> **[IPFS / Kubo](https://docs.ipfs.tech/) · [Docker](https://www.docker.com/)** | Optional static-site publishing, CID validation and CAR exports. Neither is needed to run the app locally. |
+| <img src="src/assets/technology/ipfs.svg" height="24" alt=""> **[IPFS / Kubo](https://docs.ipfs.tech/) · [Docker](https://www.docker.com/)** | IPFS hosting, CID validation and CAR exports. Neither is needed to run the app locally. |
 
 Logos identify their technologies, not endorsements. See [artwork sources and credits](src/assets/technology/README.md). The app uses the Tor logo for Tor mode, Ethereum's mark for the network, and Uniswap's mark for price methodology. All runtime artwork is local and works offline.
 
@@ -126,17 +134,19 @@ Live tests are opt-in and depend on external services. To exercise a production 
 
 Tests cover wrong-wallet/block proofs, omitted nonzero storage slots, bytecode tampering, private-route escapes, cancellation and late replies, response-size limits, concurrent tab edits, quote ordering/decimals/history, zero balances, failures, offline cache behavior and loading layout stability. CI runs locked installs on Bun 1.3.14 and 1.4.3; failed browser checks retain screenshots and traces.
 
-## Static HTTPS and IPFS deployment
+## IPFS hosting and static HTTPS deployment
 
-Upload the complete **`dist/`** directory to a static HTTPS host. No application backend or wallet extension is required. For a subdirectory, build with `bun run build --base=/your-path/`. Serve `sw.js` with revalidation/no-cache so browsers can discover updates. The service worker installs the small UI shell first; verifier runtimes and documentation are cached when requested. Visited documentation remains available offline. Cached pages return after three seconds if the host is too slow.
+Anonfolio is intended to reside on IPFS. Each release contains the complete **`dist/`** directory, identified by an immutable CID. Updating the app produces a new CID; publish and pin that release to keep it available. IPFS delivers the application files; Ethereum requests still use Anon-RPC/Tor by default, or Direct HTTPS when explicitly selected. IPFS hosting alone does not anonymize requests.
 
-Optional IPFS commands:
+For ordinary browsers, use an HTTPS IPFS gateway so browser security features remain available. The same build can also be uploaded to a static HTTPS host. No application backend or wallet extension is required. For a subdirectory, build with `bun run build --base=/your-path/`. Serve `sw.js` with revalidation/no-cache so browsers can discover updates. The service worker installs the small UI shell first; verifier runtimes and documentation are cached when requested. Visited documentation remains available offline. Cached pages return after three seconds if the host is too slow.
+
+Build, publish and verify IPFS releases:
 
 ```sh
 bun run ui:docker            # build the image and publish through a reachable Kubo API
 bun run test:ipfs            # isolated Kubo/CAR/path + subdomain gateway checks; needs Kubo
 ```
 
-`IPFS_API_MULTIADDR` selects the publisher's Kubo API; the Docker default is `/dns4/host.docker.internal/tcp/5001`. The publisher checks the uploaded CID against the build CID. `scripts/export-ipfs.sh` produces `anonfolio.car` and `ipfs-cid.txt`. See the [publishing section of the guide](docs/documentation.html#configuration-builds-and-publishing) and [IPFS workflow template](.github-workflows/ipfs-deploy.yml) for export/release details. Enabling that template requires credentials with workflow-write permission.
+`IPFS_API_MULTIADDR` selects the publisher's Kubo API; the Docker default is `/dns4/host.docker.internal/tcp/5001`. The publisher checks the uploaded CID against the build CID. `scripts/export-ipfs.sh` produces `anonfolio.car` and `ipfs-cid.txt`. Use `ipfs://<CID>/` with that exported CID; a content address alone does not guarantee public availability. `bun run test:ipfs` also writes these artifacts under `ipfs-artifacts/`, using an isolated local node without publishing them to the public network. See the [publishing section of the guide](docs/documentation.html#configuration-builds-and-publishing) and [IPFS workflow template](.github-workflows/ipfs-deploy.yml) for export/release details. Enabling that template requires credentials with workflow-write permission.
 
 Prefer an IPFS subdomain gateway for a separate browser origin per CID. Path gateways can share storage origins with other content; changing CIDs/subdomains does not migrate saved portfolios automatically.
