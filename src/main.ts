@@ -105,21 +105,26 @@ const connection = new Connection(
 );
 let persistence: Promise<unknown> | undefined;
 let persistAgain = false;
+const pendingEdits: (() => void)[] = [];
+function applyPendingEdits() { for (const edit of pendingEdits.splice(0)) edit(); }
 function reconcileRemoved(before: Wallet[]) {
   for (const wallet of before) if (!wallets.includes(wallet)) {
     cancelRefresh(wallet); expandedAddresses.delete(wallet.address);
   }
 }
-function persist() {
+function persist(edit?: () => void) {
+  if (edit) pendingEdits.push(edit);
   persistAgain = true;
   if (persistence) return;
   const warning = document.querySelector('#storage-warning')!;
   if (!navigator.locks) {
+    applyPendingEdits(); renderTokens(); render();
     warning.textContent = 'Safe browser storage requires Web Locks. Changes remain visible in this tab but could not be saved. Use a current browser on HTTPS or localhost.';
     return;
   }
   persistence = navigator.locks.request(PORTFOLIO_KEY, () => {
     persistAgain = false;
+    applyPendingEdits();
     const before = [...wallets], previousTokens = JSON.stringify(tokens);
     const saved = savePortfolio(wallets, tokens);
     warning.textContent = saved ? '' : 'Browser storage is unavailable or full. Changes and new balances are visible now but could not be saved.';
@@ -128,6 +133,7 @@ function persist() {
     render();
   }).catch(() => {
     persistAgain = false;
+    applyPendingEdits(); renderTokens(); render();
     warning.textContent = 'Browser storage could not be locked. Changes remain visible but could not be saved.';
   }).finally(() => { persistence = undefined; if (persistAgain) persist(); });
 }
@@ -384,15 +390,16 @@ function renderTokens() {
     const remove = document.createElement('button');
     remove.textContent = 'Remove';
     remove.setAttribute('aria-label', 'Remove token ' + token.symbol);
-    remove.onclick = () => {
+    remove.onclick = () => persist(() => {
+      if (!tokens.includes(token)) return;
       tokens.splice(tokens.indexOf(token), 1);
       wallets.forEach(wallet => {
         setTokenBalance(wallet, token, { failed: false });
         pruneTokenBalances(wallet);
         if (!tokens.some(asset => tokenBalance(wallet, asset).failed || retryPrice(tokenBalance(wallet, asset), pricing))) retries.cancel(wallet);
       });
-      persist(); renderTokens(); render();
-    };
+      renderTokens();
+    });
     controls.append(iconLabel, remove);
     item.append(text, controls);
     list.append(item);
@@ -677,10 +684,12 @@ function render() {
     remove.onclick = () => {
       const label = wallet.name ? `${wallet.name}\n${wallet.address}` : wallet.address;
       if (!window.confirm(`Remove this tracked address?\n\n${label}\n\nIts saved balances will also be removed from this browser.`)) return;
-      cancelRefresh(wallet);
-      expandedAddresses.delete(wallet.address);
-      wallets.splice(wallets.indexOf(wallet), 1);
-      persist(); render();
+      persist(() => {
+        if (!wallets.includes(wallet)) return;
+        cancelRefresh(wallet);
+        expandedAddresses.delete(wallet.address);
+        wallets.splice(wallets.indexOf(wallet), 1);
+      });
     };
     actions.append(toggle);
     row.append(actions);

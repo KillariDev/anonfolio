@@ -1,5 +1,5 @@
 import { setHeliosStatus } from './status';
-import { RequestPurposes } from './request-purpose';
+import { consensusPurpose, RequestPurposes } from './request-purpose';
 import { operatorRoute, executionWithOperators, type OperatorRoute } from './operators';
 import type { NetworkProgress, VerificationStage } from './progress';
 import { config } from '../config';
@@ -84,7 +84,7 @@ function getWorker() {
     if (message.type === 'consensus') {
       try {
         const session = active ? sessions.get(active) : undefined;
-        const report = session?.stage === 'consensus' ? networkReporter(session, { requestId: message.id, method: 'GET ' + new URL(message.url).pathname.split('/').slice(1, 6).join('/'), host: new URL(message.url).hostname }) : undefined;
+        const report = session?.stage === 'consensus' ? networkReporter(session, { requestId: message.id, method: 'GET ' + new URL(message.url).pathname.split('/').slice(1, 6).join('/'), purpose: consensusPurpose(message.url), host: new URL(message.url).hostname }) : undefined;
         report?.('waiting');
         if (!consensusRoute) throw new Error('Private consensus route unavailable; no direct fallback.');
         const data = await privateConsensusGet(consensusRoute.worker, consensusRoute.key, message.url, lifetime.signal, report);

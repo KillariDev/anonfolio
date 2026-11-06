@@ -56,14 +56,17 @@ test('capture ten real mainnet portfolio screenshots', async ({ page, request })
     await expect(page.locator('#connection')).toHaveText('Direct HTTPS · not anonymous');
   }
   const captures: any[] = [];
-  async function capture(file: string, description: string) {
+  async function capture(file: string, description: string, fullPage = true) {
     await page.evaluate(() => document.fonts.ready);
     await expect.poll(() => page.locator('img:visible').evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
     await page.mouse.move(0, 0);
     await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+    // Opening long history/log disclosures can scroll the outer document.
+    // Reset it so full-page captures paint the fixed gradient from the top.
+    await page.evaluate(() => { window.scrollTo(0, 0); return new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
     await expect(page.getByRole('tooltip')).toBeHidden();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: new URL(file, directory).pathname, animations: 'disabled', fullPage: true });
+    await page.screenshot({ path: new URL(file, directory).pathname, animations: 'disabled', fullPage });
     const portfolio = await page.evaluate(() => JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!));
     const { tokens: _tokens, ...snapshot } = portfolio;
     captures.push({ file, description, capturedAt: new Date().toISOString(), viewport: page.viewportSize(), portfolio: snapshot });
@@ -91,8 +94,10 @@ test('capture ten real mainnet portfolio screenshots', async ({ page, request })
   const foundation = page.locator('.wallet').filter({ has: page.locator('.address-name', { hasText: 'Ethereum Foundation' }) });
   await openWalletDetails(page, accounts[1]!.address + ' · ' + accounts[1]!.name);
   await foundation.locator('.history-details > summary').click();
+  await page.setViewportSize({ width: 1440, height: 1250 });
   await capture('07-finalized-balance-history.png', 'Ethereum Foundation balances with their actual verified finalized block and successful-read timestamps.');
   await foundation.locator('.history-details > summary').click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await foundation.locator('.retrieval-log > summary').click();
   // Frame the actual execution trace rather than the startup messages or tail.
   const proof = foundation.locator('.log-stream li').filter({ hasText: /storage proof|bytecode/ }).first();
@@ -100,7 +105,7 @@ test('capture ten real mainnet portfolio screenshots', async ({ page, request })
     const root = node.closest<HTMLElement>('#wallets')!;
     root.scrollTop += node.getBoundingClientRect().top - root.getBoundingClientRect().top - 60;
   });
-  await capture('08-local-verification-log.png', 'Actual timestamped Helios proof, bytecode and Uniswap oracle retrieval events.');
+  await capture('08-local-verification-log.png', 'Actual timestamped Helios proof, bytecode and Uniswap oracle retrieval events.', false);
   await foundation.locator('.retrieval-log > summary').click();
   await openWalletDetails(page, accounts[1]!.address + ' · ' + accounts[1]!.name);
   await foundation.getByRole('button', { name: 'Details ' + accounts[1]!.address + ' · ' + accounts[1]!.name, exact: true }).click();

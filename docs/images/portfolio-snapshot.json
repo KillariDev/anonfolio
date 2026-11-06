@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-11-06T09:20:33.694Z",
+  "capturedAt": "2026-11-06T13:08:42.705Z",
   "transport": "Direct HTTPS",
   "verification": "Helios 0.12.0 finalized execution with account/code/storage proof verification",
   "rpcUrls": [
@@ -41,66 +41,66 @@
         "balances": {
           "eth": {
             "amount": "5780441042197210512",
-            "updatedAt": 1793956811450,
+            "updatedAt": 1793970495713,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
               "numerator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096",
-              "denominator": "6024143057048401391312394378853650307311425187120507289210282849631842705559599013550572978220697351766644429026246139102701831459637135222251733247109622825248384"
+              "denominator": "5977339851108037294979457741684765951601211430684714185781588064826187367930451220239011480097340450031325930622826613611270599235939293193813566372153313120342936"
             }
           },
           "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": {
             "amount": "1466528037085158070",
-            "updatedAt": 1793956812483,
+            "updatedAt": 1793970496810,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
               "numerator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096",
-              "denominator": "6024143057048401391312394378853650307311425187120507289210282849631842705559599013550572978220697351766644429026246139102701831459637135222251733247109622825248384"
+              "denominator": "5977339851108037294979457741684765951601211430684714185781588064826187367930451220239011480097340450031325930622826613611270599235939293193813566372153313120342936"
             }
           },
           "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {
             "amount": "39192124",
-            "updatedAt": 1793956813957,
+            "updatedAt": 1793970498580,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 6,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x0000000000000000000000000000000000000000",
@@ -110,24 +110,24 @@
           },
           "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": {
             "amount": "116800000000000",
-            "updatedAt": 1793956813449,
+            "updatedAt": 1793970497777,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0xD0fC8bA7E267f2bc56044A7715A489d851dC6D78",
-              "numerator": "93929314774966883501183185879148797476743024634747308784504513527219456168037714911492833700604650252350729190733776443631616181335084513325820",
+              "numerator": "93685427940957352264789166623089864658646799832936377987875637151950850889117272761438244672064463795822818942747715517041264845367906535188225",
               "denominator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096"
             }
           }
@@ -139,66 +139,66 @@
         "balances": {
           "eth": {
             "amount": "5774551794456062094343",
-            "updatedAt": 1793956829183,
+            "updatedAt": 1793970516807,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
               "numerator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096",
-              "denominator": "6024143057048401391312394378853650307311425187120507289210282849631842705559599013550572978220697351766644429026246139102701831459637135222251733247109622825248384"
+              "denominator": "5977339851108037294979457741684765951601211430684714185781588064826187367930451220239011480097340450031325930622826613611270599235939293193813566372153313120342936"
             }
           },
           "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": {
             "amount": "214140968121599991968",
-            "updatedAt": 1793956829270,
+            "updatedAt": 1793970516731,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
               "numerator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096",
-              "denominator": "6024143057048401391312394378853650307311425187120507289210282849631842705559599013550572978220697351766644429026246139102701831459637135222251733247109622825248384"
+              "denominator": "5977339851108037294979457741684765951601211430684714185781588064826187367930451220239011480097340450031325930622826613611270599235939293193813566372153313120342936"
             }
           },
           "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {
             "amount": "1136601177",
-            "updatedAt": 1793956829436,
+            "updatedAt": 1793970516965,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 6,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x0000000000000000000000000000000000000000",
@@ -208,24 +208,24 @@
           },
           "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": {
             "amount": "507180000000000000",
-            "updatedAt": 1793956829496,
+            "updatedAt": 1793970517040,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0xD0fC8bA7E267f2bc56044A7715A489d851dC6D78",
-              "numerator": "93929314774966883501183185879148797476743024634747308784504513527219456168037714911492833700604650252350729190733776443631616181335084513325820",
+              "numerator": "93685427940957352264789166623089864658646799832936377987875637151950850889117272761438244672064463795822818942747715517041264845367906535188225",
               "denominator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096"
             }
           }
@@ -237,66 +237,66 @@
         "balances": {
           "eth": {
             "amount": "237652245462629109",
-            "updatedAt": 1793956830197,
+            "updatedAt": 1793970517708,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
               "numerator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096",
-              "denominator": "6024143057048401391312394378853650307311425187120507289210282849631842705559599013550572978220697351766644429026246139102701831459637135222251733247109622825248384"
+              "denominator": "5977339851108037294979457741684765951601211430684714185781588064826187367930451220239011480097340450031325930622826613611270599235939293193813566372153313120342936"
             }
           },
           "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": {
             "amount": "0",
-            "updatedAt": 1793956830100,
+            "updatedAt": 1793970517795,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
               "numerator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096",
-              "denominator": "6024143057048401391312394378853650307311425187120507289210282849631842705559599013550572978220697351766644429026246139102701831459637135222251733247109622825248384"
+              "denominator": "5977339851108037294979457741684765951601211430684714185781588064826187367930451220239011480097340450031325930622826613611270599235939293193813566372153313120342936"
             }
           },
           "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {
             "amount": "135383008",
-            "updatedAt": 1793956830442,
+            "updatedAt": 1793970518091,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 6,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0x0000000000000000000000000000000000000000",
@@ -306,24 +306,24 @@
           },
           "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": {
             "amount": "262247996305835021033106178",
-            "updatedAt": 1793956830550,
+            "updatedAt": 1793970518168,
             "failed": false,
             "verifiedBlock": {
-              "hash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
-              "stateRoot": "0x8e4da03696d3e1b1654265efadc57c478704503400699a9f6eca7f477d95a59a",
-              "number": "0x192245b",
-              "timestamp": 1793955671000
+              "hash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
+              "stateRoot": "0xfc420afd59a0c2cdadda082cd1bfb8914c838e870288b7eca4fc6113af19203f",
+              "number": "0x19228d9",
+              "timestamp": 1793969495000
             },
             "decimals": 18,
             "estimate": {
               "quote": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
               "symbol": "USDC",
               "decimals": 6,
-              "blockHash": "0x955d14cfa3544f38dab1f9cbf54a6efecc99b89d2af12cdaea84765095c531bf",
+              "blockHash": "0x29930164ca237e8a6032c0d9735b299395a4547f541738a74cea384674588800",
               "window": 1800,
               "minLiquidity": "10000",
               "pool": "0xD0fC8bA7E267f2bc56044A7715A489d851dC6D78",
-              "numerator": "93929314774966883501183185879148797476743024634747308784504513527219456168037714911492833700604650252350729190733776443631616181335084513325820",
+              "numerator": "93685427940957352264789166623089864658646799832936377987875637151950850889117272761438244672064463795822818942747715517041264845367906535188225",
               "denominator": "13407807929942597099574024998205846127479365820592393377723561443721764030073546976801874298166903427690031858186486050853753882811946569946433649006084096"
             }
           }

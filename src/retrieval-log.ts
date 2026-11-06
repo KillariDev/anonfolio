@@ -23,10 +23,10 @@ export function logVerificationEvent(owner:RetrievalLog,event:VerificationEvent,
     appendRetrievalLog(owner, request.purpose
       ? (checks ? checkLabel(checks)+' · ' : '') + request.purpose + ' · ' + (request.state === 'waiting' ? 'requested' : request.state === 'reading' ? 'receiving' : 'received')
       : 'Request #'+request.requestId+' · '+request.method+' → '+request.host+' · '+status);
-  } else if(event.type==='block'&&event.block) appendRetrievalLog(owner,'Selected verified finalized block '+BigInt(event.block.number)+' · '+event.block.hash);
+  } else if(event.type==='block'&&event.block) appendRetrievalLog(owner,'Finalized block #'+BigInt(event.block.number)+' selected');
   else if(event.type==='asset') appendRetrievalLog(owner,token+' · Starting balance proof / local execution.');
-  else if(event.type==='balance'&&event.block&&event.amount!==undefined) appendRetrievalLog(owner,token+' · Balance proved at finalized block '+event.block.hash+'.','success');
+  else if(event.type==='balance'&&event.block&&event.amount!==undefined) appendRetrievalLog(owner,token+' · Balance proved · #'+BigInt(event.block.number),'success');
   else if(event.type==='price-start') appendRetrievalLog(owner,token+' · Starting verified price-oracle reads.');
-  else if(event.type==='price') appendRetrievalLog(owner,token+' · Price quote received for block '+(event.block?.hash||'unknown')+'. Holding values require a matching balance proof.','success');
+  else if(event.type==='price') appendRetrievalLog(owner,token+' · '+(event.estimate?.symbol || 'Quote')+' price read · '+(event.block ? '#'+BigInt(event.block.number) : 'block unknown'),'success');
   else if(event.type==='price-error'||event.type==='asset-error') appendRetrievalLog(owner,token+' · '+(event.type==='price-error'?'Price':'Balance')+' lookup failed: '+errorMessage(event.error),'error');
 }

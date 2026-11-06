@@ -37,3 +37,13 @@ test('multiline Tor failures keep each diagnostic in a separate timestamped log 
   expect(new Set(owner.retrievalLog!.map(entry => entry.at)).size).toBe(1);
   expect(owner.retrievalLog!.every(entry => entry.level === 'error')).toBe(true);
 });
+
+test('result logs identify the block and quote token without full hashes',()=>{
+  const owner:RetrievalLog={},tokens=defaultTokens();
+  const block={hash:('0x'+'11'.repeat(32)) as `0x${string}`,stateRoot:('0x'+'22'.repeat(32)) as `0x${string}`,number:'0x100' as `0x${string}`,timestamp:Date.now()};
+  logVerificationEvent(owner,{type:'block',block},tokens);
+  logVerificationEvent(owner,{type:'balance',asset:'eth',amount:'0',block},tokens);
+  logVerificationEvent(owner,{type:'price',asset:'eth',block,estimate:{symbol:'USDC'} as any},tokens);
+  expect(owner.retrievalLog!.map(entry=>entry.message)).toEqual(['Finalized block #256 selected','ETH · Balance proved · #256','ETH · USDC price read · #256']);
+  expect(owner.retrievalLog!.every(entry=>entry.message.length<60)).toBe(true);
+});

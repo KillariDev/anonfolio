@@ -1814,3 +1814,33 @@ test('reopening saved addresses never refreshes until requested, including histo
   await page.clock.runFor(65_000);
   expect(await page.evaluate(() => (window as any).__calls)).toEqual([]);
 });
+
+for (const kind of ['address', 'token'] as const) test(`removing ${kind} waits for its storage lock before confirming in the UI`, async ({page}) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a);
+  await page.getByRole('button',{name:'add address to track',exact:true}).click();
+  await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
+  if (kind === 'address') await openWalletDetails(page,a);
+  else await openTokenSettings(page);
+  await page.evaluate(async () => {
+    await navigator.locks.request('anonfolio.portfolio.v2',()=>{});
+    await new Promise<void>(ready => {
+      void navigator.locks.request('anonfolio.portfolio.v2',()=>new Promise<void>(release => {
+        (window as any).__releaseSave=release; ready();
+      }));
+    });
+  });
+  if (kind === 'address') {
+    page.once('dialog',dialog=>dialog.accept());
+    await page.getByRole('button',{name:'Remove '+a,exact:true}).click();
+    await expect(page.locator('.wallet')).toHaveCount(1);
+  } else {
+    await page.getByRole('button',{name:'Remove token ETH',exact:true}).click();
+    await expect(page.locator('.total-label')).toHaveCount(2);
+  }
+  await page.evaluate(()=>(window as any).__releaseSave());
+  await expect(page.locator(kind==='address'?'.wallet':'.total-label')).toHaveCount(kind==='address'?0:1);
+  await page.reload();
+  await expect(page.locator(kind==='address'?'.wallet':'.total-label')).toHaveCount(kind==='address'?0:1);
+});

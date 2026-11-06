@@ -1,7 +1,12 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #e8ece5;
-  background: #101510;
+  background:
+    radial-gradient(ellipse at 8% 0%, #347b4a38, transparent 48%),
+    radial-gradient(ellipse at 100% 38%, #1c686b30, transparent 55%),
+    radial-gradient(ellipse at 24% 100%, #81983920, transparent 52%),
+    linear-gradient(145deg, #101b15, #0c1716 55%, #161d11);
+  background-attachment: fixed;
   font-synthesis: none;
   color-scheme: dark;
   --scrollbar-track: #131b12;
@@ -19,7 +24,7 @@
   * { scrollbar-color: auto; }
 }
 html { scrollbar-gutter: stable; }
-body { margin: 0; }
+body { margin: 0; min-height: 100vh; }
 button, input, textarea { font: inherit; }
 button, a, input, summary { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; border: 1px solid #3d483c; background: #1e281e; color: #e8ece5; border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 550; }
