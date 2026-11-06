@@ -8,6 +8,8 @@ export const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const;
 const list = (value: string | undefined, fallback: string) =>
   (value || fallback).split(',').map((s) => s.trim()).filter(Boolean);
 export const defaultConfig = {
+  mode: 'tor' as const,
+  bootstrapUrl: import.meta.env.VITE_TOR_BOOTSTRAP_URL ?? './tor-bootstrap.json',
   gateways: list(import.meta.env.VITE_ANON_GATEWAYS, '152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ'),
   rpcUrls: list(import.meta.env.VITE_RPC_URLS, 'https://eth.drpc.org,https://ethereum-rpc.publicnode.com,https://rpc.ankr.com/eth'),
 };

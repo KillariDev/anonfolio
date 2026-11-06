@@ -90,3 +90,22 @@ test('static build reopens completely offline with saved wallets, token settings
   await expect(page.locator('.wallet')).toHaveCount(0);
   await context.setOffline(false);
 });
+
+
+test('static build HTTPS mode caches its offline shell without downloading Tor',async({page,context})=>{
+  test.skip(!process.env.BASE_URL,'Requires the production service worker.');
+  await page.addInitScript(()=>localStorage.setItem('anonfolio.network.v1',JSON.stringify({mode:'https',gateways:['152.236.3.22:12298:uEiCH0VdbhryzJcMtCfB0vLA4sOvHdQ4hq5w7CopcwU59bQ'],rpcUrls:['https://eth.drpc.org/']})));
+  const torFiles:string[]=[];
+  page.on('request',request=>{if(request.url().includes('anon-rpc-worker-'))torFiles.push(request.url());});
+  await page.goto('/');
+  await expect(page.locator('#connection')).toHaveText('Direct HTTPS · not anonymous');
+  await page.evaluate(async()=>{await navigator.serviceWorker.ready;if(!navigator.serviceWorker.controller)await new Promise<void>(resolve=>navigator.serviceWorker.addEventListener('controllerchange',()=>resolve(),{once:true}));});
+  const cached=await page.evaluate(async()=>{const names=await caches.keys();return (await Promise.all(names.filter(name=>name.startsWith('anonfolio-shell-')).map(async name=>(await (await caches.open(name)).keys()).map(request=>request.url)))).flat();});
+  expect(cached.some(url=>url.includes('index_bg-'))).toBe(true);
+  expect(cached.some(url=>url.includes('anon-rpc-worker-'))).toBe(false);
+  expect(torFiles).toEqual([]);
+  await context.setOffline(true);await page.reload();
+  await expect(page.locator('#connection')).toContainText('HTTPS connection unavailable');
+  await expect(page.locator('#offline-notice')).toContainText('offline');
+  await expect(page.locator('iframe')).toHaveCount(0);
+});

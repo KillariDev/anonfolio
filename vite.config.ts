@@ -21,8 +21,10 @@ export default defineConfig({
         type: 'asset', fileName: 'sw.js',
         source: 'const CACHE = "anonfolio-shell-' + version + '";\nconst PATHS = ' + JSON.stringify(paths) + ';\n' + `
 const urls = PATHS.map(path => new URL(path, self.registration.scope).href);
+// HTTPS mode does not need the large Tor bundle, even for offline startup.
+const eager = new URL(self.location.href).searchParams.get('mode') === 'https' ? urls.filter(url => !url.split('/').at(-1).startsWith('anon-rpc-worker-')) : urls;
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(urls)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(eager)).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('anonfolio-shell-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));

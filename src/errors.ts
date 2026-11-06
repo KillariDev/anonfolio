@@ -30,7 +30,7 @@ export function errorMessage(error: unknown): string {
 export function readFailure(error: unknown, stage?: string): ReadFailure {
   return { message: errorMessage(error), ...(stage ? { stage: errorMessage(stage).slice(0, 600) } : {}), at: Date.now() };
 }
-export function explainFailure(failure: ReadFailure) {
+export function explainFailure(failure: ReadFailure, mode: 'tor' | 'https' = 'tor') {
   const message = failure.message.toLowerCase();
   const context = (failure.stage || '').toLowerCase();
   let summary = failure.message.split('\n')[0]!.slice(0, 90);
@@ -49,7 +49,7 @@ export function explainFailure(failure: ReadFailure) {
     action = 'Reload from a trusted, updated application deployment. The downloaded verifier or Tor worker did not match its pinned hash.';
   } else if (/proof window|historical.*(proof|state)|missing trie node|pruned|archive/.test(message)) {
     summary = 'RPC cannot prove this finalized block';
-    action = 'The RPC does not retain the proofs needed for this finalized block. The app tries other configured RPCs through Anon-RPC when available. If none can serve it, add an endpoint with historical eth_getProof support in Settings → Network connection, then save and reconnect.';
+    action = 'The RPC does not retain the proofs needed for this finalized block. The app tries other configured RPCs through the selected transport when available. If none can serve it, add an endpoint with historical eth_getProof support in Settings → Network connection, then save and reconnect.';
   } else if (/offline/.test(message)) {
     summary = 'Browser is offline';
     action = 'Reconnect to the internet. Pending balance reads retry automatically when the browser comes online.';
@@ -58,22 +58,25 @@ export function explainFailure(failure: ReadFailure) {
     action = 'Check your connection and reload the application. If the verifier file is missing, use an updated deployment.';
   } else if (/consensus get/.test(message) || (/consensus/.test(context) && /fetch|http|network|timed out/.test(message))) {
     summary = 'Consensus API unavailable';
-    action = 'The private beacon request failed before state could be verified. Check your connection and retry. If it persists, the application deployment may need an updated beacon endpoint.';
+    action = 'The beacon request failed before state could be verified. Check your connection and retry. If it persists, the application deployment may need an updated beacon endpoint.';
   } else if (/429|rate.?limit|too many requests/.test(message)) {
     summary = 'RPC rate limit reached';
     action = 'Wait for the automatic retry, or configure another balance RPC endpoint in Settings → Network connection.';
   } else if (/401|403|unauthori[sz]ed|forbidden|access denied/.test(message)) {
     summary = 'RPC access denied';
-    action = 'Check the endpoint credentials and whether the operator accepts Tor traffic. Update the balance RPC endpoints in Settings → Network connection if needed.';
+    action = mode === 'https' ? 'Check the endpoint credentials and browser CORS access. Update the HTTPS RPC endpoints in Settings → Network connection if needed.' : 'Check the endpoint credentials and whether the operator accepts Tor traffic. Update the balance RPC endpoints in Settings → Network connection if needed.';
   } else if (/verification timed out/.test(message)) {
     summary = 'Verification timed out';
     action = 'The queued or running verification session exceeded five minutes. Retry this address after other reads finish; check the private connection and RPC if it repeats.';
   } else if (/timeout|timed out|aborted/.test(message)) {
     summary = 'Request timed out';
-    action = 'Retry when the connection is stable. If timeouts persist, check the configured Tor gateway and RPC endpoints in Settings → Network connection.';
-  } else if (/private eth_\w+ response from .* could not be read/.test(message)) {
+    action = mode === 'https' ? 'Retry when the connection is stable. If timeouts persist, check the HTTPS RPC endpoints and browser CORS access in Settings → Network connection.' : 'Retry when the connection is stable. If timeouts persist, check the configured Tor gateway and RPC endpoints in Settings → Network connection.';
+  } else if (/(?:private|direct https) eth_\w+ response from .* could not be read/.test(message)) {
     summary = 'RPC response interrupted';
-    action = 'The private RPC response could not be read completely. Refresh to retry through Anon-RPC. If it keeps failing, check the gateway or choose another compatible balance RPC endpoint in Settings.';
+    action = 'The RPC response could not be read completely. Refresh to retry through the selected connection mode. If it keeps failing, choose another compatible balance RPC endpoint in Settings.';
+  } else if (/(?:private|direct https) eth_\w+(?: to [^\s]+)? failed:/.test(message)) {
+    summary = 'Connection unavailable';
+    action = mode === 'https' ? 'Check your internet connection, HTTPS RPC endpoints and browser CORS access in Settings → Network connection. Failed balance reads retry automatically.' : 'Check your internet connection and the Tor gateway/RPC endpoints in Settings → Network connection. Failed balance reads retry automatically.';
   } else if (/proof|bytecode|state root|pinned finalized block/.test(message)) {
     summary = 'Proof verification rejected';
     action = 'The returned data could not be verified. Retry with a compatible mainnet RPC endpoint; the application will keep the previous value until verification succeeds.';
@@ -82,7 +85,7 @@ export function explainFailure(failure: ReadFailure) {
     action = 'Check that the tracked token contract is correct for Ethereum mainnet. Retry the read or use another compatible balance RPC endpoint.';
   } else if (/connection|network|fetch|gateway|worker.*(unavailable|stopped)/.test(message)) {
     summary = 'Connection unavailable';
-    action = 'Check your internet connection and the Tor gateway/RPC endpoints in Settings → Network connection. Failed balance reads retry automatically.';
+    action = mode === 'https' ? 'Check your internet connection, HTTPS RPC endpoints and browser CORS access in Settings → Network connection. Failed balance reads retry automatically.' : 'Check your internet connection and the Tor gateway/RPC endpoints in Settings → Network connection. Failed balance reads retry automatically.';
   }
   if (/starting the private/.test(context) && !/checkpoint|digest|hash|offline/.test(message)) action = 'Check Tor gateways in Settings → Network connection, then save and reconnect. Failed balance reads retry automatically.';
   if (/pricing/.test(context) && /automatic/.test(action)) action = 'Use the address Refresh button to retry the price read. Check the network settings if the request keeps failing.';
@@ -94,7 +97,7 @@ export function failureEndpoint(failure: ReadFailure, walletRpcHost?: string): {
   if (consensus) return { label: 'Consensus API', host: consensus[1]! };
   const verifier = /Helios WASM download from ([^\s]+) failed/i.exec(failure.message);
   if (verifier) return { label: 'Application host', host: verifier[1]! };
-  const execution = /Private eth_\w+ (?:to|response from) ([^\s]+) (?:failed|could|rejected)/i.exec(failure.message);
+  const execution = /(?:Private|Direct HTTPS) eth_\w+ (?:to|response from) ([^\s]+) (?:failed|could|rejected)/i.exec(failure.message);
   if (execution) return { label: 'RPC', host: execution[1]! };
   // A bare fetch failure identifies no destination. Do not blame the wallet RPC.
   if (/^(?:failed to fetch|networkerror.*|load failed)[.!]?$/i.test(failure.message)) return undefined;

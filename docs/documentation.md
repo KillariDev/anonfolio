@@ -4,7 +4,7 @@
 
 Anonfolio is a static, browser-based Ethereum mainnet portfolio reader. A user adds addresses to a watchlist, chooses which assets to track, and sees their balances, per-token totals, and estimated portfolio value. ETH and WETH are included initially, and other ERC-20 tokens can be added in Settings. Addresses can have names and locally generated blockie icons. The application never asks the user to connect a wallet or sign a transaction.
 
-The application combines two separate protections. **Anon-RPC and Tor provide a private network route** for execution requests. **Helios verifies Ethereum state in the browser** so an RPC response alone cannot establish a balance. Each refresh uses one verified finalized Ethereum block, and its price estimates use that same block. Finalized state can lag the chain head; displayed results are not reads of the latest unfinalized block.
+The application combines two separate protections. **Anon-RPC and Tor provide a private network route** in the default Tor mode. Settings also offers explicit **Direct HTTPS (not anonymous)**: providers then see the browser’s IP and requested addresses; this mode never starts Tor. **Helios verifies Ethereum state in the browser** so an RPC response alone cannot establish a balance. Each refresh uses one verified finalized Ethereum block, and its price estimates use that same block. Finalized state can lag the chain head; displayed results are not reads of the latest unfinalized block.
 
 Price estimates use a 30-minute Uniswap v3 time-weighted average price (TWAP) from one qualifying direct token/quote pool. USDC is the default quote token. A custom ERC-20 quote token can be configured. Missing prices leave the corresponding assets unpriced and make the estimated portfolio total partial.
 
@@ -14,7 +14,7 @@ There is no application backend or portfolio database. Bun runs development tool
 
 ## Architecture and source map
 
-The main browser thread owns application state and rendering. It communicates with two different workers: the Anon-RPC worker supplies private networking, while the Helios worker performs consensus verification and local contract execution.
+The main browser thread owns application state and rendering. In Tor mode it communicates with two different workers: the Anon-RPC worker supplies private networking, while the Helios worker performs consensus verification and local contract execution.
 
 ```mermaid
 flowchart TD
@@ -26,11 +26,14 @@ flowchart TD
     HV -->|Execution request messages| HC
     HC -->|worker.fetch with wallet isolation key| TOR[Anon-RPC worker and Tor route]
     TOR --> RPC[Wallet's configured execution RPC]
+    HC -->|Explicit HTTPS mode only| HTTPS[Direct HTTPS capability]
+    HTTPS --> RPC
+    HTTPS --> BEACON
     UI --> PIN[Local worker metadata and bundled Tor bytes]
     PIN --> TOR
 ```
 
-Both consensus and execution traffic use Anon-RPC. Consensus has its own isolation key and carries no watched wallet addresses. Ordinary browser HTTP loads local application assets, including the pinned Tor bundle and Helios WASM; it does not query Ethereum execution or beacon endpoints.
+In Tor mode, both consensus and execution traffic use Anon-RPC. Consensus has its own isolation key and carries no watched wallet addresses. Ordinary browser HTTP loads local application assets, including the pinned Tor bundle and Helios WASM; it does not query Ethereum execution or beacon endpoints in Tor mode. HTTPS mode deliberately uses ordinary browser fetch for these endpoints, with credentials omitted, no referrer, no redirects, no request caching, and the same method/destination restrictions. Tor failure never selects HTTPS automatically.
 
 | File or directory | Responsibility |
 | --- | --- |
@@ -39,13 +42,15 @@ Both consensus and execution traffic use Anon-RPC. Consensus has its own isolati
 | [`src/viewport.ts`](../src/viewport.ts) | Portfolio scroll anchoring, visible-log-tail following and open-disclosure height retention. |
 | [`src/addresses.ts`](../src/addresses.ts), [`src/address-display.ts`](../src/address-display.ts) | Address/name validation and the reusable address/blockie component. |
 | [`src/tokens.ts`](../src/tokens.ts), [`src/icons.ts`](../src/icons.ts) | Token definitions, validation, presets, and local icon handling. |
-| [`src/connection.ts`](../src/connection.ts) | Local pinned bootstrap and lifecycle of the shared Anon-RPC worker. |
+| [`src/connection.ts`](../src/connection.ts) | Selected connection mode, bounded Tor lifecycle, slow notice, cancellation and startup diagnostics. |
+| [`src/https-transport.ts`](../src/https-transport.ts) | Explicit, non-anonymous HTTPS capability for configured RPCs and approved consensus URLs. |
+| [`src/tor-bootstrap.ts`](../src/tor-bootstrap.ts), [`scripts/update-tor-bootstrap.ts`](../scripts/update-tor-bootstrap.ts) | Bounded public-directory mirror loading and atomic publication. |
 | [`src/bootstrap.ts`](../src/bootstrap.ts), [`vendor/tor`](../vendor/tor/README.md) | Local specifier metadata and unchanged hash-pinned Tor bundle. |
 | [`src/config.ts`](../src/config.ts), [`src/settings.ts`](../src/settings.ts) | Deployment defaults, runtime network settings, and the Tor worker digest pin. |
 | [`src/balances.ts`](../src/balances.ts) | Wallet/balance models, verification events, and amount formatting. |
 | [`src/verification/client.ts`](../src/verification/client.ts) | Main-thread sessions and messages to/from the Helios worker. |
 | [`src/verification/helios.worker.ts`](../src/verification/helios.worker.ts) | Shared consensus client, serialized refreshes, verified balance and oracle execution. |
-| [`src/verification/transport.ts`](../src/verification/transport.ts) | The execution RPC capability that uses Anon-RPC. |
+| [`src/verification/transport.ts`](../src/verification/transport.ts) | The execution RPC capability that uses the explicitly selected transport. |
 | [`src/verification/proofs.ts`](../src/verification/proofs.ts), [`src/verification/trust.ts`](../src/verification/trust.ts) | Proof/code checks, block binding, checkpoint policy, and WASM pin. |
 | [`src/pricing.ts`](../src/pricing.ts) | Direct-pool discovery, qualification, TWAP calculations, quote caches, and pricing settings. |
 | [`src/totals.ts`](../src/totals.ts) | Token totals and rational estimated portfolio totals. |
@@ -57,16 +62,16 @@ Both consensus and execution traffic use Anon-RPC. Consensus has its own isolati
 
 ## Startup and the refresh lifecycle
 
-When the page opens, `main.ts` loads network configuration, pricing settings, and the saved portfolio. Saved values can render immediately. The application starts the Anon-RPC connection, and each restored address requests a refresh. The Helios worker is created lazily when verification is first requested.
+When the page opens, `main.ts` loads network configuration, pricing settings, and the saved portfolio. Saved values can render immediately. The application starts the selected connection mode, and each restored address requests a refresh. The Helios worker is created lazily when verification is first requested.
 
 A refresh follows this sequence:
 
 1. Mark the address as loading and prepare per-asset activity entries. If a refresh is already running for that address, request one follow-up refresh instead of starting another concurrently.
-2. Wait for the shared Anon-RPC worker to become ready. An offline browser or unavailable private connection cannot trigger a public execution fallback.
+2. In Tor mode, wait for the shared Anon-RPC worker to become ready; HTTPS mode creates a restricted direct capability instead. An offline browser or unavailable private connection cannot trigger a public execution fallback.
 3. Create a Helios verification session containing the wallet's RPC endpoint, isolation key, selected tokens, and a snapshot of pricing settings.
 4. Queue execution in the shared verifier. Synchronize consensus if needed, select a verified finalized block, and freeze its hash and state root for this refresh.
 5. Verify the selected balances. Each successful asset emits its own result, which is saved and rendered immediately; another asset's failure does not erase it.
-6. After the balance-reading loop finishes, attempt price estimates for the successfully read assets at the frozen block. Oracle work does not precede the other assets' balance reads.
+6. Run balance proofs and oracle work in parallel at the frozen block. Early prices wait for their matching verified balance; failed or mismatched proofs never gain a holding value.
 7. Save and render the final state. Schedule recovery after a failed round; start a requested follow-up refresh immediately only after a successful round.
 
 Addresses have independent UI state and retry schedules, but execution in Helios is **serialized across addresses**. This keeps one shared consensus client and ensures every execution request has an unambiguous wallet route. A large watchlist therefore queues work rather than executing all wallets' contracts simultaneously.
@@ -89,7 +94,22 @@ Icons use bundled assets or local raster uploads. Uploaded PNG, JPEG, and WebP f
 
 Settings open behind the top-right gear. The panel contains tracked tokens, price estimates, and network configuration, and closes with Escape, its close button, or interaction outside the panel.
 
-## Private connection and execution transport
+## Connection modes and execution transport
+
+Tor is the default for fresh installs and legacy saved settings. Direct HTTPS requires an explicit Settings selection, is persisted, and is labeled “not anonymous” in the header. Saving reloads the page so an old Tor/HTTPS capability cannot continue sending requests under a newly selected mode. Both modes retain local Helios consensus/proof/code/storage verification. Direct HTTPS is a networking alternative, never an unverified balance fallback. The configured endpoints are shared between modes; the first default is [dRPC’s public HTTPS endpoint](https://drpc.org/docs/ethereum-api), with PublicNode also configured. Providers must support browser CORS, finalized-block proofs and EIP-1898 block hashes.
+
+### Tor startup and directory mirrors
+
+The entire configured gateway pool is passed to one worker. Tor-js performs its own gateway distribution/backoff; the application does not race workers or rotate wallet isolation keys. One public development demo is available by default. No additional production gateway is claimed to be provisioned. Follow [gateway deployment](../deploy/tor-gateways/README.md) to run hosts on separate providers and ship their pinned addresses with `VITE_ANON_GATEWAYS`. Merely adding ordinary Tor relay IPs cannot replace KPS gateways.
+
+Cold startup has a 30-second soft notice and a five-minute readiness deadline. The same pending worker survives the notice, preserving bootstrap and guard-backoff progress. Cancel aborts startup, closes the worker, clears automatic connection/wallet retries and leaves saved values available. Retry connection explicitly resumes after cancellation. Timeout/error still closes the old worker and ignores late readiness. Header stages are derived only from corresponding directory/gateway/guard/circuit diagnostics; logs retain the underlying warnings. Circuit percentages and live gateway reachability are not invented.
+
+Before creating Tor, the app optionally loads `./tor-bootstrap.json` relative to its application base (including an IPFS path), or the configured HTTPS mirror. A six-hour manifest-age limit, an eight-second combined timeout, bounded manifest/archive sizes (4 KiB / 8 MiB), same-origin archive URLs, and SHA-256 checks reject missing/stale/oversized/corrupted mirrors. Requests omit credentials and referrers. Valid bytes enter the existing pinned worker as `config.bootstrap`; Arti still authenticates directory signatures. Failure falls back to the saved directory or gateways, without direct Ethereum requests. The public-directory request itself contains no wallet data.
+
+`bun run bootstrap:update /path/to/gateway/data/bootstrap.zip.zst [output-directory=public]` publishes content-addressed bytes and atomically updates the manifest. It refuses source files older than six hours. Refresh hourly beside the gateway and publish to the static document root, or include the files in a new build/IPFS release. An immutable IPFS snapshot expires and then uses ordinary Tor bootstrap unless a maintained HTTPS mirror is configured. No scheduled hosting service is created by the app.
+
+### Pinned Tor worker
+
 
 `Connection.get()` shares one pending startup promise and one long-lived `AnonRpcWorker`. The application bundles unchanged Tor worker bytes with its source-pinned hash. A local metadata provider answers only `workerHash()` and `workerResolvers()` for the expected specifier identity; unsupported requests are rejected rather than forwarded to an RPC. By default the only resolver is the same-origin bundled asset. The harness verifies its bytes before starting its sandbox. Startup has no chain lookup or remote resolver fallback. An unavailable or tampered bundle fails closed.
 
@@ -115,7 +135,7 @@ The transport allows only `eth_getProof`, `eth_getCode`, `eth_getBlockByHash`, a
 
 Contract calls execute locally rather than using remote `eth_call`. Requests for remote access-list hints receive a synthetic unsupported-method response, allowing Helios to demand-load proven dependencies instead. Retries retain the wallet's endpoint and isolation key. There is no automatic switch to ordinary browser fetch when a private read fails.
 
-The RPC operator still receives the account, code, and storage queries it serves. Isolation keys separate Tor circuits/TLS sessions, but do not promise different exit nodes. The beacon provider receives consensus requests through Tor on a separate shared isolation key. Consensus can continue syncing outside an active wallet session using that route. It is never sent with a wallet’s isolation key or through ordinary browser fetch. Wallet names stay local, and the app adds no analytics or wallet-address URL parameters.
+The RPC operator still receives the account, code, and storage queries it serves. Isolation keys separate Tor circuits/TLS sessions, but do not promise different exit nodes. In Tor mode the beacon provider receives consensus requests through Tor on a separate shared isolation key. Consensus can continue syncing outside an active wallet session using that route. It is never sent with a wallet’s isolation key. Only explicitly selected HTTPS mode sends it through ordinary browser fetch. Wallet names stay local, and the app adds no analytics or wallet-address URL parameters.
 
 ## Consensus and balance verification
 
@@ -243,19 +263,19 @@ The portfolio storage key retains its older name for migration. Bigint amounts a
 
 Isolation keys and request payloads are not persisted. Saved values are restored as cached, and legacy entries lacking block provenance require verification. Successful results and watchlist edits save immediately. A blocked or full localStorage leaves the current in-memory session usable and displays a storage warning. The stored portfolio and any credentials in network-setting URLs are accessible to someone with access to that browser origin's storage.
 
-The bundled Tor worker is cached as a local application asset, and is still hash-checked by the harness when loaded. The production service worker is generated by `vite.config.ts`. It caches an explicit list of built application files, including the WASM binary, and removes older application-shell caches on activation. Navigation tries the network and falls back to cached HTML; other shell assets use the cache first. Requests outside that exact asset list, including RPC and worker/gateway traffic, are not intercepted. The first visit still requires a connection, and offline startup cannot retrieve new balances.
+The bundled Tor worker is cached as a local application asset, and is still hash-checked by the harness when loaded. The production service worker is generated by `vite.config.ts`. It caches an explicit list of built application files, including the WASM binary (HTTPS mode omits the unused Tor bundle from precaching), and removes older application-shell caches on activation. Navigation tries the network and falls back to cached HTML; other shell assets use the cache first. Requests outside that exact asset list, including RPC and worker/gateway traffic, are not intercepted. The first visit still requires a connection, and offline startup cannot retrieve new balances.
 
 `RetryQueue` maintains one scheduled attempt per address or connection key. Failed balance rounds use delays of 2, 4, 8, 16, 32, then at most 60 seconds. Private-worker reconnects use 2, 4, 8, then at most 10 seconds between attempts. Automatic recovery selects failed or not-yet-verified balances, keeping successful results. Going offline pauses timers; coming online resumes pending work. Manual refresh resets the backoff, and removing an address cancels its scheduled retries. Leaving the page pauses retries and closes the private connection.
 
-An execution HTTP attempt has a 90-second timeout, worker readiness has a 30-second timeout, and a verification session has a five-minute timeout. After a startup timeout, the app closes that worker before retrying and ignores late readiness from old attempts. The pinned Tor worker’s internal per-guard backoff (such as 2m 30s) is separate and is not configurable through the exposed harness API; reconnecting retains its persisted guard selection and other Tor state. These bounds keep unavailable routes from waiting indefinitely, although queued work and retries can still make a large refresh take time.
+An execution HTTP attempt has a 90-second timeout, Tor worker readiness has a 30-second soft notice and a five-minute timeout, and a verification session has a five-minute timeout. After a startup timeout, the app closes that worker before retrying and ignores late readiness from old attempts. The pinned Tor worker’s internal per-guard backoff (such as 2m 30s) is separate and is not configurable through the exposed harness API; reconnecting retains its persisted guard selection and other Tor state. These bounds keep unavailable routes from waiting indefinitely, although queued work and retries can still make a large refresh take time.
 
 ## Configuration, builds, and publishing
 
-Deployment defaults come from `VITE_ANON_GATEWAYS` and `VITE_RPC_URLS`, with source defaults in `config.ts`. Browser network settings override those defaults after local validation. The default balance endpoint order starts with dRPC, followed by PublicNode and Ankr. The old `bootstrapRpc` storage property and `VITE_BOOTSTRAP_RPC` variable are ignored; saving settings removes that obsolete field while preserving gateway/RPC choices.
+Deployment defaults come from `VITE_ANON_GATEWAYS`, `VITE_TOR_BOOTSTRAP_URL` and `VITE_RPC_URLS`, with source defaults in `config.ts`. Browser network settings override those defaults after local validation. The default balance endpoint order starts with dRPC, followed by PublicNode and Ankr. The old `bootstrapRpc` storage property and `VITE_BOOTSTRAP_RPC` variable are ignored; saving settings removes that obsolete field while preserving gateway/RPC choices.
 
 Saving network settings closes the old Anon-RPC worker and reloads the page, replacing wallet routes together. Restoring network defaults removes that override rather than clearing the portfolio or pricing configuration. Saving pricing settings instead updates the pricing configuration and refreshes the current wallets without a page reload.
 
-An RPC must support proofs and code queries at the selected finalized block, including EIP-1898 block-hash parameters. A provider whose historical proof window is too short can reject valid requests. An explicit eth_getProof JSON-RPC history/window/pruned-state rejection triggers a bounded switch among the configured execution endpoints. The exact request, pinned finalized block and wallet isolation key remain unchanged, and every attempt still uses worker.fetch. The active session shares its rejected-endpoint set between concurrent balance and pricing reads, so they converge on a usable operator without loops. Later execution requests and refreshes prefer the replacement operator within the browser session. The UI request destination, worker progress and retrieval log identify the switch. No alternate endpoint is tried for a timeout, malformed response, generic RPC error or invalid proof; those failures still stop verification. If the configured endpoints cannot provide the required proofs, the application fails closed, retains unavailable/stale states and asks the user to configure a historical-proof-capable RPC. It never changes to latest/unfinalized state to satisfy a provider’s shorter window. Tor/WebRTC gateway connectivity is also required. The shipped Tor gateway is a development demo, and a deployment can configure its own gateway. The checkpoint can be overridden in Settings using a trusted root and matching slot. The Helios WASM pin remains source-controlled. Tor uses the release pin by default; the explicit Settings updater can apply a PublicNode-supplied digest and downloaded worker.
+An RPC must support proofs and code queries at the selected finalized block, including EIP-1898 block-hash parameters. A provider whose historical proof window is too short can reject valid requests. An explicit eth_getProof JSON-RPC history/window/pruned-state rejection triggers a bounded switch among the configured execution endpoints. The exact request, pinned finalized block and wallet isolation key remain unchanged, and every attempt still uses worker.fetch. The active session shares its rejected-endpoint set between concurrent balance and pricing reads, so they converge on a usable operator without loops. Later execution requests and refreshes prefer the replacement operator within the browser session. The UI request destination, worker progress and retrieval log identify the switch. No alternate endpoint is tried for a timeout, malformed response, generic RPC error or invalid proof; those failures still stop verification. If the configured endpoints cannot provide the required proofs, the application fails closed, retains unavailable/stale states and asks the user to configure a historical-proof-capable RPC. It never changes to latest/unfinalized state to satisfy a provider’s shorter window. Tor/WebRTC gateway connectivity is required in Tor mode; HTTPS mode needs browser HTTPS/CORS access instead. The shipped Tor gateway is a development demo, and a deployment can configure its own gateway. The checkpoint can be overridden in Settings using a trusted root and matching slot. The Helios WASM pin remains source-controlled. Tor uses the release pin by default; the explicit Settings updater can apply a PublicNode-supplied digest and downloaded worker.
 
 Use the repository's Bun 1.3.14 baseline for dependency changes and its compatible committed lockfile:
 
@@ -285,6 +305,8 @@ The tests cover separate boundaries rather than treating mocked UI results as ev
 | `bun run test:static` | Production page loading and offline recovery, after building. |
 | `bun run test:all` | Unit tests, build, deterministic browser scenarios, and production/offline checks. |
 | `BASE_URL=http://127.0.0.1:4173 bun run test:live` | Opt-in real Tor/Helios mainnet balances and TWAPs against a built page. The runner starts the static server if needed. |
+| `bun run test:live:https` | Real mainnet ETH/WETH proof verification through explicitly selected HTTPS. |
+| `bun run bootstrap:update SOURCE [DESTINATION]` | Publish a fresh public Tor directory mirror. |
 | `bun run test:ipfs` | Real local Kubo publishing, CID/CAR checks, and path/subdomain gateway browser scenarios. `LIVE_RPC=1` also enables the live mainnet case. |
 
 Install Chromium with `bunx playwright install chromium` before browser tests. `LIVE_BALANCE_RPC` can select a specific execution endpoint for the live smoke test. Live checks depend on external gateway/RPC availability and remain separate from deterministic CI checks.

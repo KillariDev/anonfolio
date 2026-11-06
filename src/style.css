@@ -168,7 +168,7 @@ input::placeholder, textarea::placeholder { color: #687462; }
   .input-row { flex-direction: column; }
   .token-inputs { grid-template-columns: 1fr 1fr; }
   .token-inputs > div:first-child { grid-column: 1/-1; }
-  .connection-heading { flex-wrap: wrap; }
+  .connection-heading { flex-wrap: nowrap; }
   .connection strong { font-size: 10px; white-space: normal; min-width: 0; }
   .section-heading .local-note { font-size: 9px; }
   .scroll-hint { display: block; color: #819777; font-size: 10px; margin: 0 0 7px; }
@@ -336,3 +336,6 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 
 .progress-request .progress-clock { font-size: 9px; line-height: 12px; height: 12px; }
 .progress-requests > .progress-hint { font-size: 9px; line-height: 12px; margin: 8px 0 0; }
+
+.connection-heading strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-heading button { flex: 0 0 auto; }

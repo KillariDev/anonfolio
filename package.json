@@ -15,7 +15,9 @@
     "typecheck": "bun --bun tsc --noEmit --project tsconfig.json",
     "check": "bun run test && bun run typecheck && bun run build",
     "ui:docker": "bun ./scripts/build-docker.mts anonfolio-ui && docker run --rm --add-host=host.docker.internal:host-gateway --env IPFS_API_MULTIADDR anonfolio-ui",
-    "test:ipfs": "bun scripts/test-ipfs.mts"
+    "test:ipfs": "bun scripts/test-ipfs.mts",
+    "bootstrap:update": "bun scripts/update-tor-bootstrap.ts",
+    "test:live:https": "LIVE_HTTPS=1 playwright test --grep \"live mainnet verified ETH and WETH through explicitly selected HTTPS\""
   },
   "dependencies": {
     "@anon-rpc/browser-harness": "0.4.0",

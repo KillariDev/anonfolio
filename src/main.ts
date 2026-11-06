@@ -48,21 +48,24 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <button type="submit">Save pricing and refresh</button><p id="pricing-error" class="input-error" role="alert"></p></form>
 <form id="settings-form" novalidate>
 <h2>Network connection</h2>
+<label for="settings-mode">Connection mode</label><select id="settings-mode"><option value="tor">Tor via Anon-RPC (default)</option><option value="https">Direct HTTPS (not anonymous)</option></select>
+<p id="mode-hint" class="form-hint">Tor hides your IP from RPC providers. Direct HTTPS sends requests from your browser: providers see your IP and requested addresses. Proof verification remains enabled. There is no automatic switch between modes.</p>
 <label for="settings-gateways">Tor gateways</label><textarea id="settings-gateways" rows="2" spellcheck="false" autocomplete="off" aria-describedby="gateway-hint settings-error"></textarea>
 <p id="gateway-hint" class="form-hint">One ip:port:certhash entry per line. IPv6 addresses use [ipv6]:port:certhash. The default is a development demo gateway.</p>
+<label for="settings-bootstrap-url">Tor directory mirror URL (optional)</label><input id="settings-bootstrap-url" spellcheck="false" autocomplete="off" placeholder="./tor-bootstrap.json"><p class="form-hint">A fresh public directory snapshot can speed up Tor startup. A missing mirror falls back to the gateways.</p>
 <label for="settings-rpcs">Balance RPC endpoints</label><textarea id="settings-rpcs" rows="3" spellcheck="false" autocomplete="off" aria-describedby="rpc-hint settings-error"></textarea>
-<p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses start on separate endpoints where possible. If an endpoint cannot serve finalized-block proofs, another configured endpoint is tried with the same private isolation key. Every request goes through Anon-RPC.</p>
-<p class="form-hint">The Tor worker is bundled and hash-verified locally. Startup never queries an Ethereum RPC. Consensus, balance and oracle requests all use Anon-RPC.</p>
+<p id="rpc-hint" class="form-hint">Ethereum mainnet HTTPS URLs, one per line. Addresses start on separate endpoints where possible. If an endpoint cannot serve finalized-block proofs, another configured endpoint is tried with the same private isolation key. Requests use your selected mode. Defaults include dRPC and PublicNode; no API key is required for their public endpoints.</p>
+<p class="form-hint">The Tor worker is bundled and hash-verified locally. Startup never queries an Ethereum RPC. In Tor mode, consensus, balance and oracle requests all use Anon-RPC. In HTTPS mode, they go directly to the configured services.</p>
 <h2>Tor worker</h2>
 <label for="settings-tor-worker">Tor worker source</label><select id="settings-tor-worker"><option value="bundled">Bundled release worker (default)</option><option value="updated">Saved worker from PublicNode</option></select>
-<p class="form-hint">Update only when you choose: this queries ethereum-rpc.publicnode.com directly for the Tor specifier's hash and download locations, then downloads the worker directly. No tracked addresses are sent. Applying the update trusts PublicNode's worker hash and code. Balance, proof and consensus requests stay on Anon-RPC.</p>
+<p class="form-hint">Update only when you choose: this queries ethereum-rpc.publicnode.com directly for the Tor specifier's hash and download locations, then downloads the worker directly. No tracked addresses are sent. Applying the update trusts PublicNode's worker hash and code. Balance, proof and consensus requests use the selected connection mode.</p>
 <button id="update-tor-worker" type="button">Update Tor worker from PublicNode</button>
 <p id="tor-worker-status" role="status" class="form-hint"></p><pre id="tor-worker-metadata" class="form-hint" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
 <h2 id="checkpoint-settings">Consensus checkpoint</h2>
 <label for="settings-checkpoint-root">Mainnet checkpoint root</label><input id="settings-checkpoint-root" type="text" spellcheck="false" autocomplete="off" aria-describedby="checkpoint-hint settings-error">
 <label for="settings-checkpoint-slot">Checkpoint beacon slot</label><input id="settings-checkpoint-slot" type="number" min="1" step="1" aria-describedby="checkpoint-hint settings-error">
 <p id="checkpoint-hint" class="form-hint">A trusted finalized beacon block root and its matching slot, less than 14 days old. Compare them across independent trusted mainnet sources before saving: this checkpoint is the light client's trust anchor. Saving restarts verification. Restore defaults uses the release-pinned checkpoint.</p>
-<p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and restarts private reads; saved balances remain visible.</p>
+<p class="form-hint">Settings are saved in this browser, including any API keys in endpoint URLs. Applying settings reloads the page and restarts reads; saved balances remain visible.</p>
 <div class="settings-actions"><button class="primary" type="submit">Save settings and reconnect</button><button id="reset-settings" type="button">Restore defaults</button></div>
 <p id="settings-error" class="input-error" role="alert"></p></form></section></details></div></header>
 <main>
@@ -126,12 +129,12 @@ addressToggle.addEventListener('click', () => {
 });
 const loggedRetries = new Map<Wallet,string>();
 const retries = new RetryQueue<Wallet | 'connection'>(
-  key => key === 'connection' ? start(true) : refreshWallet(key, true),
+  key => connection.cancelled ? undefined : key === 'connection' ? start(true) : refreshWallet(key, true),
   () => navigator.onLine,
   () => {
     for (const wallet of wallets) {
       const connectionRetry=state==='failed'?retryMessage('connection'):'';
-      const message=[retryMessage(wallet),connectionRetry?'Private connection: '+connectionRetry:''].filter(Boolean).join(' ');
+      const message=[retryMessage(wallet),connectionRetry?(config.mode === 'https' ? 'HTTPS connection: ' : 'Private connection: ')+connectionRetry:''].filter(Boolean).join(' ');
       if(message && loggedRetries.get(wallet)!==message) appendRetrievalLog(wallet,message);
       loggedRetries.set(wallet,message);
     }
@@ -144,8 +147,8 @@ const retries = new RetryQueue<Wallet | 'connection'>(
 const connection = new Connection(
   next => {
     state = next;
-    for(const wallet of wallets) if(wallet.loading) appendRetrievalLog(wallet,'Private connection: '+next,next==='failed'?'error':'info');
-    if (next === 'failed') retries.schedule('connection');
+    for(const wallet of wallets) if(wallet.loading) appendRetrievalLog(wallet,(config.mode === 'https' ? 'HTTPS connection: ' : 'Private connection: ')+next,next==='failed'?'error':'info');
+    if (next === 'failed' && !connection.cancelled) retries.schedule('connection');
     else if (next === 'ready') retries.cancel('connection');
     renderConnection();
   },
@@ -171,15 +174,22 @@ function retryMessage(key: Wallet | 'connection') {
 function renderConnection() {
   const node = document.querySelector<HTMLElement>('#connection')!;
   node.className = 'connection ' + state;
+  node.setAttribute('aria-label', config.mode === 'https' ? 'HTTPS connection' : 'Private connection');
   const heading = document.createElement('div');
   heading.className = 'connection-heading';
   if (state === 'starting') heading.append(spinner());
   const title = document.createElement('strong');
-  title.textContent = state === 'ready' ? 'Private worker ready'
-    : state === 'starting' ? 'Starting private connection…'
-    : 'Private connection unavailable';
+  title.textContent = config.mode === 'https' ? state === 'ready' ? 'Direct HTTPS · not anonymous' : state === 'starting' ? 'Starting HTTPS connection…' : 'HTTPS connection unavailable'
+    : state === 'ready' ? 'Private worker ready' : state === 'starting' ? connection.phase || 'Starting private connection…' : connection.cancelled ? 'Connection cancelled' : 'Private connection unavailable';
+  if (state === 'starting' && connection.slow) { title.textContent += ' Taking longer than usual.'; title.title = 'Keeping this Tor bootstrap attempt alive for up to five minutes. You can cancel or keep using saved balances.'; }
+  if (!title.title) title.title = title.textContent;
   heading.append(title);
   if (state === 'failed') title.title = [connection.lastError, retryMessage('connection')].filter(Boolean).join(' · ');
+  if (state === 'starting') {
+    const cancel = document.createElement('button'); cancel.textContent = 'Cancel'; cancel.setAttribute('aria-label', 'Cancel connection');
+    cancel.onclick = () => { connection.cancel(); retries.cancel('connection'); wallets.forEach(wallet => retries.cancel(wallet)); };
+    heading.append(cancel);
+  }
   if (state === 'failed') {
     const button = document.createElement('button');
     button.textContent = 'Retry connection';
@@ -192,7 +202,7 @@ function failureReport(label: string, failure: ReadFailure, rpcHost?: string, id
   const report = document.createElement('section'); report.className = 'read-failure';
   report.setAttribute('aria-label', label + ' failure');
   report.dataset.viewKey = identity;
-  const { summary, action } = explainFailure(failure);
+  const { summary, action } = explainFailure(failure, config.mode);
   const header = document.createElement('div'); header.className = 'failure-heading';
   const asset = document.createElement('span'); asset.className = 'failure-label'; asset.textContent = label;
   const heading = document.createElement('strong'); heading.textContent = summary;
@@ -259,7 +269,7 @@ function balanceNode(wallet: Wallet, symbol: string, decimals: number, balance: 
   const failure = balanceFailure(balance);
   if (failure) {
     const explain = document.createElement('button'); explain.type = 'button'; explain.className = 'failure-link';
-    const meaning = explainFailure(failure).summary + ' · Details';
+    const meaning = explainFailure(failure, config.mode).summary + ' · Details';
     const icon = statusIcon(statusKind, meaning, statusText + ' · ' + meaning + ': ' + failure.message);
     icon.removeAttribute('tabindex');
     explain.append(icon);
@@ -476,7 +486,7 @@ function verificationPanel(wallet: Wallet) {
     for (const request of requests.slice(0, 2)) {
       const row = document.createElement('div'); row.className = 'progress-request'; row.dataset.viewKey = String(request.requestId);
       const operation = document.createElement('p'); operation.textContent = request.method + ' → ' + request.host;
-      const state = document.createElement('span'); state.textContent = request.state === 'waiting' ? 'Submitted to Anon-RPC · waiting for response headers' : 'Response headers received · reading response body';
+      const state = document.createElement('span'); state.textContent = request.state === 'waiting' ? (config.mode === 'https' ? 'Direct HTTPS · waiting for response headers' : 'Submitted to Anon-RPC · waiting for response headers') : 'Response headers received · reading response body';
       row.append(operation, state, progressClock(request.startedAt, request.deadline));
       operation.title = operation.textContent; state.title = state.textContent;
       requestArea.append(row);
@@ -538,7 +548,7 @@ function walletDetails(wallet: Wallet, logOpen=false) {
       const detail = document.createElement('div');
       const title = document.createElement('strong');
       title.textContent = item.symbol + ' · ' + (item.phase === 'waiting' ? 'Pending'
-        : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' on the same private route; verifying finalized state' : 'Verifying locally; fetching private proofs as needed')
+        : item.phase === 'requesting' ? (item.attempt > 1 ? 'Retry ' + (item.attempt - 1) + ' on the same ' + (config.mode === 'https' ? 'HTTPS route' : 'private route') + '; verifying finalized state' : config.mode === 'https' ? 'Verifying locally; fetching HTTPS proofs as needed' : 'Verifying locally; fetching private proofs as needed')
         : item.phase === 'received' ? 'Balance received' : 'Read failed; previous amount kept if available');
       const payload = document.createElement('small');
       payload.textContent = item.phase === 'waiting' || item.phase === 'received' || item.phase === 'failed' ? '' : item.description;
@@ -716,23 +726,24 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   if (!tokens.length) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
   if (onlyFailed) retries.begin(wallet);
   else retries.cancel(wallet);
+  if (connection.cancelled) return;
   const selectedTokens = [...tokens];
   wallet.loading = true;
   wallet.verificationStage = 'connection';
   wallet.stageStartedAt = Date.now();
   wallet.networkRequests = [];
   wallet.queuedForVerifier = false;
-  appendRetrievalLog(wallet, (onlyFailed?'Automatic retry':'Refresh')+' started · '+new URL(wallet.rpcUrl).hostname+' through the address’s Anon-RPC route.');
-  appendRetrievalLog(wallet, state==='ready'?'Using the ready private worker.':connectionMessage);
+  appendRetrievalLog(wallet, (onlyFailed?'Automatic retry':'Refresh')+' started · '+new URL(wallet.rpcUrl).hostname+(config.mode === 'https' ? ' through direct HTTPS (not anonymous).' : ' through the address’s Anon-RPC route.'));
+  appendRetrievalLog(wallet, config.mode === 'https' ? 'Using direct HTTPS; RPC providers see your IP and requested addresses.' : state==='ready'?'Using the ready private worker.':connectionMessage);
   prepareActivity(wallet, selectedTokens, onlyFailed);
   render();
   try {
     if (!navigator.onLine) throw new Error('Offline');
     const worker = await connection.get();
-    appendRetrievalLog(wallet,'Private worker ready; requesting finalized verification.');
+    appendRetrievalLog(wallet, config.mode === 'https' ? 'HTTPS transport ready; requesting finalized verification.' : 'Private worker ready; requesting finalized verification.');
     if (wallets.includes(wallet)) await readBalances(wallet, worker, selectedTokens, () => { pruneTokenBalances(wallet); persist(); render(); }, onlyFailed);
   } catch (cause) {
-    const failure = readFailure(navigator.onLine ? cause : 'Browser is offline.', 'Starting the private connection');
+    const failure = readFailure(navigator.onLine ? cause : 'Browser is offline.', config.mode === 'https' ? 'Starting the HTTPS connection' : 'Starting the private connection');
     wallet.verificationStatus = failure.message;
     appendRetrievalLog(wallet,'Refresh failed: '+failure.message,'error');
     wallet.activity.forEach(item => {
@@ -746,7 +757,7 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
     wallet.queuedForVerifier = false;
     pruneTokenBalances(wallet);
     persist(); render();
-    if (!wallets.includes(wallet)) { retries.cancel(wallet); return; }
+    if (!wallets.includes(wallet) || connection.cancelled) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
     const failed = tokens.some(token => tokenBalance(wallet, token).failed);
     if (wallet.queuedRefresh && !failed) { wallet.queuedRefresh = false; void refreshWallet(wallet); }
     else if (failed) { wallet.queuedRefresh = false; retries.schedule(wallet); }
@@ -754,10 +765,11 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   }
 }
 async function start(automatic = false) {
+  const resumeCancelled = connection.cancelled;
   if (automatic) retries.begin('connection');
   else retries.cancel('connection');
   if (!navigator.onLine) { state = 'failed'; retries.schedule('connection'); renderConnection(); return; }
-  try { await connection.get(); }
+  try { await connection.get(); if (resumeCancelled) wallets.forEach(wallet => { if (!wallet.loading && tokens.some(token => tokenBalance(wallet, token).failed)) void refreshWallet(wallet, true); }); }
   catch { state = 'failed'; retries.schedule('connection'); renderConnection(); }
 }
 document.querySelector('#wallet-form')!.addEventListener('submit', event => {
@@ -847,6 +859,8 @@ function showSettings(settings: NetworkSettings) {
   stagedWorker = settings.torWorker;
   settingsField('tor-worker').value = stagedWorker ? 'updated' : 'bundled';
   renderWorkerMetadata();
+  document.querySelector<HTMLSelectElement>('#settings-mode')!.value = settings.mode || 'tor';
+  settingsField('bootstrap-url').value = settings.bootstrapUrl ?? defaultConfig.bootstrapUrl;
   settingsField('gateways').value = settings.gateways.join('\n');
   settingsField('rpcs').value = settings.rpcUrls.join('\n');
   const checkpoint = settings.checkpoint || DEFAULT_CHECKPOINT;
@@ -884,7 +898,7 @@ document.querySelector('#settings-form')!.addEventListener('submit', event => {
   event.preventDefault();
   try {
     const lines = (value: string) => value.split(/[,\n]/).map(line => line.trim()).filter(Boolean);
-    const settings = validateSettings({ torWorker: settingsField('tor-worker').value === 'updated' ? stagedWorker : undefined, gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value),
+    const settings = validateSettings({ mode: document.querySelector<HTMLSelectElement>('#settings-mode')!.value, bootstrapUrl: settingsField('bootstrap-url').value.trim(), torWorker: settingsField('tor-worker').value === 'updated' ? stagedWorker : undefined, gateways: lines(settingsField('gateways').value), rpcUrls: lines(settingsField('rpcs').value),
       checkpoint: { root: settingsField('checkpoint-root').value, slot: Number(settingsField('checkpoint-slot').value) } });
     checkCheckpointAge(Date.now(), settings.checkpoint);
     applySettings(settings);
@@ -906,7 +920,7 @@ window.addEventListener('online', () => { renderOffline(); retries.resume(); voi
 window.addEventListener('pagehide', () => { retries.pause(); connection.close(); });
 window.addEventListener('pageshow', event => { if (event.persisted) { retries.resume(); void start(); } });
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  void navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(() => {
+  void navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js' + (config.mode === 'https' ? '?mode=https' : '')).catch(() => {
     document.querySelector('#offline-notice')!.textContent = 'Offline page caching is unavailable. Balances are still saved locally, but reopening the page may need a connection.';
   });
 }

@@ -9,7 +9,7 @@ import type { Estimate } from './pricing';
 import { WETH } from './config';
 import { defaultTokens, type Token } from './tokens';
 
-export type PrivateWorker = Pick<AnonRpcWorker, 'fetch'>;
+export type PrivateWorker = Pick<AnonRpcWorker, 'fetch'> & { transport?: 'tor' | 'https' };
 export type Balance = { failure?: ReadFailure; estimate?: Estimate; priceError?: string; amount?: bigint; updatedAt?: number; failed: boolean; cached?: boolean; verifiedBlock?: VerifiedBlock; decimals?: number };
 export type RequestActivity = {
   asset: string;
@@ -73,7 +73,7 @@ export async function readBalances(
   let fatal: ReadFailure | undefined;
   try {
     await verifier(wallet, worker, selected, event => {
-      logVerificationEvent(wallet,event,selected);
+      logVerificationEvent(wallet,event,selected,worker.transport);
       const stage = event.stage || (event.type === 'queued' ? 'queued' : event.type === 'started' ? 'verifier' : event.type === 'asset' ? 'balances' : event.type === 'price-start' ? 'pricing' : undefined);
       if (stage && stage !== wallet.verificationStage) { wallet.verificationStage = stage; wallet.stageStartedAt = Date.now(); }
       if (event.type === 'network' && event.request) {

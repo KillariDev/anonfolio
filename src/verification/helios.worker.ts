@@ -12,7 +12,7 @@ import { parallelReads } from './parallel';
 let activeCheckpoint: Checkpoint = DEFAULT_CHECKPOINT;
 const EXECUTION_URL = 'https://helios-execution.invalid/';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
-let current: { id: string; rpcHost: string; requests: number; block?: VerifiedBlock } | undefined;
+let current: { id: string; rpcHost: string; mode?: 'tor'|'https'; requests: number; block?: VerifiedBlock } | undefined;
 let client: EthereumClient | undefined;
 const oracle = new TwapOracle();
 let sequence = 0;
@@ -44,7 +44,7 @@ async function internalFetch(request: Request): Promise<Response> {
     assertConsensusUrl(url.href);
     if (request.method !== 'GET') throw new Error('Disallowed consensus method.');
     const syncingRun = current && !current.block ? current.id : undefined;
-    if (syncingRun) step('Requesting consensus data from ' + url.hostname + ' through Anon-RPC. No wallet balance request has been sent yet.', 'consensus');
+    if (syncingRun) step('Requesting consensus data from ' + url.hostname + (current?.mode === 'https' ? ' through direct HTTPS. No wallet balance request has been sent yet.' : ' through Anon-RPC. No wallet balance request has been sent yet.'), 'consensus');
     const id = ++sequence;
     const reply = new Promise<{ status: number; body: string }>((resolve, reject) => replies.set(id, { resolve, reject }));
     scope.postMessage({ type: 'consensus', id, url: url.href });
@@ -66,9 +66,9 @@ async function internalFetch(request: Request): Promise<Response> {
     if (!current?.block) throw new Error('State request before verified finalized block selection.');
     assertPinnedBlock(body.params.at(-1), current.block);
   } else if (!['eth_getBlockByHash', 'eth_getBlockByNumber'].includes(body.method)) throw new Error('Unreviewed Helios RPC method.');
-  step('Private ' + body.method + ' request #' + (++current!.requests) + ' → ' + current!.rpcHost + ' through Anon-RPC; waiting for response.');
+  step((current?.mode === 'https' ? 'Direct HTTPS ' : 'Private ') + body.method + ' request #' + (++current!.requests) + ' → ' + current!.rpcHost + (current?.mode === 'https' ? ' through direct HTTPS; waiting for response.' : ' through Anon-RPC; waiting for response.'));
   let data;
-  try { data = await rpc(body); } catch (error) { step('Private ' + body.method + ' failed: ' + String(error)); throw error; }
+  try { data = await rpc(body); } catch (error) { step((current?.mode === 'https' ? 'Direct HTTPS ' : 'Private ') + body.method + ' failed: ' + String(error)); throw error; }
   if (body.method === 'eth_getProof') {
     step('Checking account and requested storage proofs against finalized state root.');
     const hash = await verifyAccountResponse(body.params[0], body.params[1], current!.block!, data.result);
@@ -114,7 +114,7 @@ async function synced(checkpoint: Checkpoint) {
   return client;
 }
 async function refresh(message: any) {
-  current = { id: message.id, rpcHost: message.rpcHost, requests: 0 };
+  current = { id: message.id, rpcHost: message.rpcHost, mode: message.mode, requests: 0 };
   codeHashes.clear();
   executionFailure = '';
   try {
@@ -134,7 +134,7 @@ async function refresh(message: any) {
           step('ETH: requesting wallet account proof and verifying its balance against the finalized state root.');
           amount = BigInt(await helios.get_balance(message.address, { blockHash: block.hash }));
         } else {
-          step(token.symbol + ': executing balanceOf(wallet) locally; fetching only missing proven code/storage through the private route.');
+          step(token.symbol + ': executing balanceOf(wallet) locally; fetching only missing proven code/storage through the selected transport.');
           const call = { to: token.address, input: '0x70a08231' + message.address.slice(2).toLowerCase().padStart(64, '0'), gas: '0x989680' };
           const output = await helios.call(call, { blockHash: block.hash }, undefined);
           if (!/^0x[0-9a-f]{64}$/i.test(output)) throw new Error('Invalid balanceOf return value.');

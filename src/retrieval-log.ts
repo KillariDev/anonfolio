@@ -13,12 +13,12 @@ export function appendRetrievalLog(owner: RetrievalLog, message: string, level:R
   }
   if(entries.length>LOG_LIMIT) { owner.droppedLogEntries=(owner.droppedLogEntries||0)+entries.length-LOG_LIMIT; entries.splice(0,entries.length-LOG_LIMIT); }
 }
-export function logVerificationEvent(owner:RetrievalLog,event:VerificationEvent,tokens:Token[]) {
+export function logVerificationEvent(owner:RetrievalLog,event:VerificationEvent,tokens:Token[], mode?:'tor'|'https') {
   const token=tokens.find(token=>token.address===event.asset)?.symbol || 'Token';
   if(event.message) appendRetrievalLog(owner,event.message,event.type.endsWith('error')?'error':'info');
   if(event.type==='network'&&event.request) {
     const request=event.request;
-    const status=request.state==='waiting'?'Submitted to Anon-RPC; waiting for response headers':request.state==='reading'?'Response headers received; reading body':'Response body received';
+    const status=request.state==='waiting'?(mode==='https'?'Direct HTTPS; waiting for response headers':'Submitted to Anon-RPC; waiting for response headers'):request.state==='reading'?'Response headers received; reading body':'Response body received';
     appendRetrievalLog(owner,'Request #'+request.requestId+' · '+request.method+' → '+request.host+' · '+status);
   } else if(event.type==='block'&&event.block) appendRetrievalLog(owner,'Selected verified finalized block '+BigInt(event.block.number)+' · '+event.block.hash);
   else if(event.type==='asset') appendRetrievalLog(owner,token+' · Starting balance proof / local execution.');

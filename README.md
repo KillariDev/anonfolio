@@ -1,6 +1,6 @@
 # Anonfolio
 
-A standalone Bun, Vite and TypeScript Ethereum mainnet portfolio reader. Track wallet addresses and ERC-20 balances without connecting a wallet. Each wallet's reads use its own Anon-RPC/Tor isolation key.
+A standalone Bun, Vite and TypeScript Ethereum mainnet portfolio reader. Track wallet addresses and ERC-20 balances without connecting a wallet. Tor is the default, with an Anon-RPC isolation key per address. Settings also offers explicit **Direct HTTPS (not anonymous)**, keeping browser-side proof verification while exposing your IP and requested addresses to providers. Tor failures never switch modes automatically.
 
 Read [how the application works](docs/documentation.md) for an overview followed by detailed explanations of the architecture, verification, pricing, storage, interface, and deployment.
 
@@ -15,6 +15,7 @@ bun run test                 # balance, storage, token and static-server tests
 bunx playwright install chromium
 bun run test:browser         # deterministic Chromium UI tests
 bun run test:all             # unit tests, build, UI tests and production/offline checks
+bun run test:live:https      # real verified ETH/WETH over explicitly selected HTTPS
 bun run test:live            # actual tor-js worker + mainnet; needs WebRTC/network access
 bun run build               # type-check and produce dist/
 bun run serve               # simple Bun static server, http://localhost:4173
@@ -30,9 +31,9 @@ If you saw “Unknown lockfile version”, pull the latest branch and run `bun i
 
 The overview sums each token across all tracked addresses using exact bigint arithmetic and the configured token decimals. ETH, WETH and each custom contract have separate totals; tokens with the same symbol remain separate. Removing an address or token updates the totals immediately. Totals do not trigger extra RPC requests.
 
-A total uses only available balance values. Unknown amounts are not counted as zero: the coverage label shows how many addresses are included and marks incomplete totals as **Partial**. Retained cached or failed values are included with a stale count; a spinner and updating label indicate pending reads. These are sums of independently fetched values, not an atomic snapshot of a single block.
+A total uses only available balance values. Unknown amounts are not counted as zero: the coverage label shows how many addresses are included and marks incomplete totals as **Partial**. Retained cached or failed values are included with a stale count; loading indicators stay on the address being refreshed while totals retain their previous values. These are sums of independently fetched values, not an atomic snapshot of a single block.
 
-The watchlist uses compact table rows with refresh next to each address. Full addresses are shown whenever the column has room; smaller screens truncate only the visible text, retaining the full address for accessibility and tooltips. Choose **Details** to see the full address, RPC operator, read timestamps and request progress. Expanded rows stay open while results arrive. Adding addresses, token settings and connection diagnostics are collapsible; the address form closes after adding entries. Narrow screens scroll the table horizontally while the address column stays visible. Long watchlists scroll within the table with fixed column headers.
+The watchlist uses compact table rows with refresh next to each address. Full addresses are shown whenever the column has room; smaller screens truncate only the visible text, retaining the full address for accessibility and tooltips. Choose **Details** to see read timestamps, errors and request progress. Expanded rows stay open while results arrive. Adding addresses, token settings and connection diagnostics are collapsible; the address form closes after adding entries. Narrow screens scroll the table horizontally while the address column stays visible. Long watchlists scroll within the table with fixed column headers.
 
 ## Tracking wallets and tokens
 
@@ -54,13 +55,13 @@ Every other estimate uses exactly one direct token/quote Uniswap v3 pool. ETH is
 
 The [30-minute oracle](https://developers.uniswap.org/docs/protocols/v3/concepts/price-oracles) uses `observe([1800, 0])`, the arithmetic mean tick rounded down for negative non-integral results, and harmonic mean in-range liquidity. Canonical pools reject an observation older than their available history. Both the current and harmonic virtual quote reserves must meet **Minimum quote-side liquidity**, default **10,000 USDC**. Adjust this amount in quote-token units when changing the quote token. Virtual reserves are computed from in-range liquidity and current/TWAP square-root prices; this is a liquidity filter, not total TVL or an executable sale quote.
 
-After selecting one verified finalized block, balance proofs and oracle work run in parallel, with at most one balance operation and one token’s pricing work active at a time. Price discovery does not depend on the holding amount. Early quotes wait in memory for a successful balance proof at the same block; failed proofs or mismatched blocks cannot produce a new holding value. The progress panel shows both stages while they overlap. Factory, pool and observation reads execute locally in Helios at that same finalized block hash. All missing code/storage proofs and retries use that address's existing Anon-RPC worker and isolation key. Successful pool oracle data are cached in bounded memory by pool, 1,800-second window and block hash; reverse quote directions recompute liquidity from the cached raw data. No failures are cached. The first default balance endpoint is dRPC, tested with finalized oracle storage proofs. RPC operators must serve historical account/storage proofs at the verified finalized block; a short proof window can reject otherwise valid reads. For an explicit proof-history rejection, the app retries the identical request at another configured RPC, using the same Anon-RPC worker, wallet isolation key and finalized block hash. The selected replacement is used for subsequent requests and refreshes in the browser session. No public/direct fallback is allowed. If all configured RPCs lack the required proofs, add a historical-proof-capable endpoint in **Settings → Network connection**. Ordinary transport/RPC failures and invalid proofs still fail closed. Price failures leave verified balances intact and show **Unpriced**; use the address's Refresh button to retry. Missing prices make the estimated portfolio total **Partial**. Totals label stale values and mixed finalized blocks, and suppress conflicting quote-decimal results.
+After selecting one verified finalized block, balance proofs and oracle work run in parallel, with at most one balance operation and one token’s pricing work active at a time. Price discovery does not depend on the holding amount. Early quotes wait in memory for a successful balance proof at the same block; failed proofs or mismatched blocks cannot produce a new holding value. The progress panel shows both stages while they overlap. Factory, pool and observation reads execute locally in Helios at that same finalized block hash. All missing code/storage proofs and retries use the selected transport; Tor mode retains that address’s Anon-RPC worker and isolation key. Successful pool oracle data are cached in bounded memory by pool, 1,800-second window and block hash; reverse quote directions recompute liquidity from the cached raw data. No failures are cached. The first default balance endpoint is dRPC, tested with finalized oracle storage proofs. RPC operators must serve historical account/storage proofs at the verified finalized block; a short proof window can reject otherwise valid reads. For an explicit proof-history rejection, the app retries the identical request at another configured RPC, using the same Anon-RPC worker, wallet isolation key and finalized block hash. The selected replacement is used for subsequent requests and refreshes in the browser session. Tor never falls back to direct HTTPS. HTTPS is used only when explicitly selected in Settings. If all configured RPCs lack the required proofs, add a historical-proof-capable endpoint in **Settings → Network connection**. Ordinary transport/RPC failures and invalid proofs still fail closed. Price failures leave verified balances intact and show **Unpriced**; use the address's Refresh button to retry. Missing prices make the estimated portfolio total **Partial**. Totals label stale values and mixed finalized blocks, and suppress conflicting quote-decimal results.
 
 Tick exponentiation uses bigint fixed point with 512 fractional bits. Raw holdings are multiplied by the raw quote/base ratio, so token ordering and differing decimals are handled without floating-point amounts. Values are summed as rational bigint fractions before conversion for the two-decimal display; no per-holding currency rounding feeds the aggregate. Estimates describe a historical 30-minute geometric price average and exclude swap fees, slippage and price impact.
 
 ## Progress and saved balances
 
-Spinners indicate worker startup, wallet refresh and individual pending reads. The header connection status shows loading and hash-checking the bundled Tor worker before private requests begin. Startup performs no Ethereum RPC lookup. Configured gateway endpoints are shown as configuration: the harness does not expose live gateway or circuit-building progress.
+Spinners indicate worker startup, wallet refresh and individual pending reads. The header connection status shows loading and hash-checking the bundled Tor worker before private requests begin. Startup performs no Ethereum RPC lookup. The header shows concise directory, gateway, guard or circuit stages when worker diagnostics identify them. A slow notice after 30 seconds preserves the same Tor attempt until its five-minute deadline; Cancel stops automatic recovery until Retry connection is clicked.
 
 Failed balances show a short cause with a **Details** action. The expanded report shows a compact error card with recovery advice, RPC hostname and attempt time; **Technical details** reveals the original error and a distinct failed step without repeating the same failure. Recovery advice provides specific guidance for checkpoint expiry, RPC proof-history limits, rate limits, and connection failures. Causes stay attached to their assets across later progress and reloads, and clear after successful verification. Credential-bearing endpoint URLs are redacted in saved/displayed error messages.
 
@@ -196,3 +197,32 @@ Progress reports the actual step: loading and digest-checking WASM, private beac
 Checkpoints expire after 14 days. Renew the trust anchor in Settings → Consensus checkpoint using a root and matching slot checked across independent operators, or install a reviewed release with a newer default. Restore defaults selects the release-pinned checkpoint. Runtime settings cannot change the Helios binary pin. The explicit Tor updater can replace the worker digest with the PublicNode-supplied value. Frozen finalized blocks older than one hour are rejected. The shared verifier serializes wallet execution, trading throughput for a single consensus sync and unambiguous private routing. Proof-unavailable RPC operators fail closed; configure a mainnet endpoint supporting eth_getProof and EIP-1898 block-hash queries.
 
 Run `bun run test:all` for unit, adversarial and deterministic UI/offline checks. `BASE_URL=http://127.0.0.1:4173 bun run test:live` exercises the actual production WASM and Tor worker (build first); the live checks additionally reject any ordinary browser proof/code requests. UI fixtures replace the verifier boundary only inside tests, never in the shipped app. Unit regressions use genuine generated trie proofs for wrong-wallet, wrong-block, omitted-nonzero-slot, exclusion/zero and tampered-bytecode attacks; transport tests forbid native-fetch fallbacks. `LIVE_RPC=1 bun run test:ipfs` runs the same verifier on a real local Kubo gateway.
+
+
+## Resilient Tor deployment and HTTPS mode
+
+Choose **Settings → Network connection → Connection mode**. Tor remains the
+default; **Direct HTTPS (not anonymous)** uses the configured RPC endpoints,
+starting with `https://eth.drpc.org`, and the configured-in-source beacon API.
+HTTPS mode omits credentials/referrers, blocks redirects and batches, and allows
+only proof/code/block RPC methods and approved beacon URLs. It keeps the same
+Helios verification and finalized-block checks. The header always labels it
+non-anonymous. It does not download or initialize Tor.
+
+Configure multiple real `ip:port:certhash` gateways in Settings or
+`VITE_ANON_GATEWAYS`; tor-js distributes connections and backs off failed gateways.
+Only one public demo gateway is known and shipped. Additional production hosts
+must be operated or supplied; see [the deployment guide](deploy/tor-gateways/README.md).
+
+To accelerate cold Tor starts, publish the gateway's fresh public directory:
+
+```sh
+bun run bootstrap:update /path/to/gateway/data/bootstrap.zip.zst
+bun run build
+```
+
+Run publication hourly against your static host, or set a maintained HTTPS
+manifest in **Tor directory mirror URL** / `VITE_TOR_BOOTSTRAP_URL`. A missing,
+stale or corrupt mirror falls back to the saved directory and gateways. The
+mirror carries no wallet data; Arti verifies directory signatures. Immutable
+IPFS releases need republishing or a maintained external mirror for fresh data.

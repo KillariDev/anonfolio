@@ -53,7 +53,7 @@ test('bulk additions show spinners and the current stage, then private per-token
   await mockConnection(page, true);
   await page.goto('/');
   await expect(page.locator('#connection .spinner')).toBeVisible();
-  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await expect(page.locator('#connection strong')).toHaveText('Starting private connection…');
   await addToken(page);
   await openAddressForm(page);
   await page.locator('#address').fill(a + ',\n' + b + '\n' + a);
@@ -1466,7 +1466,7 @@ for (const width of [1280, 390]) test(`connection header stays concise through T
   `}));
   await page.goto('/');
   const header=page.locator('#connection');
-  await expect(header).toHaveText('Starting private connection…');
+  await expect(header.locator('strong')).toHaveText('Starting private connection…');
   const before=await header.boundingBox();
   await page.locator('#address').fill(a);
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
@@ -1474,7 +1474,7 @@ for (const width of [1280, 390]) test(`connection header stays concise through T
   await page.locator('.retrieval-log > summary').first().click();
   await expect(page.locator('.log-stream')).toContainText('Unable to get the total available memory');
   await page.evaluate(()=>(window as any).__connection.onProgress('Tor worker: '+ 'A long startup diagnostic. '.repeat(30)));
-  await expect(header).toHaveText('Starting private connection…');
+  await expect(header.locator('strong')).toHaveText('Starting private connection…');
   expect((await header.boundingBox())!.height).toBe(before!.height);
   await expect(header.locator('.spinner')).toHaveCount(1);
   await page.evaluate(()=>(window as any).__ready());
@@ -1482,7 +1482,7 @@ for (const width of [1280, 390]) test(`connection header stays concise through T
   await expect(header.locator('.spinner')).toHaveCount(0);
 });
 
-test('stalled Tor startup retries promptly, separates diagnostics and ignores late readiness', async ({page}) => {
+test('slow Tor bootstrap survives its notice, times out with diagnostics and ignores late readiness', async ({page}) => {
   await page.clock.install();
   const direct: string[]=[];
   page.on('request',request=>{if(/^https?:/.test(request.url())&&!request.url().startsWith('http://127.0.0.1:5173'))direct.push(request.url());});
@@ -1504,8 +1504,12 @@ test('stalled Tor startup retries promptly, separates diagnostics and ignores la
   await expect(page.getByText('Ethereum balances · saved on this browser',{exact:true})).toHaveCount(0);
   await page.locator('#address').fill(a);
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
-  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await expect(page.locator('#connection strong')).toContainText('Connecting to a Tor guard');
+  await expect.poll(()=>page.evaluate(()=>(window as any).__torWorkers.length)).toBe(1);
   await page.clock.fastForward(30_001);
+  await expect(page.locator('#connection strong')).toContainText('Taking longer than usual');
+  expect(await page.evaluate(()=>(window as any).__torWorkers[0].closed)).toBe(false);
+  await page.clock.fastForward(270_000);
   await expect(page.locator('#connection')).toContainText('Private connection unavailable');
   expect(await page.evaluate(()=>(window as any).__torWorkers.length)).toBe(1);
   expect(await page.evaluate(()=>(window as any).__torWorkers[0].closed)).toBe(true);
@@ -1516,10 +1520,10 @@ test('stalled Tor startup retries promptly, separates diagnostics and ignores la
   expect(lines.some(line=>line.includes('[01:57.599]'))).toBe(true);
   expect(lines.every(line=>!(line.includes('[01:52.583]')&&line.includes('[01:57.599]')))).toBe(true);
   await page.clock.fastForward(2000);
-  expect(await page.evaluate(()=>(window as any).__torWorkers.length)).toBe(2);
-  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await expect.poll(()=>page.evaluate(()=>(window as any).__torWorkers.length)).toBe(2);
+  await expect(page.locator('#connection strong')).toContainText('Connecting to a Tor guard');
   await page.evaluate(()=>(window as any).__torWorkers[0].resolve());
-  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await expect(page.locator('#connection strong')).toContainText('Connecting to a Tor guard');
   await page.evaluate(()=>(window as any).__torWorkers[1].resolve());
   await expect(page.locator('#connection')).toHaveText('Private worker ready');
   expect(direct).toEqual([]);
@@ -1533,7 +1537,7 @@ test('shared startup status appears only in the header, with both address detail
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
   await openWalletDetails(page,a);
   await openWalletDetails(page,b);
-  await expect(page.locator('#connection')).toHaveText('Starting private connection…');
+  await expect(page.locator('#connection strong')).toHaveText('Starting private connection…');
   await expect(page.locator('.compact-progress')).toHaveText(['','']);
   for (const detail of await page.locator('.detail-content').all()) {
     await expect(detail).not.toContainText('Starting private connection');
