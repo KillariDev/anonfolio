@@ -24,5 +24,7 @@ test('the Docker builder COPY inputs produce the complete static application and
     expect(await Bun.file(resolve(stage, 'dist/index.html')).exists()).toBe(true);
     expect(await Bun.file(resolve(stage, 'dist/docs/documentation.html')).text()).toContain('Startup and the refresh lifecycle');
     expect((await Bun.file(resolve(stage, 'dist/docs/images/portfolio.png')).size)).toBeGreaterThan(0);
+    expect(await Bun.file(resolve(stage, 'dist/docs/presentation.html')).text()).toContain('Messages carry requests. Proofs carry trust.');
+    expect((await Bun.file(resolve(stage, 'dist/docs/presentation.pdf')).size)).toBeGreaterThan(0);
   } finally { await rm(stage, { recursive: true, force: true }); }
 }, 30_000);

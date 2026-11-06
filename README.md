@@ -75,6 +75,10 @@ Temporary pricing failures retry automatically for affected holdings on their ex
 
 The [illustrated system guide](docs/documentation.html) covers the architecture, flowcharts, networking, verification, pricing, cache formats, retries and deployment in detail. It opens directly from disk or at **`/docs/documentation.html`** on either server.
 
+The [technical presentation](docs/presentation.html) is a self-contained 16-slide deck covering the project, technology stack, worker messages, Tor/KPS networking, consensus and account/storage proofs, local ERC-20 execution, and shared Uniswap pricing. Open it directly from disk or at **`/docs/presentation.html`**. A [PDF copy](docs/presentation.pdf) is also included. Use arrow keys to present, **Notes** for speaker detail, **All slides** to read continuously, or **Print / PDF** to export. Logos, diagrams and the demonstration screenshot are embedded; the deck sends no network requests unless you follow a reference link.
+
+After editing the slides, regenerate the committed PDF with `UPDATE_PRESENTATION_PDF=1 bun run test:browser e2e/presentation.spec.ts --grep "self-contained presentation"`, then rebuild. The test checks a 16-page PDF export; the production build includes both formats in the offline application shell.
+
 ## Privacy, trust and configuration
 
 **Tor mode:** consensus, balance proofs, bytecode and price-oracle requests go through Anon-RPC. RPC providers see the addresses they serve, while Tor hides the browser's IP from them. Per-address isolation does not guarantee different Tor exit nodes. No analytics, remote icon services, external fonts or addresses in page URLs are used.

@@ -5,6 +5,8 @@ import { defineConfig } from 'vite';
 const torWorkerBytes = readFileSync(new URL('./vendor/tor/anon-rpc-worker.js', import.meta.url));
 const documentation = readFileSync(new URL('./docs/documentation.html', import.meta.url), 'utf8');
 const documentationImage = readFileSync(new URL('./docs/images/portfolio.png', import.meta.url));
+const presentation = readFileSync(new URL('./docs/presentation.html', import.meta.url), 'utf8');
+const presentationPdf = readFileSync(new URL('./docs/presentation.pdf', import.meta.url));
 
 // Cache only built application files, never RPC or worker/gateway traffic.
 export default defineConfig({
@@ -36,13 +38,15 @@ export default defineConfig({
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'docs/documentation.html', source: documentation });
       this.emitFile({ type: 'asset', fileName: 'docs/images/portfolio.png', source: documentationImage });
+      this.emitFile({ type: 'asset', fileName: 'docs/presentation.html', source: presentation });
+      this.emitFile({ type: 'asset', fileName: 'docs/presentation.pdf', source: presentationPdf });
     },
   }, {
     name: 'offline-application-shell',
     enforce: 'post',
     generateBundle(_, bundle) {
-      const paths = [...Object.keys(bundle).filter(path => /\.(html|js|css|png|jpg|jpeg|svg|webp|wasm)$/.test(path)), './'];
-      const version = createHash('sha256').update(JSON.stringify(paths)).update(documentation).update(documentationImage).digest('hex').slice(0, 16);
+      const paths = [...Object.keys(bundle).filter(path => /\.(html|js|css|png|jpg|jpeg|svg|webp|wasm|pdf)$/.test(path)), './'];
+      const version = createHash('sha256').update(JSON.stringify(paths)).update(documentation).update(documentationImage).update(presentation).update(presentationPdf).digest('hex').slice(0, 16);
       this.emitFile({
         type: 'asset', fileName: 'sw.js',
         source: 'const CACHE = "anonfolio-shell-' + version + '";\nconst PATHS = ' + JSON.stringify(paths) + ';\n' + `
