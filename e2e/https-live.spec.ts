@@ -12,9 +12,12 @@ test('live mainnet verified ETH and WETH through explicitly selected HTTPS',asyn
   await page.locator('#address').fill('0x0000000000000000000000000000000000000001');
   await page.getByRole('button',{name:'add address to track',exact:true}).click();
   await expect(page.locator('.balance .status-verified')).toHaveCount(2,{timeout:180_000});
-  const values=await page.evaluate(()=>Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances) as any[]);
   await openWalletDetails(page,'0x0000000000000000000000000000000000000001');
-  await expect(page.locator('.progress-heading')).toContainText(/\d\/4 checks/);
+  // Wait for both price jobs too: returning after the balances alone would miss
+  // concurrency/deadlock regressions in the shared WASM client's oracle calls.
+  await expect(page.locator('.progress-heading')).toContainText('4/4 checks',{timeout:180_000});
+  const values=await page.evaluate(()=>Object.values(JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets[0].balances) as any[]);
+  expect(values.every(value=>value.estimate?.blockHash===value.verifiedBlock.hash)).toBe(true);
   await page.locator('.retrieval-log > summary').click();
   await expect(page.locator('.log-stream')).toContainText('WETH bytecode');
   await expect(page.locator('.log-stream')).toContainText('Tracked address account proof');

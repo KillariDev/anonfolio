@@ -161,3 +161,43 @@ test('quote-token holdings require no contract calls and cached quotes must matc
   expect(usableEstimate(balance, settings)).toBe(quote);
   expect(usableEstimate(balance, defaultPricing())).toBeUndefined();
 });
+
+
+test('concurrent ETH/WETH estimates share in-flight reads, but never another block', async () => {
+  const oracle = new TwapOracle(), rpc = fixture();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const delayed: LocalCall = async (...args) => { await gate; return rpc.call(...args); };
+  const eth = oracle.estimate(ethToken, defaultPricing(), block, delayed, progress);
+  const weth = oracle.estimate(wethToken, defaultPricing(), block, delayed, progress);
+  release();
+  expect(await eth).toEqual(await weth);
+  expect(rpc.calls.filter(c => c.method === 'getPool')).toHaveLength(1);
+  expect(rpc.calls.filter(c => c.method === 'observe')).toHaveLength(1);
+  await oracle.estimate(wethToken, defaultPricing(), { ...block, hash: '0x'+'99'.repeat(32) }, rpc.call, progress);
+  expect(rpc.calls.filter(c => c.method === 'observe')).toHaveLength(2);
+});
+
+test('failed shared price lookup can be retried instead of caching a rejected promise', async () => {
+  const oracle = new TwapOracle(), settings = defaultPricing();
+  const bad = fixture({ history: false });
+  const results = await Promise.allSettled([
+    oracle.estimate(ethToken, settings, block, bad.call, progress),
+    oracle.estimate(wethToken, settings, block, bad.call, progress),
+  ]);
+  expect(results.every(result => result.status === 'rejected')).toBe(true);
+  const good = fixture();
+  expect((await oracle.estimate(wethToken, settings, block, good.call, progress)).pool).toBe(WETH_USDC_POOL);
+  expect(good.calls.filter(c => c.method === 'observe')).toHaveLength(1);
+});
+
+test('independent pool identity and state reads overlap instead of waiting for each method', async () => {
+  const rpc = fixture();
+  let active = 0, peak = 0;
+  const delayed: LocalCall = async (...args) => {
+    active++; peak = Math.max(peak, active);
+    try { await Bun.sleep(1); return await rpc.call(...args); } finally { active--; }
+  };
+  await new TwapOracle().estimate(ethToken, defaultPricing(), block, delayed, progress);
+  expect(peak).toBe(2);
+});

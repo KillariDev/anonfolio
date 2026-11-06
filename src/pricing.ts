@@ -2,6 +2,7 @@ import { decodeFunctionResult, encodeFunctionData, getAddress, parseAbi, parseUn
 import { WETH } from './config';
 import { validateToken, type Token } from './tokens';
 import type { VerifiedBlock } from './verification/trust';
+import { mapConcurrent } from './verification/parallel';
 
 export const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as Address;
 export const V3_FACTORY = '0x1F98431c8aD98523631AE4a59f267346ea31F984' as Address;
@@ -71,6 +72,9 @@ type PoolQuote = { pool: Address; token0: Address; token1: Address; tick: number
 export class TwapOracle {
   private pools = new Map<string, PoolQuote>();
   private selections = new Map<string, PoolQuote>();
+  // ETH and WETH share a selection, including while its verified reads are in flight.
+  // Settled failures are removed so a subsequent refresh can retry.
+  private pendingSelections = new Map<string, Promise<PoolQuote>>();
   private put<T>(cache: Map<string, T>, key: string, value: T) { if (cache.size >= 128) cache.delete(cache.keys().next().value!); cache.set(key, value); }
   async estimate(token: Token, settings: PricingSettings, block: VerifiedBlock, call: LocalCall, progress: (message: string) => void): Promise<Estimate> {
     const base = token.address === 'eth' ? WETH : token.address;
@@ -86,44 +90,53 @@ export class TwapOracle {
     const selectionKey = [base, quote, WINDOW, block.hash, floor].join(':');
     let selected = this.selections.get(selectionKey);
     if (!selected) {
-      const fixed = base === WETH && quote === USDC;
-      const candidates: { result: PoolQuote; depth: bigint }[] = [];
-      for (const fee of fixed ? [500] : [100, 500, 3000, 10000]) {
-        progress(`Pricing ${token.symbol}: checking direct ${token.symbol}/${settings.quote.symbol} v3 pool (${fee / 10000}%) against the canonical factory.`);
-        const pool = getAddress(await read(V3_FACTORY, 'getPool', [base, quote, fee]));
-        if (pool === zeroAddress) continue;
-        if (fixed && pool !== WETH_USDC_POOL) throw new Error('Unexpected WETH/USDC 0.05% pool.');
-        const cacheKey = [pool, WINDOW, block.hash].join(':');
-        let result = this.pools.get(cacheKey);
-        if (!result) {
-          try {
-            const factory = getAddress(await read(pool, 'factory'));
-            const token0 = getAddress(await read(pool, 'token0'));
-            const token1 = getAddress(await read(pool, 'token1'));
-            if (factory !== V3_FACTORY || Number(await read(pool, 'fee')) !== fee
-              || ![token0, token1].includes(base) || ![token0, token1].includes(quote) || token0 === token1) throw new Error('Pool identity mismatch.');
-            const current = BigInt(await read(pool, 'liquidity'));
-            const slot = await read(pool, 'slot0');
-            const sqrtPrice = BigInt(slot[0]);
-            if (current <= 0n || sqrtPrice <= 0n || !slot[6]) throw new Error('Pool has no active liquidity.');
-            progress(`Pricing ${token.symbol}: verifying observe([1800, 0]) and harmonic liquidity locally through the private route.`);
-            // Canonical observe reverts with OLD if the full window is unavailable.
-            const observations = await read(pool, 'observe', [[WINDOW, 0]]);
-            const mean = oracleMeans(observations[0], observations[1]);
-            result = { pool, token0, token1, tick: mean.tick, liquidity: mean.liquidity, current, sqrtPrice };
-            // Cache orientation-independent liquidity, normalized below for each quote.
-            this.put(this.pools, cacheKey, result);
-          } catch { continue; }
-        }
-        const sqrtMean = sqrt(tickRatio(result.tick));
-        const quoteIs1 = result.token1 === quote;
-        const depth = quoteIs1 ? result.liquidity * sqrtMean / (1n << 256n) : result.liquidity * (1n << 256n) / sqrtMean;
-        const currentDepth = quoteIs1 ? result.current * result.sqrtPrice / (1n << 96n) : result.current * (1n << 96n) / result.sqrtPrice;
-        if (depth >= floor && currentDepth >= floor) candidates.push({ result, depth });
+      let pending = this.pendingSelections.get(selectionKey);
+      if (!pending) {
+        pending = (async () => {
+          const fixed = base === WETH && quote === USDC;
+          const candidates: { result: PoolQuote; depth: bigint }[] = [];
+          await mapConcurrent(fixed ? [500] : [100, 500, 3000, 10000], 2, async fee => {
+            progress(`Pricing ${token.symbol}: checking direct ${token.symbol}/${settings.quote.symbol} v3 pool (${fee / 10000}%) against the canonical factory.`);
+            const pool = getAddress(await read(V3_FACTORY, 'getPool', [base, quote, fee]));
+            if (pool === zeroAddress) return;
+            if (fixed && pool !== WETH_USDC_POOL) throw new Error('Unexpected WETH/USDC 0.05% pool.');
+            const cacheKey = [pool, WINDOW, block.hash].join(':');
+            let result = this.pools.get(cacheKey);
+            if (!result) {
+              try {
+                const [factoryValue, token0Value, token1Value, feeValue] = await mapConcurrent(['factory', 'token0', 'token1', 'fee'], 2, method => read(pool, method));
+                const factory = getAddress(factoryValue);
+                const token0 = getAddress(token0Value);
+                const token1 = getAddress(token1Value);
+                if (factory !== V3_FACTORY || Number(feeValue) !== fee
+                  || ![token0, token1].includes(base) || ![token0, token1].includes(quote) || token0 === token1) throw new Error('Pool identity mismatch.');
+                progress(`Pricing ${token.symbol}: verifying pool liquidity and 30-minute observations locally.`);
+                const [liquidity, slot, observations] = await mapConcurrent(['liquidity', 'slot0', 'observe'], 2, method => read(pool, method, method === 'observe' ? [[WINDOW, 0]] : []));
+                const current = BigInt(liquidity);
+                const sqrtPrice = BigInt(slot[0]);
+                if (current <= 0n || sqrtPrice <= 0n || !slot[6]) throw new Error('Pool has no active liquidity.');
+                // Canonical observe reverts with OLD if the full window is unavailable.
+                const mean = oracleMeans(observations[0], observations[1]);
+                result = { pool, token0, token1, tick: mean.tick, liquidity: mean.liquidity, current, sqrtPrice };
+                // Cache orientation-independent liquidity, normalized below for each quote.
+                this.put(this.pools, cacheKey, result);
+              } catch { return; }
+            }
+            const sqrtMean = sqrt(tickRatio(result.tick));
+            const quoteIs1 = result.token1 === quote;
+            const depth = quoteIs1 ? result.liquidity * sqrtMean / (1n << 256n) : result.liquidity * (1n << 256n) / sqrtMean;
+            const currentDepth = quoteIs1 ? result.current * result.sqrtPrice / (1n << 96n) : result.current * (1n << 96n) / result.sqrtPrice;
+            if (depth >= floor && currentDepth >= floor) candidates.push({ result, depth });
+          });
+          const chosen = candidates.sort((a, b) => a.depth === b.depth ? a.result.pool.localeCompare(b.result.pool) : a.depth > b.depth ? -1 : 1)[0]?.result;
+          if (!chosen) throw new Error('No direct pool qualifies: require 30-minute history and sufficient current/harmonic quote liquidity.');
+          this.put(this.selections, selectionKey, chosen);
+          return chosen;
+        })();
+        this.pendingSelections.set(selectionKey, pending);
       }
-      selected = candidates.sort((a, b) => a.depth === b.depth ? a.result.pool.localeCompare(b.result.pool) : a.depth > b.depth ? -1 : 1)[0]?.result;
-      if (!selected) throw new Error('No direct pool qualifies: require 30-minute history and sufficient current/harmonic quote liquidity.');
-      this.put(this.selections, selectionKey, selected);
+      try { selected = await pending; }
+      finally { if (this.pendingSelections.get(selectionKey) === pending) this.pendingSelections.delete(selectionKey); }
     }
     progress(`Pricing ${token.symbol}: one direct pool selected; calculating the 30-minute TWAP locally.`);
     const ratio = tickRatio(selected.tick);

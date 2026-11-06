@@ -61,7 +61,7 @@ background-task and consensus changes, regenerating/verifying the upstream
 WASM artifact, updating pins, and rerunning adversarial and real Tor tests.
 
 Oracle estimates use the same local `EthereumClient.call` path for canonical v3
-factory/pool methods. Token and quote decimals use configured metadata; no decimals() calls are made. They run after wallet balance reads
+factory/pool methods. Token and quote decimals use configured metadata; no decimals() calls are made. They run concurrently with wallet balance reads (two jobs per lane), share in-flight ETH/WETH pool selections,
 and use the refresh's pinned finalized block hash. Oracle proof/code/block requests
 share the immutable wallet session and private bridge; no new transport method or
 WASM modification is introduced. The bounded pool/window/block cache contains only
