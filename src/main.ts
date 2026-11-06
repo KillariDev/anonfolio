@@ -402,7 +402,6 @@ function renderTotals() {
     label.className = 'total-label';
     label.append(tokenIcon(total), document.createTextNode(total.symbol));
     label.title = total.address === 'eth' ? 'Native Ethereum' : total.address;
-    if (total.loading) label.append(spinner());
     const amount = document.createElement('div');
     amount.className = 'total-amount';
     amount.textContent = total.amount === undefined ? '—' : formatBalance(total.amount, total.decimals);
@@ -414,7 +413,6 @@ function renderTotals() {
       : total.known < total.addresses ? 'Partial · ' + coverage : coverage;
     if (total.mixedBlocks) status.textContent += ' · mixed finalized blocks';
     if (total.stale) status.textContent += ' · ' + total.stale + ' stale';
-    if (total.loading) status.textContent += ' · updating';
     status.title = status.textContent;
     card.classList.toggle('incomplete', total.known < total.addresses || total.stale > 0);
     const valuation = estimatedTotal(wallets, [total], pricing);

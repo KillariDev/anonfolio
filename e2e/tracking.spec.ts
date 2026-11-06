@@ -27,7 +27,7 @@ async function mockConnection(page: Page, paused = false, failure = false) {
             if (window.__fail) throw new Error('private connection unavailable');
             const custom = body.method === 'eth_call' && body.params[0].to.toLowerCase() === '${usdc.toLowerCase()}';
             return Response.json({ jsonrpc: '2.0', id: body.id,
-              result: body.method === 'eth_getBalance' ? '0xde0b6b3a7640000' : '0x' + (custom ? 1234567n : 0n).toString(16).padStart(64, '0') });
+              result: body.method === 'eth_getBalance' ? (window.__ethBalance || '0xde0b6b3a7640000') : '0x' + (custom ? 1234567n : 0n).toString(16).padStart(64, '0') });
           }};
         })();
       }
@@ -440,7 +440,7 @@ test('pinned local startup never queries RPC directly; retries keep their privat
           const body = JSON.parse(init.body);
           window.__calls.push({ url, body, key: init.anonOptions.isolationKey });
           if (window.__fail) throw new Error('private route unavailable');
-          return Response.json({ jsonrpc: '2.0', id: body.id, result: body.method === 'eth_getBalance' ? '0xde0b6b3a7640000' : '0x' + '0'.repeat(64) });
+          return Response.json({ jsonrpc: '2.0', id: body.id, result: body.method === 'eth_getBalance' ? (window.__ethBalance || '0xde0b6b3a7640000') : '0x' + '0'.repeat(64) });
         }
       }
     `,
@@ -1359,7 +1359,7 @@ for (const width of [1280, 390]) test(`balance updates keep mounted rows, icons 
   await page.locator('.retrieval-log > summary').first().click();
   await expect(page.locator('.log-stream li').first()).toHaveAttribute('data-log-id', /\d+/);
   await page.evaluate(() => {
-    const nodes = ['.wallet-table', '.wallet', '.blockie', '.refresh-icon .spinner', '.balance .amount', '.total', '.total .spinner', '.detail-content', '.log-stream', '.log-stream li'];
+    const nodes = ['.wallet-table', '.wallet', '.blockie', '.refresh-icon .spinner', '.balance .amount', '.total', '.detail-content', '.log-stream', '.log-stream li'];
     (window as any).__stableNodes = nodes.map(selector => ({ selector, node: document.querySelector(selector) }));
     (window as any).__panelHeight = document.querySelector('.verification-panel')!.getBoundingClientRect().height;
     (window as any).__columnWidths = [...document.querySelectorAll('.wallet-table > thead > tr > th')].map(node => node.getBoundingClientRect().width);
@@ -1381,7 +1381,7 @@ for (const width of [1280, 390]) test(`balance updates keep mounted rows, icons 
       worker.onmessage({ data: { ...event, run: worker.request.id } });
     }, event);
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(await page.evaluate(loading => (window as any).__stableNodes.filter(({selector, node}: any) => (loading || selector !== '.total .spinner') && document.querySelector(selector) !== node).map(({selector}: any) => selector), event.type === 'progress' || event.type === 'network')).toEqual([]);
+    expect(await page.evaluate(() => (window as any).__stableNodes.filter(({selector, node}: any) => document.querySelector(selector) !== node).map(({selector}: any) => selector))).toEqual([]);
     const shifts = await page.evaluate(() => [...document.querySelectorAll('.wallet-table > thead > tr > th')].map((node, i) => Math.abs(node.getBoundingClientRect().width - (window as any).__columnWidths[i])));
     expect(Math.max(...shifts)).toBeLessThanOrEqual(1);
     expect(await page.evaluate(() => Math.abs(document.querySelector('.verification-panel')!.getBoundingClientRect().height - (window as any).__panelHeight))).toBeLessThanOrEqual(1);
@@ -1579,3 +1579,44 @@ test('a failed balance has one actionable warning instead of duplicate warning i
   await expect(page.locator('.failure-details')).toHaveAttribute('open','');
   await expect(page.locator('.read-failure').first()).toContainText('private connection unavailable');
 });
+
+
+for (const [target, fail] of [[a,false],[b,false],[b,true]] as const) {
+  test(`refresh affects only ${target === a ? 'first' : 'second'} address on ${fail ? 'failure' : 'success'}`,async ({page}) => {
+    await mockConnection(page);
+    const publicRequests: string[]=[];
+    page.on('request',request=>{if(request.method()==='POST')publicRequests.push(request.url());});
+    await page.goto('/');
+    await page.locator('#address').fill(a+'\n'+b);
+    await page.getByRole('button',{name:'add address to track',exact:true}).click();
+    await expect(page.locator('.amount')).toHaveText(['1','0','1','0']);
+    await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
+    const other=target===a?b:a;
+    await openWalletDetails(page,other);
+    const untouched=page.locator('.wallet[data-address="'+other+'"]');
+    const selected=page.locator('.wallet[data-address="'+target+'"]');
+    const otherHTML=await untouched.innerHTML();
+    const savedOther=await page.evaluate(address=>JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets.find((wallet:any)=>wallet.address===address),other);
+    const previousCalls=await page.evaluate(()=>(window as any).__calls);
+    const originalKey=previousCalls.find((call:any)=>call.body.method==='eth_getBalance'&&call.body.params[0]===target).key;
+    await page.evaluate(fail=>{(window as any).__delay=1000;(window as any).__ethBalance='0x1bc16d674ec80000';(window as any).__fail=fail;},fail);
+    await page.getByRole('button',{name:'Refresh '+target,exact:true}).click();
+    await expect(selected).toHaveAttribute('data-loading','true');
+    await expect(selected.locator('.refresh-icon .spinner')).toBeVisible();
+    await expect(untouched).toHaveAttribute('data-loading','false');
+    await expect(untouched.locator('.spinner')).toHaveCount(0);
+    await expect(page.locator('.total .spinner')).toHaveCount(0);
+    await expect(page.locator('.total-status')).not.toContainText(['updating','updating']);
+    await expect(page.locator('.total-amount')).toHaveText(['2','0']);
+    expect(await untouched.innerHTML()).toBe(otherHTML);
+    await expect(page.getByRole('button',{name:'Refresh '+target,exact:true})).toBeEnabled({timeout:10000});
+    const newCalls=await page.evaluate(count=>(window as any).__calls.slice(count),previousCalls.length);
+    expect(newCalls).toHaveLength(fail?4:2);
+    expect(newCalls.every((call:any)=>call.key===originalKey)).toBe(true);
+    expect(newCalls.every((call:any)=>call.body.method==='eth_getBalance'?call.body.params[0]===target:call.body.params[0].data.endsWith(target.slice(2)))).toBe(true);
+    expect(await untouched.innerHTML()).toBe(otherHTML);
+    expect(await page.evaluate(address=>JSON.parse(localStorage.getItem('anonfolio.portfolio.v2')!).wallets.find((wallet:any)=>wallet.address===address),other)).toEqual(savedOther);
+    await expect(page.locator('.total-amount')).toHaveText([fail?'2':'3','0']);
+    expect(publicRequests).toEqual([]);
+  });
+}
