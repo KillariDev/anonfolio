@@ -75,8 +75,8 @@ test('static build reopens completely offline with saved wallets, token settings
     images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
   await expect(page.locator('#offline-notice')).toContainText('offline');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(page.locator('.error .failure-link')).toHaveCount(3);
-  for (const warning of await page.locator('.error .failure-link').all()) await expect(warning).toHaveAttribute('aria-description', 'Unverified saved value · verification failed');
+  await expect(page.locator('.error .failure-link')).toHaveCount(0);
+  await expect(page.locator('.balance small.cached')).toHaveCount(3);
   await expect(page.locator('.wallet .spinner')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Refresh ' + a + ' · Offline savings', exact: true })).toBeEnabled();
   expect(await page.locator('.balance time').first().getAttribute('datetime')).toBe(new Date(timestamp).toISOString());

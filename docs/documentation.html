@@ -180,7 +180,7 @@
 <figcaption>03 / Concurrency schematic, not a speed measurement. Each price job also bounds fee-tier and pool reads to two at a time; ETH/WETH share their in-flight pool selection. On narrow screens, scroll the chart sideways.
 </figcaption>
 </figure>
-<p>When the page opens, <code>main.ts</code> loads network configuration, pricing settings, and the saved portfolio. Saved values can render immediately. The application starts the selected connection mode, and each restored address requests a refresh. The Helios worker is created lazily when verification is first requested.
+<p>When the page opens, <code>main.ts</code> loads network configuration, pricing settings, and the saved portfolio. Saved values can render immediately. The application starts the selected connection mode, but restored addresses do not refresh automatically. Click an address’s Refresh button to retrieve new balances and prices. Leaving the page cancels scheduled balance retries; returning does not resume them. New addresses still receive their initial read. The Helios worker is created lazily when verification is first requested.
 </p>
 <p>A refresh follows this sequence:
 </p>

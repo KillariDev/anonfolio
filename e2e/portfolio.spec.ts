@@ -68,7 +68,7 @@ test('browser watchlist, exact zero, refresh, stale state, recovery, persistence
   expect(page.url()).not.toContain(a);
   await page.reload();
   await expect(page.locator('.wallet')).toHaveCount(2);
-  await expect(page.locator('.amount')).toHaveCount(0);
+  await expect(page.locator('.amount')).toHaveText(['0', '0', '0', '0']);
   await openAddressForm(page);
   await page.locator('#address').fill(a);
   await page.getByRole('button', { name: 'add address to track' }).click();

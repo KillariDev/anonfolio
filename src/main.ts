@@ -734,7 +734,11 @@ function pruneTokenBalances(wallet: Wallet) {
     if (!tokens.some(token => token.address === address)) delete wallet.tokens[address];
   }
 }
+let pageActive = true;
+let refreshGeneration = 0;
 async function refreshWallet(wallet: Wallet, onlyFailed = false) {
+  if (!pageActive) return;
+  const generation = refreshGeneration;
   if (wallet.loading) { wallet.queuedRefresh = true; return; }
   if (!wallets.includes(wallet)) return;
   if (!tokens.length) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
@@ -772,7 +776,7 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
     wallet.queuedForVerifier = false;
     pruneTokenBalances(wallet);
     persist(); render();
-    if (!wallets.includes(wallet) || connection.cancelled) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
+    if (generation !== refreshGeneration || !pageActive || !wallets.includes(wallet) || connection.cancelled) { retries.cancel(wallet); wallet.queuedRefresh = false; return; }
     const failed = tokens.some(token => tokenBalance(wallet, token).failed);
     if (wallet.queuedRefresh && !failed) { wallet.queuedRefresh = false; void refreshWallet(wallet); }
     else if (failed) { wallet.queuedRefresh = false; retries.schedule(wallet); }
@@ -780,11 +784,12 @@ async function refreshWallet(wallet: Wallet, onlyFailed = false) {
   }
 }
 async function start(automatic = false) {
+  if (!pageActive) return;
   const resumeCancelled = connection.cancelled;
   if (automatic) retries.begin('connection');
   else retries.cancel('connection');
   if (!navigator.onLine) { state = 'failed'; retries.schedule('connection'); renderConnection(); return; }
-  try { await connection.get(); if (resumeCancelled) wallets.forEach(wallet => { if (!wallet.loading && tokens.some(token => tokenBalance(wallet, token).failed)) void refreshWallet(wallet, true); }); }
+  try { await connection.get(); if (resumeCancelled && !automatic) wallets.forEach(wallet => { if (!wallet.loading && tokens.some(token => tokenBalance(wallet, token).failed)) void refreshWallet(wallet, true); }); }
   catch { state = 'failed'; retries.schedule('connection'); renderConnection(); }
 }
 document.querySelector('#wallet-form')!.addEventListener('submit', event => {
@@ -929,11 +934,16 @@ function renderOffline() {
 }
 renderTokens(); render(); renderConnection(); renderOffline();
 void start();
-wallets.forEach(wallet => { void refreshWallet(wallet); });
 window.addEventListener('offline', () => { retries.pause(); renderOffline(); });
-window.addEventListener('online', () => { renderOffline(); retries.resume(); void start(); });
-window.addEventListener('pagehide', () => { retries.pause(); connection.close(); });
-window.addEventListener('pageshow', event => { if (event.persisted) { retries.resume(); void start(); } });
+window.addEventListener('online', () => { renderOffline(); retries.resume(); if (!connection.cancelled) void start(true); });
+window.addEventListener('pagehide', () => {
+  pageActive = false;
+  refreshGeneration++;
+  retries.cancel('connection');
+  wallets.forEach(wallet => { retries.cancel(wallet); wallet.queuedRefresh = false; });
+  connection.close();
+});
+window.addEventListener('pageshow', event => { if (event.persisted) { pageActive = true; if (!connection.cancelled) void start(true); } });
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   void navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js' + (config.mode === 'https' ? '?mode=https' : '')).catch(() => {
     document.querySelector('#offline-notice')!.textContent = 'Offline page caching is unavailable. Balances are still saved locally, but reopening the page may need a connection.';

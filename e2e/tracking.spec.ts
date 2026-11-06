@@ -305,9 +305,9 @@ test('default tokens have icons and can be removed and re-added like other token
   await page.getByRole('button', { name: 'Remove token ETH', exact: true }).click();
   await expect(page.locator('.total-label')).toHaveText(['WETH']);
   await page.reload();
-  await expect(page.locator('.amount')).toHaveCount(0);
+  await expect(page.locator('.amount')).toHaveText(['0']);
   const calls = await page.evaluate(() => (window as any).__calls);
-  expect(calls.every((call: any) => call.body.method === 'eth_call')).toBe(true);
+  expect(calls).toEqual([]);
   await openTokenSettings(page);
   await page.getByRole('button', { name: 'Remove token WETH', exact: true }).click();
   await expect(page.locator('.amount')).toHaveCount(0);
@@ -396,11 +396,14 @@ test('network settings validate, reconnect with new private RPCs, preserve cache
   await page.locator('#network-settings > summary').click();
   await expect(page.getByLabel('Tor gateways', { exact: true })).toHaveValue(customGateway);
   await page.evaluate(() => (window as any).__releaseConnection());
+  await page.getByRole('button', { name: 'Close settings', exact: true }).click();
+  for (const address of [a, b]) await page.getByRole('button', { name: 'Refresh ' + address, exact: true }).click();
   await expect(page.locator('.wallet[data-loading="true"]')).toHaveCount(0);
   const calls = await page.evaluate(() => (window as any).__calls);
   expect(calls).toHaveLength(4);
   expect(new Set(calls.map((call: any) => call.url))).toEqual(new Set(['https://one.example/rpc', 'https://two.example/rpc']));
   expect(new Set(calls.map((call: any) => call.key)).size).toBe(2);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Restore defaults' }).click()]);
   await page.locator('#network-settings > summary').click();
   await expect(page.getByLabel('Tor gateways', { exact: true })).toHaveValue(originalGateway);
@@ -665,6 +668,8 @@ test('saved balance errors expose per-asset causes and recovery actions, then cl
   ` }));
   await page.goto('/');
   await expect(page.locator('.amount')).toHaveText(['1', '0']);
+  await expect(page.locator('.balance small.error button')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.balance small.error button')).toHaveCount(2);
   for (const warning of await page.locator('.balance small.error button').all()) await expect(warning).toHaveAttribute('aria-description', /Unverified saved value · verification failed/);
   await expect(page.locator('.failure-link').first()).toHaveText('RPC cannot prove this finalized block · Details');
@@ -1096,6 +1101,7 @@ test('compact status icons explain verification, proven zero, missing prices and
   await expect(page.locator('.balance small.cached .status-saved')).toHaveCount(3);
   await expect(page.locator('.balance small.cached .status-saved').first()).toHaveAttribute('title','Saved verified balance; refresh to check for updates.');
   await page.evaluate(()=>(window as any).__releaseConnection());
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(page.locator('.balance small.error .status-stale')).toHaveCount(3);
   const explain=page.getByRole('button',{name:'Explain ETH failure for '+a,exact:true});
   await expect(explain.locator('svg')).toBeVisible();
@@ -1225,6 +1231,7 @@ test('read history keeps legacy saved values separate from tokens with no succes
   await expect(pending.locator('tbody td')).toHaveText('—');
   await expect(history.locator('.snapshot-hash')).toHaveCount(0);
   await page.evaluate(()=>(window as any).__releaseConnection());
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
   await expect(pending.getByRole('img',{name:/no successful read is available/})).toBeVisible();
   await expect(legacy.locator('tbody time')).toHaveAttribute('datetime',new Date(timestamp).toISOString());
 });
@@ -1751,4 +1758,44 @@ for (const width of [1280, 390]) test(`sparse holdings omit proven zeroes withou
   expect(await page.locator('#wallets').evaluate(node=>node.scrollWidth<=node.clientWidth)).toBe(true);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/sparse-holdings-'+width+'.png',fullPage:true});
+});
+
+test('reopening saved addresses never refreshes until requested, including history return', async ({ page }) => {
+  await mockConnection(page);
+  await page.goto('/');
+  await page.locator('#address').fill(a + '\n' + b);
+  await page.getByRole('button', { name: 'add address to track' }).click();
+  await expect(page.locator('.amount')).toHaveText(['1', '1']);
+  const saved = await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2'));
+  await page.reload();
+  await expect(page.locator('.balance small.cached')).toHaveCount(4);
+  await page.clock.install();
+  await page.clock.runFor(65_000);
+  expect(await page.evaluate(() => (window as any).__calls)).toEqual([]);
+  expect(await page.evaluate(() => localStorage.getItem('anonfolio.portfolio.v2'))).toBe(saved);
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await page.clock.runFor(1000);
+  await expect(page.locator('.wallet').first().locator('.balance small.cached')).toHaveCount(0);
+  await expect(page.locator('.wallet').nth(1).locator('.balance small.cached')).toHaveCount(2);
+  const calls = await page.evaluate(() => (window as any).__calls);
+  expect(calls).toHaveLength(2);
+  expect(calls.every((call: any) => JSON.stringify(call.body).toLowerCase().includes(a.slice(2).toLowerCase()))).toBe(true);
+  // A failed user-initiated refresh retries while active, but leaving cancels it.
+  await page.evaluate(() => { (window as any).__fail = true; });
+  await page.getByRole('button', { name: 'Refresh ' + a, exact: true }).click();
+  await page.clock.runFor(2000);
+  await expect(page.locator('.wallet').first().locator('.error')).toHaveCount(2);
+  await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    window.dispatchEvent(new Event('online'));
+    (window as any).__calls = [];
+  });
+  await page.clock.runFor(65_000);
+  expect(await page.evaluate(() => (window as any).__calls)).toEqual([]);
+  await expect(page.locator('.wallet .spinner')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.wallet').first().locator('.error')).toHaveCount(2);
+  await page.clock.runFor(65_000);
+  expect(await page.evaluate(() => (window as any).__calls)).toEqual([]);
 });
