@@ -1,4 +1,4 @@
-import { explain, explanationGroup, installTooltips } from './tooltips';
+import { explain, explanationGroup, flash, installTooltips } from './tooltips';
 import { verificationPanel } from './verification-panel';
 import { pageMarkup } from './page';
 import { heliosStatus, subscribeHeliosStatus } from './verification/status';
@@ -685,10 +685,16 @@ function copyButton(wallet: Wallet) {
   copy.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 9h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>';
   copy.title = 'Copy address';
   copy.setAttribute('aria-label', 'Copy ' + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
-  copy.onclick = async () => {
-    try { await navigator.clipboard.writeText(wallet.address); copy.classList.add('copied'); copy.title = 'Copied'; }
-    catch { copy.title = 'Copying is unavailable in this browser'; }
-    setTimeout(() => { copy.classList.remove('copied'); copy.title = 'Copy address'; }, 1500);
+  // Re-rendering keeps the mounted button but adopts this handler, so act on the
+  // event target rather than the element this closure was created with.
+  copy.onclick = async event => {
+    const button = event.currentTarget as HTMLElement;
+    try {
+      await navigator.clipboard.writeText(wallet.address);
+      button.classList.add('copied');
+      flash(button, 'Copied');
+      setTimeout(() => button.classList.remove('copied'), 1500);
+    } catch { flash(button, 'Copying is unavailable in this browser', 2500); }
   };
   return copy;
 }
