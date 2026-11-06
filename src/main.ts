@@ -682,7 +682,7 @@ function rowStatus(wallet: Wallet) {
 function copyButton(wallet: Wallet) {
   const copy = document.createElement('button');
   copy.type = 'button'; copy.className = 'copy-address';
-  copy.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>';
+  copy.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 9h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>';
   copy.title = 'Copy address';
   copy.setAttribute('aria-label', 'Copy ' + wallet.address + (wallet.name ? ' · ' + wallet.name : ''));
   copy.onclick = async () => {
