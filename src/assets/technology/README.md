@@ -7,7 +7,8 @@ Downloaded November 6, 2026:
 | File | Original asset | Source / terms |
 | --- | --- | --- |
 | `tor.svg` | [Official full-color logo](https://styleguide.torproject.org/static/images/tor-logo/color.svg) | [Tor brand assets](https://styleguide.torproject.org/brand-assets/), [copyright and brand policy](https://www.torproject.org/about/trademark/) |
-| `tor-light.svg` | [Official white logo](https://styleguide.torproject.org/static/images/tor-logo/white.svg) | Same Tor brand assets and policy; used on the dark application header |
+| `tor-onion.svg` | [Official onion glyph](https://styleguide.torproject.org/static/images/tor-browser/glyph/glyph.svg) | Same Tor brand assets and policy; shown unchanged on a light badge in the connection indicator |
+| `tor-light.svg` | [Official white logo](https://styleguide.torproject.org/static/images/tor-logo/white.svg) | Same Tor brand assets and policy |
 | `uniswap.svg` | [Pink Uniswap icon](https://github.com/Uniswap/brand-assets/blob/master/Uniswap%20Brand%20Assets/Uniswap_icon_pink.svg) | [Uniswap's official brand assets](https://github.com/Uniswap/brand-assets) |
 | `bun.svg` | [Official small-size icon](https://bun.sh/icon.svg) | [Bun press kit](https://bun.sh/press-kit) |
 | `vite.svg` | [Official Vite 7 template logo](https://github.com/vitejs/vite/blob/v7.3.7/packages/create-vite/template-vanilla-ts/public/vite.svg) | [Vite](https://vite.dev/), [MIT license](https://github.com/vitejs/vite/blob/main/LICENSE) |

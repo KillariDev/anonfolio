@@ -219,8 +219,16 @@ function renderConnection() {
   node.setAttribute('aria-label', config.mode === 'https' ? 'HTTPS connection' : 'Private connection');
   const heading = document.createElement('div');
   heading.className = 'connection-heading';
-  if (config.mode !== 'https') heading.append(technologyIcon('tor'));
-  if (state === 'starting') heading.append(spinner());
+  if (config.mode !== 'https') {
+    const badge = document.createElement('span');
+    badge.className = 'connection-technology';
+    badge.append(technologyIcon('tor'));
+    heading.append(badge);
+  }
+  const indicator = state === 'starting' ? spinner() : document.createElement('span');
+  indicator.classList.add('connection-indicator');
+  indicator.setAttribute('aria-hidden', 'true');
+  heading.append(indicator);
   const title = document.createElement('strong');
   title.textContent = config.mode === 'https' ? state === 'ready' ? 'Direct HTTPS · not anonymous' : state === 'starting' ? 'Starting HTTPS connection…' : 'HTTPS connection unavailable'
     : state === 'ready' ? 'Private worker ready' : state === 'starting' ? connection.phase || 'Starting private connection…' : connection.cancelled ? 'Connection cancelled' : 'Private connection unavailable';

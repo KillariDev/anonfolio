@@ -1,4 +1,4 @@
-import torLogo from './assets/technology/tor-light.svg?no-inline';
+import torLogo from './assets/technology/tor-onion.svg?no-inline';
 import uniswapLogo from './assets/technology/uniswap.svg?no-inline';
 import ethereumLogo from './assets/tokens/eth.png';
 

@@ -40,13 +40,22 @@ for (const width of [1280,390]) test(`technology indicators stay readable throug
   await expect(page.locator('.network .technology-ethereum')).toHaveAttribute('title','Ethereum mainnet');
   await expect(page.locator('#estimated-total .technology-uniswap')).toHaveCount(1);
   await expect(page.locator('#estimated-total .technology-uniswap').locator('..')).toHaveAttribute('title',/Uniswap v3 TWAP/);
+  await expect(logo).toHaveAttribute('src', /tor-onion/);
   const original=await logo.boundingBox();
+  const initialConnection=await page.locator('#connection').boundingBox();
   for(const state of ['starting','failed','ready']) {
     await page.evaluate(state=>(window as any).__connection.state(state),state);
+    await expect(page.locator('#connection .spinner')).toHaveCount(state==='starting'?1:0);
+    await expect(page.locator('#connection button')).toHaveCount(state==='ready'?0:1);
+    const connection=await page.locator('#connection').boundingBox();
+    expect(connection!.width).toBe(initialConnection!.width);
+    expect(connection!.height).toBe(initialConnection!.height);
+    expect(connection!.width).toBeLessThanOrEqual(360);
     const box=await logo.boundingBox();
     expect(box!.width).toBe(original!.width); expect(box!.height).toBe(original!.height);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   }
+  await page.screenshot({path:test.info().outputPath(`connection-ready-${width}.png`)});
   await page.getByRole('button',{name:'Settings',exact:true}).click();
   await expect(page.locator('#pricing-form h2 .technology-uniswap')).toHaveAttribute('title',/Uniswap v3/);
   await page.screenshot({path:`test-results/technology-settings-${width}.png`});

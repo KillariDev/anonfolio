@@ -73,10 +73,19 @@ input::placeholder, textarea::placeholder { color: #687462; }
 .token-inputs { display: grid; grid-template-columns: minmax(0,1fr) 80px 75px; gap: 8px; }
 .token-inputs > div { min-width: 0; }
 #token-form { padding-top: 5px; }
-.connection { border: 1px solid #303d2b; border-radius: 7px; background: #131b12; min-width: 0; margin: 0; font-size: 11px; }
-.connection-heading { min-height: 38px; display: flex; align-items: center; gap: 9px; font-size: 11px; padding: 8px 12px; }
-.connection strong { font-weight: 500; color: #b8caae; white-space: nowrap; }
-.connection button { padding: 4px 8px; font-size: 10px; white-space: nowrap; }
+.connection { justify-self: end; width: 360px; max-width: 100%; min-width: 0; margin: 0; border: 1px solid #39433c; border-radius: 22px; background: #19201b; font-size: 11px; }
+.connection-heading { height: 38px; display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 5px; }
+.connection-technology { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; background: #ddcbed; }
+.connection-indicator { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #b5d99b; }
+.connection-indicator.spinner { width: 12px; height: 12px; flex-basis: 12px; }
+.connection strong { font-weight: 500; color: #d3e2cc; white-space: nowrap; }
+.connection.failed { border-color: #67543b; background: #252119; }
+.connection.failed .connection-indicator { background: #e7b978; }
+.connection.failed strong { color: #ecd1ab; }
+.connection.starting .connection-indicator { border-color: #71617f; border-top-color: #e6d2f6; }
+.connection button { padding: 4px 9px; font-size: 10px; white-space: nowrap; border-radius: 14px; background: transparent; }
+.connection button:hover { background: #33402e; }
+.connection:not(:has(.connection-technology)) .connection-heading { padding-left: 12px; }
 .section-heading { display: flex; justify-content: space-between; align-items: center; margin: 15px 0 9px; }
 #count { font-size: 10px; background: #283325; border-radius: 4px; padding: 2px 6px; margin-left: 6px; color: #b8ccaa; }
 #offline-notice, #storage-warning { font-size: 11px; line-height: 1.6; color: #d2c393; margin: 9px 0; }
@@ -154,7 +163,7 @@ input::placeholder, textarea::placeholder { color: #687462; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 @media (max-width: 720px) {
   header { padding: 16px; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
-  header > .connection { grid-column: 1 / -1; grid-row: 2; }
+  header > .connection { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
   main { padding: 0 16px; margin-top: 15px; }
   .page-heading { align-items: flex-start; gap: 8px; }
   .page-heading .local-note { max-width: 150px; font-size: 10px; text-align: right; }
@@ -376,4 +385,4 @@ select { width: 100%; margin-bottom: 12px; background: #101710; color: #e8ece5; 
 #pricing-form h2 { display: flex; align-items: center; gap: 8px; }
 .status-icon .technology-logo { width: 14px; height: 14px; flex-basis: 14px; }
 
-.technology-tor { width: 30px; flex-basis: 30px; }
+.connection-technology .technology-tor { width: 23px; height: 23px; flex-basis: 23px; }
